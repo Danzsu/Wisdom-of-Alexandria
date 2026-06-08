@@ -1,0 +1,73 @@
+<h2>Vector DB döntés: Qdrant vs ChromaDB</h2>
+<p class="subtitle">A Codex RAG retrieval és a manuscript semantic memory alapja — ez az adatbázis keresi vissza a releváns karaktereket, helyszíneket, lore-t az AI promptokhoz.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Qdrant <span style="background:#ebe9ff;color:#342a91;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;margin-left:8px">Eredeti terv</span></h3>
+      <p style="margin-bottom:10px">Rust-alapú, production-grade vector DB. Saját HTTP API, Qdrant Cloud opció, self-hosted Docker image, szűrőkkel és payload metadatával.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Gyors és memória-hatékony</li>
+          <li>Gazdag filter API (project_id, entity_type stb.)</li>
+          <li>Qdrant Cloud = zero infra a prod deployban</li>
+          <li>Jól dokumentált Python kliens</li>
+          <li>Docker image egyszerű</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Külön service a Docker Compose-ban</li>
+          <li>Qdrant Cloud havidíj (~$0 free tier)</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>ChromaDB</h3>
+      <p style="margin-bottom:10px">Python-natív, egyszerűbb vector DB. Beágyazható (in-process) vagy self-hosted szerver módban futtatható. Fejlesztői DX-re fókuszált.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Embedded mód: nincs külön service</li>
+          <li>Python-natív, könnyű setup</li>
+          <li>Gyorsabb fejlesztői iteráció</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Nincs managed cloud opció (self-host kell prod-ba)</li>
+          <li>Kevésbé érett production workloadra</li>
+          <li>Filter API gyengébb mint Qdrant</li>
+          <li>Skálázhatóság kérdéses nagy projekteknél</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>pgvector (PostgreSQL kiterjesztés)</h3>
+      <p style="margin-bottom:10px">A PostgreSQL-hez adott vektor kiterjesztés — így egyetlen DB-ben van a strukturált adat ÉS a vektoros retrieval. Neon PostgreSQL natívan támogatja.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Nincs külön vector DB service</li>
+          <li>Neon-on azonnal elérhető</li>
+          <li>JOIN-ok strukturált adattal egy queryben</li>
+          <li>Kevesebb infrastruktúra</li>
+          <li>MVP-hez bőven elég teljesítmény</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Nagy korpusznál (~1M+ vektor) lassabb mint Qdrant</li>
+          <li>Kevésbé fejlett filter/facet API</li>
+          <li>Ha kell Qdrant, migráció szükséges</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px; padding:14px; background:#f1eee8; border-radius:10px; border:1px solid #ded8ce">
+  <span class="label">Ajánlás a hibrid architektúrához</span>
+  <p style="margin-top:6px"><strong>MVP-hez: pgvector (C)</strong> — egy service-szel kevesebb, Neonon ingyen fut. <strong>V1-ben migráció Qdrantra</strong> ha a retrieval minősége vagy a sebesség kérdéses lesz. A model router és a retrieval service legyen elég absztrakt hogy ez később cserélhető legyen.</p>
+</div>

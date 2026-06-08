@@ -1,0 +1,89 @@
+<h2>Mi az a Monorepo és melyik tooling kell hozzá?</h2>
+<p class="subtitle">Alapfogalom, aztán döntsük el melyik megközelítés illik a ForgeWriterhez</p>
+
+<div class="section" style="margin-bottom:24px">
+  <h3 style="margin-bottom:12px">Mi a különbség?</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">❌ Több külön repo (multi-repo)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:2">
+        <div style="color:#c2410c">github.com/te/forgewriter-frontend</div>
+        <div style="color:#c2410c">github.com/te/forgewriter-backend</div>
+        <div style="color:#c2410c">github.com/te/forgewriter-prompts</div>
+        <div style="height:12px"></div>
+        <div style="color:#6f675f;font-size:12px">→ 3 git clone</div>
+        <div style="color:#6f675f;font-size:12px">→ 3 külön CI/CD pipeline</div>
+        <div style="color:#6f675f;font-size:12px">→ Típusok duplikálva frontend/backend között</div>
+        <div style="color:#6f675f;font-size:12px">→ "melyik verzió volt egymással kompatibilis?"</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">✅ Monorepo (egy repo, több app)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8">
+        <div style="color:#2f7d55">github.com/te/forgewriter-ai/</div>
+        <div style="color:#2f7d55;padding-left:16px">apps/web/         ← Next.js frontend</div>
+        <div style="color:#2f7d55;padding-left:16px">apps/api/         ← FastAPI backend</div>
+        <div style="color:#2f7d55;padding-left:16px">packages/shared/  ← közös típusok</div>
+        <div style="color:#2f7d55;padding-left:16px">packages/prompts/ ← prompt sablonok</div>
+        <div style="height:8px"></div>
+        <div style="color:#6f675f;font-size:12px">→ 1 git clone</div>
+        <div style="color:#6f675f;font-size:12px">→ Megosztott típusok és konstansok</div>
+        <div style="color:#6f675f;font-size:12px">→ Atomic commit: "frontend + API egyszerre"</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-bottom:20px">
+  <h3 style="margin-bottom:12px">Melyik monorepo tooling?</h3>
+  <p class="subtitle" style="margin-bottom:16px">A tooling arra való, hogy a monorepon belül gyors legyen a build, a test, és ne kelljen mindent újra buildelni ha csak a frontend változott.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>pnpm workspaces <span style="background:#e6f3ec;color:#2f7d55;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;margin-left:8px">Egyszerű</span></h3>
+      <p style="margin-bottom:8px">Csak a pnpm csomagkezelő beépített workspace funkcióját használod. Nincs extra tool — a <code>packages/shared</code> direktbe importálható a frontendbe és backendbe.</p>
+      <ul style="font-size:13px;color:#4c453d;padding-left:16px">
+        <li>Nincs új dolog megtanulni</li>
+        <li>pnpm install futtatja az összeset</li>
+        <li>Nem cache-el, nem parallel — MVP-hez mindegy</li>
+        <li><strong>Kisebb projektnél tökéletes</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Turborepo + pnpm <span style="background:#ebe9ff;color:#342a91;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;margin-left:8px">Ajánlott</span></h3>
+      <p style="margin-bottom:8px">A Turborepo egy build orchestrator a monorepo tetején. Cache-eli a buildeket — ha csak a backend változott, a frontend buildet nem futtatja újra. Vercel által fejlesztett.</p>
+      <ul style="font-size:13px;color:#4c453d;padding-left:16px">
+        <li><code>turbo dev</code> — párhuzamosan indít mindent</li>
+        <li><code>turbo build</code> — csak azt buildeli ami változott</li>
+        <li>Vercel integrációval extra gyors deploy</li>
+        <li>Kis konfig (turbo.json)</li>
+        <li><strong>Next.js + FastAPI monorepohoz ez a legjobb</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Nx</h3>
+      <p style="margin-bottom:8px">Erős, vállalati monorepo tool. Sok feature, de komplex konfiguráció. Inkább 10+ alkalmazásnál éri meg.</p>
+      <ul style="font-size:13px;color:#4c453d;padding-left:16px">
+        <li>Overkill 2 apphoz (web + api)</li>
+        <li>Meredek tanulási görbe</li>
+        <li>Enterprise projekteknél szokásos</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px; padding:14px; background:#f1eee8; border-radius:10px; border:1px solid #ded8ce">
+  <span class="label">Megjegyzés a Python backendről</span>
+  <p style="margin-top:6px">A Turborepo a JavaScript/TypeScript világra optimalizált — a <strong>FastAPI backend</strong> a monorepon belül van, de nem a Turborepo részévé kell tenni. A <code>apps/api</code> mappa egy normál Python projekt marad (<code>pyproject.toml</code>), és a <code>turbo.json</code>-ban csak a frontend taskok lesznek cache-elve. Ez teljesen bevett minta.</p>
+</div>

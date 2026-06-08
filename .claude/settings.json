@@ -1,0 +1,22 @@
+{
+  "model": "claude-sonnet-4-6",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(turbo *)",
+      "Bash(npx *)",
+      "Bash(uvicorn *)",
+      "Bash(alembic *)",
+      "Bash(pytest *)",
+      "Bash(uv *)",
+      "Bash(docker compose *)",
+      "Bash(ollama *)",
+      "Bash(node *)",
+      "Bash(ruff *)"
+    ],
+    "deny": [
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}

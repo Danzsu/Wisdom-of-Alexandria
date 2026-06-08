@@ -1,0 +1,107 @@
+<h2>Frontend library döntések</h2>
+<p class="subtitle">Melyik kerül MVP-be, melyik V1-be — és a két újdonság (Sonner, cmdk) hova illik?</p>
+
+<div class="section" style="margin-bottom:24px">
+  <h3 style="margin-bottom:14px;font-size:15px">✅ Már eldöntött, besorolás megerősítve</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+    <div style="background:#e6f3ec;border:1px solid #2f7d5533;border-radius:10px;padding:12px">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#2f7d55;text-transform:uppercase">MVP</span>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Next.js 15</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">React</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">TypeScript</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Tailwind CSS</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">shadcn/ui</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Lucide React</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Tiptap</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">TanStack Query</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Zustand</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">Framer Motion</span>
+      </div>
+    </div>
+
+    <div style="background:#fff4da;border:1px solid #b7791f33;border-radius:10px;padding:12px">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#b7791f;text-transform:uppercase">V1</span>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">dnd-kit</span>
+        <span style="background:white;border:1px solid #ded8ce;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:500">React Flow / xyflow</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-bottom:24px">
+  <h3 style="margin-bottom:4px;font-size:15px">🆕 Két új könyvtár — döntést igényelnek</h3>
+  <p class="subtitle" style="margin-bottom:16px">Nem volt az eredeti listában — nézzük meg hova illeszkednek</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+    <div style="background:white;border:2px solid #6d5dfc;border-radius:12px;padding:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:17px;font-weight:700">Sonner</span>
+        <span style="background:#ebe9ff;color:#342a91;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">Toast notifications</span>
+      </div>
+      <p style="font-size:13px;color:#4c453d;margin-bottom:10px">A shadcn/ui hivatalos toast megoldása (ugyanaz a fejlesztő). Egyszerű, szép, nulla konfig.</p>
+      <p style="font-size:13px;color:#4c453d;margin-bottom:12px"><strong>ForgeWriterben használná:</strong></p>
+      <ul style="font-size:13px;color:#6f675f;padding-left:16px;margin-bottom:12px">
+        <li>„Jelenet mentve ✓"</li>
+        <li>„AI generálás elindult…"</li>
+        <li>„Export kész, letöltés indul"</li>
+        <li>„Continuity warning: Anna nem lehet itt"</li>
+        <li>„Ollama nem elérhető ⚠"</li>
+      </ul>
+      <div style="background:#e6f3ec;border-radius:8px;padding:8px 12px;font-size:12px;color:#2f7d55;font-weight:600">
+        → Ajánlás: MVP — toast nélkül az app süket
+      </div>
+    </div>
+
+    <div style="background:white;border:2px solid #6d5dfc;border-radius:12px;padding:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:17px;font-weight:700">cmdk</span>
+        <span style="background:#ebe9ff;color:#342a91;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">Command palette</span>
+      </div>
+      <p style="font-size:13px;color:#4c453d;margin-bottom:10px">Cmd+K command palette — shadcn/ui Command komponens alapja. Power user navigáció.</p>
+      <p style="font-size:13px;color:#4c453d;margin-bottom:12px"><strong>ForgeWriterben használná:</strong></p>
+      <ul style="font-size:13px;color:#6f675f;padding-left:16px;margin-bottom:12px">
+        <li>Gyors ugrás project / fejezet / jelenet között</li>
+        <li>Codex gyorskeresés</li>
+        <li>AI akció indítása: „Rewrite selected"</li>
+        <li>Model váltás gyorsan</li>
+        <li>Export indítása</li>
+      </ul>
+      <div style="background:#fff4da;border-radius:8px;padding:8px 12px;font-size:12px;color:#b7791f;font-weight:600">
+        → Ajánlás: V1 — hasznos de nem blokkoló MVP-hez
+      </div>
+      <div style="margin-top:6px;background:#f1eee8;border-radius:8px;padding:6px 12px;font-size:11px;color:#6f675f">
+        Megjegyzés: cmdk már shadcn/ui dep — installálva lesz, csak a komponens kell
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="background:#f1eee8;border-radius:12px;padding:16px;border:1px solid #ded8ce">
+  <h3 style="font-size:14px;font-weight:700;margin-bottom:10px">🔍 Radix UI — külön megemlítendő?</h3>
+  <p style="font-size:13px;color:#4c453d">A shadcn/ui <strong>Radix UI primitívekre épül</strong> (Dialog, Dropdown, Select, Tooltip, Popover stb.). Ez automatikusan installálja a szükséges Radix csomagokat. Nem kell külön konfigurálni, de a <code>package.json</code>-ban explicit dependencyként szerepel majd. Ajánlás: a docs-ban megemlíteni mint "shadcn/ui alap", de nem külön stack elemként kezelni.</p>
+</div>
+
+<div class="section" style="margin-top:16px;background:#ebe9ff;border-radius:12px;padding:14px;border:1px solid #6d5dfc33">
+  <span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#342a91;text-transform:uppercase">Végleges javasolt lista</span>
+  <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Next.js</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: React</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: TypeScript</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Tailwind</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: shadcn/ui</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Lucide React</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Tiptap</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: TanStack Query</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Zustand</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Framer Motion</span>
+    <span style="background:#6d5dfc;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">MVP: Sonner 🆕</span>
+    <span style="background:#b7791f;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">V1: dnd-kit</span>
+    <span style="background:#b7791f;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">V1: React Flow</span>
+    <span style="background:#b7791f;color:white;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600">V1: cmdk 🆕</span>
+  </div>
+</div>

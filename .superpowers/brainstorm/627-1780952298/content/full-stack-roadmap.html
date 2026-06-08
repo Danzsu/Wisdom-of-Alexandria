@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>ForgeWriter AI — Teljes Tech Stack Roadmap</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #f8f6f2; color: #2f2a24; padding: 32px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .subtitle { color: #6f675f; font-size: 14px; margin-bottom: 28px; }
+
+  .phase { margin-bottom: 32px; }
+  .phase-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 2px solid #ded8ce;
+  }
+  .phase-badge {
+    padding: 4px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+  }
+  .mvp-badge { background: #6d5dfc; color: white; }
+  .v1-badge { background: #2f7d55; color: white; }
+  .v2-badge { background: #b7791f; color: white; }
+  .later-badge { background: #9b9187; color: white; }
+  .phase-title { font-size: 17px; font-weight: 600; }
+  .phase-desc { font-size: 13px; color: #6f675f; margin-left: auto; }
+
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .stack-card {
+    background: white;
+    border: 1px solid #ded8ce;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(47,42,36,0.06);
+  }
+  .stack-card .layer {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: #9b9187; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .stack-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .stack-card p { font-size: 12px; color: #6f675f; line-height: 1.5; }
+  .tag {
+    display: inline-block; margin-top: 6px; margin-right: 4px;
+    padding: 2px 8px; border-radius: 5px;
+    font-size: 11px; font-weight: 600;
+    background: #f1eee8; color: #4c453d;
+  }
+  .tag.new { background: #ebe9ff; color: #342a91; }
+  .tag.upgrade { background: #fff4da; color: #b7791f; }
+  .tag.optional { background: #f0e9ff; color: #7c3aed; }
+
+  .divider { height: 1px; background: #ded8ce; margin: 8px 0 16px; }
+
+  .decision-box {
+    background: #ebe9ff; border: 1px solid #6d5dfc33;
+    border-radius: 12px; padding: 16px; margin-bottom: 28px;
+  }
+  .decision-box h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #342a91; }
+  .decision-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .decision-row .what { color: #4c453d; }
+  .decision-row .chosen { font-weight: 600; color: #2f2a24; }
+</style>
+</head>
+<body>
+
+<h1>ForgeWriter AI — Teljes Tech Stack Roadmap</h1>
+<p class="subtitle">MVP → V1 → V2 → Later — minden döntés egy helyen</p>
+
+<div class="decision-box">
+  <h3>✅ Már eldöntött architektúrális döntések</h3>
+  <div class="decision-row"><span class="what">Deployment stratégia</span><span class="chosen">Hibrid: Docker dev → Vercel-ready prod</span></div>
+  <div class="decision-row"><span class="what">Frontend framework</span><span class="chosen">Next.js 15 + React + TypeScript</span></div>
+  <div class="decision-row"><span class="what">Styling</span><span class="chosen">Tailwind CSS + shadcn/ui + Framer Motion + Lucide Icons</span></div>
+  <div class="decision-row"><span class="what">Backend</span><span class="chosen">FastAPI + Pydantic + SQLAlchemy + Alembic</span></div>
+  <div class="decision-row"><span class="what">Adatbázis</span><span class="chosen">PostgreSQL + pgvector (Neon cloud / Docker lokálisan)</span></div>
+  <div class="decision-row"><span class="what">Vector search</span><span class="chosen">pgvector (MVP+V1) → Qdrant opcionális V2-ben</span></div>
+  <div class="decision-row"><span class="what">Background jobs</span><span class="chosen">Redis + RQ (Redis Queue)</span></div>
+  <div class="decision-row"><span class="what">AI provider réteg</span><span class="chosen">LiteLLM (Ollama + Google AI Studio + OpenRouter)</span></div>
+  <div class="decision-row"><span class="what">Agent orchestration</span><span class="chosen">PydanticAI</span></div>
+  <div class="decision-row"><span class="what">Auth (MVP)</span><span class="chosen">JWT + .env hardcoded jelszó</span></div>
+  <div class="decision-row"><span class="what">Monorepo tooling</span><span class="chosen">Turborepo + pnpm workspaces</span></div>
+</div>
+
+<!-- MVP -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge mvp-badge">MVP</span>
+    <span class="phase-title">Első működő writing workspace</span>
+    <span class="phase-desc">Core CRUD + editor + lokális AI + Markdown export</span>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="layer">Frontend — Editor</div>
+      <h4>Tiptap (ProseMirror)</h4>
+      <p>Rich text editor jelenetek írásához. Bubble menu AI actionshöz, autosave, word count.</p>
+      <span class="tag">React extension</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Frontend — State</div>
+      <h4>Zustand + TanStack Query</h4>
+      <p>Zustand: lokális UI state (editor, panel). TanStack Query: API cache, mutation, optimistic update.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Frontend — Forms</div>
+      <h4>React Hook Form + Zod</h4>
+      <p>Codex bejegyzések, projekt létrehozás, beats kezelése — típusos validációval.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — Inference</div>
+      <h4>LiteLLM + Ollama</h4>
+      <p>Lokálisan futó 12B modell (Gemma3, Qwen2.5). Scene rewrite, brainstorm, beat generálás.</p>
+      <span class="tag">Gemini API</span><span class="tag">OpenRouter</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — Egyszerű workflow</div>
+      <h4>Direkt LiteLLM hívások</h4>
+      <p>MVP-ben nincs agent orchestration — egyszerű service osztályok: rewrite_service, scene_draft_service.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Export</div>
+      <h4>Markdown export (natív)</h4>
+      <p>Jelenet JSON → Markdown szöveg, fejezetek sorrendben, letölthető .md fájl.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">DB — Embedding</div>
+      <h4>pgvector (alap)</h4>
+      <p>Codex bejegyzések vektorizálva — egyszerű cosine similarity keresés, nincs komplex RAG még.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Auth</div>
+      <h4>Egyszerű JWT</h4>
+      <p>.env-ben tárolt username/password, FastAPI JWT middleware. Lokális single-user app.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Dev tooling</div>
+      <h4>Vitest + pytest</h4>
+      <p>Frontend: Vitest + React Testing Library. Backend: pytest + httpx test client.</p>
+    </div>
+  </div>
+</div>
+
+<!-- V1 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge v1-badge">V1</span>
+    <span class="phase-title">Teljes writing workspace</span>
+    <span class="phase-desc">RAG, drag-and-drop, folytatás nélküli AI panel, EPUB export</span>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="layer">Frontend — Board</div>
+      <h4>dnd-kit</h4>
+      <p>Chapter/scene drag-and-drop planning board. Jelenet kártyák vizuális rendezése fejezeten belül.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Frontend — Graph</div>
+      <h4>React Flow / xyflow</h4>
+      <p>Karakterkapcsolat-háló vizualizálása. Nodes = karakterek, edges = kapcsolattípusok.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — Orchestration</div>
+      <h4>PydanticAI (teljes)</h4>
+      <p>Folyamatként futó agentok: Scene Writer Agent, Continuity Checker Agent, Hungarian Editor Agent. Type-safe input/output.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — RAG</div>
+      <h4>pgvector full RAG pipeline</h4>
+      <p>Context Pack Builder: releváns karakterek, helyszínek, lore betöltése az AI kéréshez token budget alapján.</p>
+      <span class="tag upgrade">MVP pgvector upgrade</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — Streaming</div>
+      <h4>SSE (Server-Sent Events)</h4>
+      <p>FastAPI StreamingResponse → Next.js ReadableStream. AI válasz karakterenként jelenik meg.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Export</div>
+      <h4>Pandoc (DOCX + EPUB)</h4>
+      <p>Markdown → DOCX / EPUB konverzió. Export worker containerben fut, Pandoc beépítve.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">DB — Embedding</div>
+      <h4>Embedding worker (RQ job)</h4>
+      <p>Minden Codex update és approved scene summary automatikusan vektorizálódik háttérben.</p>
+      <span class="tag upgrade">RQ worker bővítés</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Frontend — Animation</div>
+      <h4>Framer Motion (bővített)</h4>
+      <p>Panel transitions, AI result card megjelenés, scene card hover. Layout animations.</p>
+      <span class="tag upgrade">MVP alap → V1 bővítés</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Testing</div>
+      <h4>Playwright E2E</h4>
+      <p>Editor autosave, AI panel flow, drag-and-drop board end-to-end tesztelése.</p>
+      <span class="tag new">V1-ben új</span>
+    </div>
+  </div>
+</div>
+
+<!-- V2 -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge v2-badge">V2</span>
+    <span class="phase-title">Agentic chapter pipeline</span>
+    <span class="phase-desc">Multi-agent workflow, quality gate, batch generation, full book audit</span>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="layer">AI — Multi-agent</div>
+      <h4>PydanticAI multi-agent pipeline</h4>
+      <p>Chapter Planner → Scene Writer → Continuity Checker → Hungarian Editor → Developmental Editor. Human approval gates minden lépésnél.</p>
+      <span class="tag new">V2-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI — Cloud review</div>
+      <h4>Gemini 1.5 Pro / Claude Opus</h4>
+      <p>Developmental critique, final polish, long-context chapter review. LiteLLM-en keresztül, user konfigurálja.</p>
+      <span class="tag new">V2-ben új</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Vector DB</div>
+      <h4>Qdrant (opcionális upgrade)</h4>
+      <p>Ha a pgvector szűknek bizonyul — migráció Qdrant Cloud-ra. Jobb filter API, gyorsabb nagy korpusznál.</p>
+      <span class="tag optional">Opcionális</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Inference</div>
+      <h4>vLLM (saját GPU szerver)</h4>
+      <p>Saját GPU VM-en futó nagy modell (70B+). Ollama helyett vLLM az OpenAI-kompatibilis API-hoz.</p>
+      <span class="tag optional">Ha van GPU szerver</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Workers</div>
+      <h4>Dramatiq (RQ upgrade)</h4>
+      <p>Ha a batch generation és a chapter pipeline job-ok meghaladják az RQ kapacitását — Dramatiq robusztusabb retry és priority queue-val.</p>
+      <span class="tag optional">Ha RQ szűk</span>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Export</div>
+      <h4>PDF (Pandoc + LaTeX / Playwright)</h4>
+      <p>Tipografált PDF export. Pandoc + LaTeX template, vagy HTML→PDF Playwright-tal.</p>
+      <span class="tag new">V2-ben új</span>
+    </div>
+  </div>
+</div>
+
+<!-- Later -->
+<div class="phase">
+  <div class="phase-header">
+    <span class="phase-badge later-badge">Later</span>
+    <span class="phase-title">Jövőbeli funkciók</span>
+    <span class="phase-desc">Desktop app, multi-user, cloud SaaS</span>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="layer">Desktop</div>
+      <h4>Tauri wrapper</h4>
+      <p>A Next.js frontend csomagolása natív desktop appként. Kisebb mint Electron, lokális fájl hozzáféréssel.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Auth</div>
+      <h4>Auth.js / Clerk</h4>
+      <p>Ha cloud SaaS deployra kerül. Multi-user, OAuth (Google, GitHub), role-based access.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Real-time</div>
+      <h4>WebSocket (Collaboration)</h4>
+      <p>Co-authoring, shared cursor, real-time edits. Liveblocks vagy saját WS szerver.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Design</div>
+      <h4>Dark theme</h4>
+      <p>CSS variables alapú dark theme — a design system CSS var-okkal már MVP-ben előkészíthető.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">AI</div>
+      <h4>Fine-tuning pipeline</h4>
+      <p>Magyar írói stílusra finomhangolt lokális modell. LoRA adapter training saját adatokon.</p>
+    </div>
+    <div class="stack-card">
+      <div class="layer">Publishing</div>
+      <h4>KDP formatting + cover gen</h4>
+      <p>Amazon KDP-ready PDF formázás, borítókép generálás (Stable Diffusion / DALL-E API).</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,72 @@
+<h2>ForgeWriter AI — Architekturális megközelítés</h2>
+<p class="subtitle">Ez az egyik legtöbbször visszatérő alapdöntés: hol fut az app, és mit tárol hol?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Local-first: Docker Compose</h3>
+      <p style="margin-bottom:10px">Az eredeti terv szerint: minden fut lokálisan. Next.js + FastAPI + PostgreSQL + Qdrant + Redis + Ollama egy docker-compose.yml fájlból.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Kézirat nem kerül felhőbe</li>
+          <li>Nincs havi cloud számla</li>
+          <li>Ollama GPU közvetlen elérés</li>
+          <li>Teljes adatvédelem</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Telepítés bonyolultabb</li>
+          <li>Nincs multi-device sync</li>
+          <li>GPU konfig gépenként különbözhet</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Cloud-first: Vercel + Neon + Qdrant Cloud</h3>
+      <p style="margin-bottom:10px">Frontend Vercelre, Neon serverless Postgres-re, Qdrant Cloud-ra. Ollama csak opcionális lokálisan, fő modell API-n (Gemini/OpenAI/OpenRouter).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Egyszerű deployment</li>
+          <li>Bárhonnan elérhető</li>
+          <li>Nincs Docker konfiguráció</li>
+          <li>Neon auto-scale és branch</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Kézirat felhőbe kerül</li>
+          <li>Cloud modell = API cost</li>
+          <li>Nincs valódi offline mód</li>
+          <li>Neon + Qdrant Cloud havidíj</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hibrid: Docker dev → Vercel-ready prod</h3>
+      <p style="margin-bottom:10px">Fejlesztés Docker Compose-ban, de az architektúra legyen Vercel/cloud-ready is. Neon Postgres lokálisan is futhat, Qdrant self-hosted marad. AI réteg: Ollama lokálisan + cloud API switch.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Előnyök</h4><ul>
+          <li>Mindkét world best-of</li>
+          <li>Helyi fejlesztés egyszerű</li>
+          <li>Deployolható Vercelre is</li>
+          <li>Adatvédelem megőrizhető</li>
+        </ul></div>
+        <div class="cons"><h4>Hátrányok</h4><ul>
+          <li>Két konfig karbantartása</li>
+          <li>Kicsit több setup</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px; padding:16px; background:#f1eee8; border-radius:10px; border:1px solid #ded8ce">
+  <span class="label">Megjegyzés</span>
+  <p style="margin-top:6px">A projekt célja <strong>local-first, lokális Ollama</strong> futtathatóság — ezt a Vercel+Neon opció gyengíti. Ha a cél az egyszerű demo/kipróbálás is, a <strong>hibrid C</strong> a legjobb kompromisszum.</p>
+</div>
