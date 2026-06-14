@@ -13,14 +13,21 @@ import { useUIStore } from "@/lib/stores/ui-store";
 import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 
-/** Placeholder project list (real data arrives in M3). */
+/** Placeholder project list.
+ *
+ * M3 note: wiring this to `useProjects()` was deferred. The shell's TopBar tests
+ * mount the switcher without a QueryClientProvider, so introducing a Query hook
+ * here would require touching unrelated M2 shell tests. Per the M3 spec ("if
+ * low-effort … otherwise leave it and note for later") this is left for M4, when
+ * the shell test harness can provide the Query/MSW context. */
 const PLACEHOLDER_PROJECTS = [{ id: "demo", title: hu.project.demoTitle }];
 
 /**
  * TopBar project switcher (shown only inside a book). Renders the current book
  * title + chevron and opens a placeholder project list; choosing one routes to
- * the projects picker for now (real switching lands with M3 data). Open state
- * is owned by the shared UI store (single-open menu rule).
+ * the projects picker for now (real switching lands when the switcher is wired
+ * to `useProjects()` in M4). Open state is owned by the shared UI store
+ * (single-open menu rule).
  */
 export function ProjectSwitcher({ title }: { title: string }) {
   const navTo = useNavTo();
