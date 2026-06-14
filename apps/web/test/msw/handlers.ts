@@ -565,6 +565,25 @@ export const handlers = [
     );
   }),
 
+  /* ---- Export (Markdown — real endpoint, M8) ---- */
+  http.post(`${base}/books/:bookId/exports`, ({ params }) => {
+    if (params.bookId === FAROSZ_BOOK.id) {
+      // Mirror the backend: text/markdown body + Content-Disposition with both
+      // an ASCII filename and the RFC 5987 UTF-8 filename*.
+      const body = `# ${FAROSZ_BOOK.title}\n\n## II. fejezet\n\nSzelene a tekercsek közé hajolt.\n`;
+      return new HttpResponse(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition":
+            'attachment; filename="a_farosz_orzoje.md"; ' +
+            "filename*=UTF-8''A%20F%C3%A1rosz%20%C5%91rz%C5%91je.md",
+        },
+      });
+    }
+    return HttpResponse.json({ detail: "Book not found" }, { status: 404 });
+  }),
+
   /* ---- AI (config-driven models + generation) ---- */
   http.get(`${base}/ai/models`, () => HttpResponse.json(MODELS_FIXTURE)),
 

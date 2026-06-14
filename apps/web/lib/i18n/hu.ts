@@ -575,6 +575,175 @@ export const hu = {
     /** Drag handle accessible name (the grip on cards/columns). */
     dragHandleAria: "Áthelyezés húzással",
   },
+  /**
+   * Import / Export screen (`Alexandria App.dc.html` showexport ~line 1449).
+   * Markdown export is REAL (wired to POST /books/{id}/exports); DOCX is V1
+   * (disabled), EPUB 3 / PDF / TXT are visual stubs; Import is a V1 stub.
+   * Copy is verbatim from the prototype.
+   */
+  exportScreen: {
+    /** Screen heading + tabs. */
+    title: "Import / Export",
+    tabExport: "Exportálás",
+    tabImport: "Importálás",
+    /** EXPORT tab. */
+    intro: "Válassz formátumot és tartományt — a fájlnév ékezet nélkül készül.",
+    formatLabel: "Formátum",
+    /** Format cards (label + sub-hint, verbatim). */
+    fmtMarkdown: "Markdown",
+    fmtMarkdownHint: ".md — egyszerű, hordozható",
+    fmtDocx: "DOCX",
+    fmtDocxHint: ".docx — Word-kompatibilis",
+    fmtEpub: "EPUB 3",
+    fmtEpubHint: "e-könyv háttérhangokkal",
+    fmtEpubBadge: "hang",
+    fmtPdf: "PDF",
+    fmtPdfHint: "nyomtatásra kész",
+    fmtTxt: "TXT",
+    fmtTxtHint: ".txt — sima szöveg",
+    /** "Hamarosan" badge on the not-yet-real format cards. */
+    fmtComingBadge: "hamarosan",
+    /** Scope (Tartomány) radios. */
+    scopeLabel: "Tartomány",
+    scopeBook: (title: string) => `Teljes könyv — ${title}`,
+    scopeBookFallback: "Teljes könyv",
+    scopeChapter: "Csak a II. fejezet",
+    scopeScene: "Csak a 3. jelenet",
+    /** Honest note: only book scope hits the real endpoint in the MVP. */
+    scopeV1Note: "A fejezet/jelenet-szintű export a V1-ben érkezik.",
+    /** Filename preview row. */
+    filenameLabel: "Fájlnév:",
+    /** Hanganyagok (audio) accordion — V2 stub. */
+    audioLabel: "Hanganyagok",
+    audioTitle: "EPUB 3 hanganyagokkal",
+    audioHint: "Háttér-atmoszféra és effektek beágyazása a könyvbe",
+    audioToggleAria: "Hanganyagok az exportban",
+    audioFootnote:
+      "3 hang · ~1,8 MB · csak EPUB 3 / Apple Books / Thorium támogatja.",
+    audioV2Note: "A hangbeágyazás a V2-ben érkezik.",
+    /** Export CTA + footnote. */
+    exportCta: "Exportálás",
+    exporting: "Exportálás…",
+    backupNote: "A projekt biztonsági mentése (JSON) a Beállításokban érhető el.",
+    /** Toasts. */
+    exportSuccess: (filename: string) => `Exportálva: ${filename}`,
+    exportError: "Az exportálás sikertelen",
+    /** Format-not-real toast (DOCX/EPUB/PDF/TXT). */
+    formatStubToast: (format: string) => `A(z) ${format} export a V1-ben érkezik`,
+    /** IMPORT tab (V1 stub). */
+    importIntroBefore: "Hozz be egy meglévő kéziratot — a tartalom fejezetekre/jelenetekre bomlik és ",
+    importIntroStrong: "teljesen szerkeszthető",
+    importIntroAfter: " lesz a kéziratban.",
+    importDropTitle: "Húzd ide a fájlt, vagy tallózz",
+    importDropHint: "DOCX · EPUB 3 · Markdown · PDF · TXT — max. 50 MB",
+    importToast: "A kézirat importálása a V1-ben érkezik",
+    importFormatsLabel: "Támogatott formátumok",
+    importFormats: [
+      { badge: "DOC", name: "Word (.docx)", hint: "stílusok → fejezetek" },
+      { badge: "EPB", name: "EPUB 3", hint: "fejezetek + média" },
+      { badge: "MD", name: "Markdown", hint: "# → fejezet, ## → jelenet" },
+      { badge: "PDF", name: "PDF", hint: "szövegréteg kinyerése" },
+      { badge: "TXT", name: "Sima szöveg", hint: "üres sor = jelenethatár" },
+    ],
+    importAiNote:
+      "Importálás után megnézheted a fejezet/jelenet felbontást, és az AI fel is ajánlhatja a Codex-bejegyzések automatikus kinyerését a szövegből.",
+    /** Loading / error state for the book (title) resolution. */
+    bookLoading: "Könyv betöltése…",
+    bookError: "Nem sikerült betölteni a könyvet",
+  },
+  /**
+   * Beállítások screen (`Alexandria App.dc.html` showsettings ~line 1556).
+   * Hub + Local (Ollama, MVP real-ish) / Cloud (V1) / MCP (V2) subpages +
+   * Generálás (Temperature / Max tokens — client-persisted) + Adatkezelés.
+   * Copy is verbatim from the prototype.
+   */
+  settings: {
+    /** Hub heading. */
+    title: "Beállítások",
+    subtitle: "Modell-providerek, MCP-eszközök és generálási paraméterek.",
+    /** Providers section. */
+    providersLabel: "Providerek",
+    localTitle: "Lokális modell-provider",
+    localHubSub: (n: number) => `Ollama · ${n} modell elérhető`,
+    localBadge: "aktív",
+    cloudTitle: "Felhő modell-provider",
+    cloudHubSub: "Gemini, Claude, OpenAI, OpenRouter",
+    cloudBadge: "1 kulcs",
+    mcpTitle: "MCP provider",
+    mcpHubSub: "Model Context Protocol — külső eszközök",
+    mcpBadge: "2 szerver",
+    providerNavAria: (title: string) => `${title} megnyitása`,
+    /** Generálás section (client-persisted params). */
+    generationLabel: "Generálás",
+    temperatureLabel: "Temperature",
+    maxTokensLabel: "Max tokenek",
+    temperatureAria: "Temperature",
+    maxTokensAria: "Max tokenek",
+    modelRouterNote:
+      "A modellnevek a ModelRouter konfigurációból érkeznek — a felületen sosem hardcode-oltak.",
+    /** Adatkezelés section (V1+ stubs). */
+    dataLabel: "Adatkezelés",
+    archiveTitle: "Archívum",
+    archiveHint:
+      "Archivált jelenetek, Codex-bejegyzések, chatek visszaállítása",
+    archiveToast: "Az Archívum a V1-ben érkezik",
+    backupTitle: "Projekt biztonsági mentése",
+    backupHint: "Teljes projekt exportálása JSON-ként",
+    backupToast: "A JSON biztonsági mentés a V1-ben érkezik",
+    /** Subpage back link. */
+    back: "Beállítások",
+    backAria: "Vissza a beállításokhoz",
+    /** Local subpage (MVP). */
+    localSubtitle:
+      "Ollama vagy LM Studio a saját gépeden — a kézirat nem hagyja el az eszközt.",
+    ollamaName: "Ollama",
+    /** Health row — the backend has no health/ping endpoint, so this is an
+     * honest stub: we show "elérhetőség ismeretlen" until the user checks. */
+    ollamaEndpoint: "http://localhost:11434",
+    healthUnknown: "elérhetőség ismeretlen",
+    healthCheck: "Ellenőrzés",
+    healthToast:
+      "A lokális provider állapot-ellenőrzése a V1-ben érkezik (nincs még health-végpont).",
+    lmStudioName: "LM Studio",
+    lmStudioEndpoint: "http://localhost:1234 · nem elérhető",
+    lmStudioReconnect: "Újracsatlakozás",
+    lmStudioToast: "Az LM Studio támogatás a V1-ben érkezik",
+    installedModelsLabel: "Telepített modellek",
+    modelsLoading: "Modellek betöltése…",
+    modelsError: "Nem sikerült betölteni a modelleket",
+    modelsEmpty: "Nincs telepített modell.",
+    /** Recommended tag on the default model. */
+    modelRecommended: "ajánlott",
+    downloadModel: "Modell letöltése",
+    downloadModelToast: "A modell-letöltés a V1-ben érkezik",
+    /** Cloud subpage (V1 — visual stub). */
+    cloudSubtitle:
+      "Add meg az API-kulcsokat a felhőszolgáltatókhoz. A kulcsok titkosítva, lokálisan tárolódnak.",
+    cloudV1Note:
+      "A felhő-providerek a V1-ben érkeznek — a kulcsok itt még nem tárolódnak.",
+    cloudGeminiName: "Google Gemini",
+    cloudGeminiStatus: "Csatlakoztatva · ••••3f8a",
+    cloudGeminiSwap: "Csere",
+    cloudClaudeName: "Anthropic Claude",
+    cloudNotSet: "Nincs beállítva",
+    cloudClaudePlaceholder: "sk-ant-…",
+    cloudOpenRouterName: "OpenRouter",
+    cloudOpenRouterPlaceholder: "sk-or-…",
+    cloudKeyToast: "Az API-kulcsok tárolása a V1-ben érkezik",
+    /** MCP subpage (V2 — visual stub). */
+    mcpSubtitle:
+      "Model Context Protocol szerverek — külső eszközök és adatforrások, amiket az AI használhat (pl. webkeresés, helyesírás, kutatás-adatbázis).",
+    mcpV2Note: "Az MCP-providerek a V2-ben érkeznek.",
+    mcpSearchName: "Webkeresés",
+    mcpSearchSub: "npx mcp-server-brave · 4 eszköz",
+    mcpResearchName: "Kutatás-adatbázis",
+    mcpResearchSub: "helyi mappa · 2 eszköz",
+    mcpRunning: "fut",
+    mcpAddServer: "MCP szerver hozzáadása",
+    mcpToggleAria: (name: string) => `${name} be/ki`,
+    mcpFootnote:
+      "A bekapcsolt MCP-eszközök az AI generálás és a Chat kontextusában válnak elérhetővé.",
+  },
   command: {
     placeholder: "Keresés a projektben… jelenetek, Codex, műveletek",
     escHint: "Esc",

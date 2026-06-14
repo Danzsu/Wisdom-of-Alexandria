@@ -21,6 +21,7 @@
 import { apiFetch } from "./client";
 import { listBooks } from "./books";
 import { listProjects } from "./projects";
+import { currentGenerationParams } from "@/lib/stores/generation-settings-store";
 import {
   aiDescribeResultSchema,
   aiResultSchema,
@@ -52,13 +53,27 @@ export async function listModels(): Promise<ModelsResponse> {
 
 /* ---------------------------------------------------------------------------
  * AI generation (each persists a Revision + GenerationJob)
+ *
+ * Every generation body carries the client-persisted generation params
+ * (temperature / max_tokens — M8 Beállítások). The store values are the base;
+ * any param explicitly set on the caller's `input` wins. See
+ * `lib/stores/generation-settings-store.ts` for why these live on the client.
  * ------------------------------------------------------------------------- */
+
+/**
+ * Merge the persisted generation params under the caller's input so the AI body
+ * always carries `temperature` / `max_tokens`. Caller-supplied values override
+ * the store (e.g. a future per-action override); store values fill the rest.
+ */
+function withGenerationParams<T extends object>(input: T): T {
+  return { ...currentGenerationParams(), ...input };
+}
 
 /** Rewrite selected text with an instruction. */
 export async function rewrite(input: RewriteRequest): Promise<AIResult> {
   const data = await apiFetch<unknown>("/ai/rewrite", {
     method: "POST",
-    body: input,
+    body: withGenerationParams(input),
   });
   return aiResultSchema.parse(data);
 }
@@ -69,7 +84,7 @@ export async function describe(
 ): Promise<AIDescribeResult> {
   const data = await apiFetch<unknown>("/ai/describe", {
     method: "POST",
-    body: input,
+    body: withGenerationParams(input),
   });
   return aiDescribeResultSchema.parse(data);
 }
@@ -80,7 +95,7 @@ export async function generateScene(
 ): Promise<AIResult> {
   const data = await apiFetch<unknown>("/ai/generate-scene", {
     method: "POST",
-    body: input,
+    body: withGenerationParams(input),
   });
   return aiResultSchema.parse(data);
 }
@@ -91,7 +106,7 @@ export async function writeContinue(
 ): Promise<AIResult> {
   const data = await apiFetch<unknown>("/ai/write-continue", {
     method: "POST",
-    body: input,
+    body: withGenerationParams(input),
   });
   return aiResultSchema.parse(data);
 }

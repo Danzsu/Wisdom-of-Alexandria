@@ -10,6 +10,7 @@
  * The `project_id` lives in the path; `BookCreate` carries only the book fields.
  */
 import { apiFetch } from "./client";
+import { listProjects } from "./projects";
 import {
   bookCreateSchema,
   bookListSchema,
@@ -46,4 +47,23 @@ export async function createBook(
     body,
   });
   return bookReadSchema.parse(data);
+}
+
+/**
+ * Resolve a `BookRead` from a bare `bookId`.
+ *
+ * Books are nested under a project and there is no top-level `GET /books/{id}`,
+ * but several routes (the Export screen) only carry `bookId`. We list projects
+ * and, for each, its books, returning the one whose id matches. Acceptable for
+ * the single-user MVP corpus; callers cache it via the hook layer. Throws (never
+ * returns a wrong/empty book) when no owning project holds the id.
+ */
+export async function resolveBookById(bookId: string): Promise<BookRead> {
+  const projects = await listProjects();
+  for (const project of projects) {
+    const books = await listBooks(project.id);
+    const match = books.find((b) => b.id === bookId);
+    if (match) return match;
+  }
+  throw new Error(`Nem található könyv ezzel az azonosítóval: ${bookId}`);
 }

@@ -117,22 +117,35 @@ export type ModelsResponse = z.infer<typeof modelsResponseSchema>;
 /* ---------------------------------------------------------------------------
  * Request bodies — mirror app/api/v1/ai.py request schemas. The model is always
  * supplied from the ModelSelector (config-driven); never a literal in the UI.
+ *
+ * Generation params (`temperature` / `max_tokens`) are OPTIONAL forward-compat
+ * fields: the client persists them (M8 Beállítások → Generálás) and attaches
+ * them to every generation body in `lib/api/ai.ts`. The v1 AI request schemas
+ * do not declare them yet, but FastAPI/Pydantic ignore unknown body fields, so
+ * sending them is harmless today and wired the day the backend adds them.
  * ------------------------------------------------------------------------- */
-export interface RewriteRequest {
+
+/** Optional client-supplied generation params attached to every AI body. */
+export interface GenerationParams {
+  temperature?: number;
+  max_tokens?: number;
+}
+
+export interface RewriteRequest extends GenerationParams {
   selected_text: string;
   instruction: string;
   scene_id?: string | null;
   model?: string | null;
 }
 
-export interface DescribeRequest {
+export interface DescribeRequest extends GenerationParams {
   selected_text: string;
   channels?: string[] | null;
   scene_id?: string | null;
   model?: string | null;
 }
 
-export interface GenerateSceneRequest {
+export interface GenerateSceneRequest extends GenerationParams {
   beats: string[];
   characters?: string;
   location?: string;
@@ -141,7 +154,7 @@ export interface GenerateSceneRequest {
   model?: string | null;
 }
 
-export interface WriteContinueRequest {
+export interface WriteContinueRequest extends GenerationParams {
   scene_text: string;
   context?: string;
   word_count_target?: number;
