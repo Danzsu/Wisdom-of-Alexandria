@@ -60,4 +60,44 @@ if (typeof window !== "undefined") {
         dispatchEvent: () => false,
       }) as unknown as MediaQueryList;
   }
+
+  /* --------------------------------------------------------------------------
+   * ProseMirror / Tiptap layout shims (test-only). jsdom does not implement
+   * geometry (`getClientRects` / `getBoundingClientRect`), which ProseMirror
+   * calls when it scrolls the selection into view after a transaction. Without
+   * these, editor edits raise async "getClientRects is not a function" errors
+   * during teardown. Returning an empty DOMRect list is enough — measurement is
+   * never asserted, only that it doesn't throw.
+   * ----------------------------------------------------------------------- */
+  const emptyRect: DOMRect = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    toJSON: () => ({}),
+  };
+  const emptyRectList = {
+    length: 0,
+    item: () => null,
+    [Symbol.iterator]: function* () {},
+  } as unknown as DOMRectList;
+
+  if (!window.HTMLElement.prototype.getClientRects) {
+    window.HTMLElement.prototype.getClientRects = () => emptyRectList;
+  }
+  if (!window.HTMLElement.prototype.getBoundingClientRect) {
+    window.HTMLElement.prototype.getBoundingClientRect = () => emptyRect;
+  }
+  if (typeof window.Range !== "undefined") {
+    if (!window.Range.prototype.getClientRects) {
+      window.Range.prototype.getClientRects = () => emptyRectList;
+    }
+    if (!window.Range.prototype.getBoundingClientRect) {
+      window.Range.prototype.getBoundingClientRect = () => emptyRect;
+    }
+  }
 }

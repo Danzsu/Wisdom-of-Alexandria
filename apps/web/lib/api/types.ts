@@ -73,6 +73,80 @@ export const bookCreateSchema = z.object({
 });
 export type BookCreate = z.infer<typeof bookCreateSchema>;
 
+/* ---------------------------------------------------------------------------
+ * Chapter — mirrors app/schemas/chapter.py
+ * ------------------------------------------------------------------------- */
+
+/** A chapter as returned by the API (`ChapterRead`). Belongs to a book. */
+export const chapterReadSchema = z.object({
+  id: idString,
+  book_id: idString,
+  title: z.string(),
+  summary: z.string().nullable(),
+  order_index: z.number().int(),
+  status: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type ChapterRead = z.infer<typeof chapterReadSchema>;
+
+/* ---------------------------------------------------------------------------
+ * Scene — mirrors app/schemas/scene.py
+ * ------------------------------------------------------------------------- */
+
+/** A scene as returned by the API (`SceneRead`). Belongs to a chapter. */
+export const sceneReadSchema = z.object({
+  id: idString,
+  chapter_id: idString,
+  title: z.string(),
+  content: z.string().nullable(),
+  summary: z.string().nullable(),
+  order_index: z.number().int(),
+  status: z.string(),
+  word_count: z.number().int(),
+  pov_character_id: idString.nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type SceneRead = z.infer<typeof sceneReadSchema>;
+
+/**
+ * Request body for patching a scene (`SceneUpdate`). All fields optional; the
+ * backend recomputes `word_count` server-side whenever `content` is present, so
+ * the frontend never sends it.
+ */
+export const sceneUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  content: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  order_index: z.number().int().optional(),
+  status: z.string().optional(),
+  pov_character_id: idString.nullable().optional(),
+});
+export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
+
+/* ---------------------------------------------------------------------------
+ * Codex entry — mirrors app/schemas/codex_entry.py (read-only here for M4's
+ * CodexMention popover; full CRUD is M6 and is project-scoped).
+ * ------------------------------------------------------------------------- */
+
+/** A codex entry as returned by the API (`CodexEntryRead`). */
+export const codexEntryReadSchema = z.object({
+  id: idString,
+  project_id: idString,
+  title: z.string(),
+  entry_type: z.string(),
+  content: z.string().nullable(),
+  ai_visible: z.boolean(),
+  tags: z.array(z.string()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type CodexEntryRead = z.infer<typeof codexEntryReadSchema>;
+
 /** Array schemas used by list endpoints. */
 export const projectListSchema = z.array(projectReadSchema);
 export const bookListSchema = z.array(bookReadSchema);
+export const chapterListSchema = z.array(chapterReadSchema);
+export const sceneListSchema = z.array(sceneReadSchema);
+export const codexEntryListSchema = z.array(codexEntryReadSchema);

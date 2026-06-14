@@ -6,10 +6,24 @@
 import { http, HttpResponse } from "msw";
 import { API_BASE_URL } from "@/lib/api/client";
 import {
+  CHAPTERS_FIXTURE,
+  FAROSZ_CODEX,
   FAROSZ_PROJECT,
   PROJECTS_FIXTURE,
+  SCENES_BY_CHAPTER,
 } from "./fixtures";
-import type { BookRead, ProjectRead } from "@/lib/api/types";
+import type {
+  BookRead,
+  ProjectRead,
+  SceneRead,
+} from "@/lib/api/types";
+
+/** Recompute word count the way the backend does (whitespace split). */
+function wordCount(text: string | null | undefined): number {
+  if (!text) return 0;
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+}
 
 const base = `${API_BASE_URL}/api/v1`;
 
@@ -69,4 +83,51 @@ export const handlers = [
       status: 201,
     });
   }),
+
+  /* ---- Chapters (book-scoped) ---- */
+  http.get(`${base}/books/:bookId/chapters`, () =>
+    HttpResponse.json(CHAPTERS_FIXTURE),
+  ),
+
+  /* ---- Scenes (chapter-scoped) ---- */
+  http.get(`${base}/chapters/:chapterId/scenes`, ({ params }) =>
+    HttpResponse.json(SCENES_BY_CHAPTER[String(params.chapterId)] ?? []),
+  ),
+
+  http.get(`${base}/chapters/:chapterId/scenes/:sceneId`, ({ params }) => {
+    const scenes = SCENES_BY_CHAPTER[String(params.chapterId)] ?? [];
+    const scene = scenes.find((s) => s.id === params.sceneId);
+    if (!scene) {
+      return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
+    }
+    return HttpResponse.json(scene);
+  }),
+
+  http.patch(
+    `${base}/chapters/:chapterId/scenes/:sceneId`,
+    async ({ params, request }) => {
+      const scenes = SCENES_BY_CHAPTER[String(params.chapterId)] ?? [];
+      const scene = scenes.find((s) => s.id === params.sceneId);
+      if (!scene) {
+        return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
+      }
+      const body = (await request.json()) as Partial<SceneRead>;
+      const merged: SceneRead = {
+        ...scene,
+        ...body,
+        // The backend recomputes word_count from content on update.
+        word_count:
+          body.content !== undefined
+            ? wordCount(body.content)
+            : scene.word_count,
+        updated_at: "2026-06-14T16:00:00Z",
+      };
+      return HttpResponse.json(merged);
+    },
+  ),
+
+  /* ---- Codex (project-scoped, read-only for M4) ---- */
+  http.get(`${base}/projects/:projectId/codex`, () =>
+    HttpResponse.json(FAROSZ_CODEX),
+  ),
 ];

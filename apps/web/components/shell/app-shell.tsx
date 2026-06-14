@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useShellChrome } from "@/lib/use-shell-chrome";
+import { useEditorStore } from "@/lib/stores/editor-store";
 import { DEMO_BOOK_ID } from "@/lib/routes";
 import { TopBar } from "./top-bar";
 import { IconRail } from "./icon-rail";
@@ -24,17 +25,40 @@ import { CommandPaletteHotkey } from "./command-palette-hotkey";
  * - outside a book (the projects picker) the rail/sidebars are hidden
  * - the StatusBar + AI-inspector slot appear only on the Write route
  *
+ * Focus mode (`focusOn`, Write route only): distraction-free writing. The TopBar,
+ * left sidebar (chapter tree), AI-inspector slot and StatusBar are all hidden,
+ * leaving only the manuscript `<main>` (its in-page toolbar — with the Fókusz
+ * toggle — and the timeline rail are gated by the page). Esc exits focus mode so
+ * the chrome is always recoverable without a mouse.
+ *
  * The route children render into the `<main>` area.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const chrome = useShellChrome();
+  const focusOn = useEditorStore((s) => s.focusOn);
+  const toggleFocus = useEditorStore((s) => s.toggleFocus);
+  // Focus mode only applies on the Write route (it's the only route with the
+  // toggle / a manuscript to focus on).
+  const focusMode = chrome.isWrite && focusOn;
+
+  // Esc exits focus mode (keeps the chrome recoverable without the toggle).
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") toggleFocus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [focusMode, toggleFocus]);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg text-text">
-      <TopBar inBook={chrome.inBook} isWrite={chrome.isWrite} />
+      {focusMode ? null : (
+        <TopBar inBook={chrome.inBook} isWrite={chrome.isWrite} />
+      )}
 
       <div className="flex min-h-0 flex-1">
-        {chrome.showRail ? (
+        {chrome.showRail && !focusMode ? (
           chrome.leftSidebar === "tree" ? (
             <ChapterTree />
           ) : chrome.leftSidebar === "codex" ? (
@@ -46,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="flex min-w-0 flex-1 flex-col">{children}</main>
 
-        {chrome.isWrite ? (
+        {chrome.isWrite && !focusMode ? (
           <aside
             aria-label="AI segéd"
             className="flex w-inspector flex-none flex-col border-l border-border bg-surface"
@@ -59,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
       </div>
 
-      {chrome.isWrite ? <StatusBar /> : null}
+      {chrome.isWrite && !focusMode ? <StatusBar /> : null}
 
       <Sparkfield />
       <CommandPalette />

@@ -479,6 +479,77 @@ select:focus-visible,
   animation: woaSweep 0.7s ease;
 }
 
+/* ----------------------------------------------------------------------------
+   Manuscript article (Write View, M4). The two radial gold gradients are
+   documented hardcoded gradients (see the implementation plan — article
+   radials/covers are token-exempt). Font / size / width / line-height are set
+   inline from the editor store; these rules cover the static decoration + the
+   in-editor block typography (kicker/H1/H2 live in the React shell, body blocks
+   come from Tiptap inside .woa-manuscript-prose).
+   -------------------------------------------------------------------------- */
+.woa-manuscript-article {
+  background-image:
+    radial-gradient(circle at 14% 8%, rgba(180, 140, 70, 0.05), transparent 40%),
+    radial-gradient(circle at 86% 92%, rgba(180, 140, 70, 0.04), transparent 38%);
+}
+
+/* Tiptap body blocks: paragraph rhythm + heading styles matching the prototype. */
+.woa-manuscript-prose p {
+  margin: 0 0 18px;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.woa-manuscript-prose p:last-child {
+  margin-bottom: 0;
+}
+.woa-manuscript-prose h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  hyphens: none;
+}
+.woa-manuscript-prose h2 {
+  margin: 0 0 28px;
+  font-size: 17px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--text-muted);
+  hyphens: none;
+}
+.woa-manuscript-prose blockquote {
+  margin: 0 0 18px;
+  padding-left: 14px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-soft);
+  font-style: italic;
+}
+.woa-manuscript-prose ul,
+.woa-manuscript-prose ol {
+  margin: 0 0 18px;
+  padding-left: 24px;
+}
+.woa-manuscript-prose hr {
+  border: none;
+  margin: 22px 0;
+  text-align: center;
+  color: var(--accent-text);
+}
+.woa-manuscript-prose hr::after {
+  content: "⁂";
+  letter-spacing: 0.3em;
+  font-size: 15px;
+}
+.woa-manuscript-prose .woa-ms-highlight {
+  background: var(--accent-muted);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+/* First-line paragraph indent toggle. */
+.woa-manuscript-article[data-indent="on"] .woa-manuscript-prose p {
+  text-indent: 1.6em;
+}
+
 /* Skeleton shimmer: a moving gradient across a muted surface. */
 .woa-skel {
   background: linear-gradient(
