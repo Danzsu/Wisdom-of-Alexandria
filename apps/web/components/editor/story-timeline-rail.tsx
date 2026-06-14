@@ -54,7 +54,7 @@ export function StoryTimelineRail({
       aria-label={hu.write.timelineAria}
       className="flex w-timeline-rail flex-none flex-col items-center gap-0 border-l border-border bg-bg-subtle py-3.5"
     >
-      <span className="mb-2.5 [writing-mode:vertical-rl] rotate-180 text-[9px] font-semibold tracking-[0.08em] text-text-faint">
+      <span className="mb-2.5 [writing-mode:vertical-rl] rotate-180 text-[9px] font-semibold tracking-[0.08em] text-text-muted">
         {hu.write.timelineLabel}
       </span>
       <div className="flex w-full flex-1 flex-col items-center gap-[3px] py-1">
@@ -79,7 +79,7 @@ export function StoryTimelineRail({
           );
         })}
       </div>
-      <span className="mt-2 text-[9px] tabular-nums text-text-faint">
+      <span className="mt-2 text-[9px] tabular-nums text-text-muted">
         {position}/{scenes.length}
       </span>
     </div>

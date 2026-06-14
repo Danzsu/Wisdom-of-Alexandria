@@ -70,10 +70,9 @@ export function BarChart({
         {data.map((datum) => (
           <span
             key={datum.label}
-            className={cn(
-              "flex-1 text-center text-[11px]",
-              datum.planned ? "text-text-faint" : "text-text-muted",
-            )}
+            // Both real and "planned" labels use text-muted: the prior
+            // text-faint failed WCAG AA on these informational axis labels.
+            className="flex-1 text-center text-[11px] text-text-muted"
           >
             {datum.label}
           </span>

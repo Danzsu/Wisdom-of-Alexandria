@@ -8,7 +8,7 @@ import { toast } from "@/components/kit/toast";
 import { Tooltip } from "@/components/kit/tooltip";
 import { useNavTo } from "@/lib/use-nav-to";
 import { useUIStore } from "@/lib/stores/ui-store";
-import { routes, DEMO_BOOK_ID } from "@/lib/routes";
+import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { UserMenu } from "./user-menu";
 import { ProjectSwitcher } from "./project-switcher";
@@ -21,6 +21,8 @@ export interface TopBarProps {
   inBook: boolean;
   /** Whether the current route is the Write view (shows the scene breadcrumb). */
   isWrite: boolean;
+  /** Active book id (from the route) — drives breadcrumb/settings navigation. */
+  bookId: string | null;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface TopBarProps {
  * a Share pill (in-book stub → toast), the search trigger (opens the command
  * palette), the theme toggle, a settings button and the user menu.
  */
-export function TopBar({ inBook, isWrite }: TopBarProps) {
+export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
   const navTo = useNavTo();
   const openCommand = useUIStore((s) => s.openCommand);
 
@@ -54,16 +56,16 @@ export function TopBar({ inBook, isWrite }: TopBarProps) {
           <span aria-hidden="true" className="text-[14px] text-text-faint">
             /
           </span>
-          <ProjectSwitcher title={hu.project.demoTitle} />
+          <ProjectSwitcher title={hu.project.demoTitle} bookId={bookId} />
         </>
       ) : null}
 
       {/* Centered scene breadcrumb (Write only) */}
       <div className="flex flex-1 justify-center">
-        {isWrite ? (
+        {isWrite && bookId ? (
           <button
             type="button"
-            onClick={() => navTo(routes.book(DEMO_BOOK_ID, "terv"))}
+            onClick={() => navTo(routes.book(bookId, "terv"))}
             className="flex h-[30px] items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-text-muted transition-colors hover:bg-surface-muted"
           >
             {hu.topbar.breadcrumbChapter}
@@ -119,8 +121,9 @@ export function TopBar({ inBook, isWrite }: TopBarProps) {
         <button
           type="button"
           aria-label={hu.topbar.settingsAria}
-          onClick={() => navTo(routes.book(DEMO_BOOK_ID, "beallitasok"))}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          disabled={!bookId}
+          onClick={() => bookId && navTo(routes.book(bookId, "beallitasok"))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Icon icon={SlidersHorizontal} size={16} />
         </button>

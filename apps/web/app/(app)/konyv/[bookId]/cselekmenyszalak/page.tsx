@@ -1,11 +1,12 @@
 import { ScreenPlaceholder } from "@/components/shell";
+import { hu } from "@/lib/i18n/hu";
 
 /** Cselekményszálak (Subplots) placeholder — filled in M10 (V1). */
 export default function CselekmenyszalakPage() {
   return (
     <ScreenPlaceholder
-      label="Cselekményszálak"
-      hint="A Cselekményszálak az M10-ben érkezik."
+      label={hu.placeholders.cselekmenyszalakLabel}
+      hint={hu.placeholders.cselekmenyszalakHint}
     />
   );
 }

@@ -208,7 +208,11 @@ export function SlashMenu({
   return (
     <div
       role="menu"
+      tabIndex={-1}
       aria-label={hu.write.slashMenuAria}
+      aria-activedescendant={
+        items[active] ? `slash-item-${items[active].id}` : undefined
+      }
       className="absolute left-8 top-12 z-50 flex w-[234px] flex-col gap-px rounded-xl border border-border bg-surface p-[5px] shadow-popover [animation:woaToastIn_.15s_ease-out]"
     >
       {items.map((item, index) => {
@@ -220,6 +224,7 @@ export function SlashMenu({
               <MenuSection label={item.section} className="px-2.5 pb-1 pt-1.5" />
             ) : null}
             <button
+              id={`slash-item-${item.id}`}
               type="button"
               role="menuitem"
               data-active={index === active ? "true" : undefined}

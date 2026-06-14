@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ImageUp, Sparkles } from "lucide-react";
+import { ChevronDown, ImageUp } from "lucide-react";
 import {
   Button,
   FieldLabel,
@@ -25,6 +25,7 @@ import {
   PopoverMenuContent,
   PopoverMenuTrigger,
   MenuRow,
+  PillButton,
   SegmentedControl,
   Textarea,
   toast,
@@ -130,11 +131,20 @@ export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
   /** Build the API payloads and run the two-step create. */
   function handleCreate(data: WizardValues) {
     setSubmitError(null);
+    // NOTE (MVP contract, see apps/api/app/schemas/book.py): the backend Book
+    // schema has NO author / POV / audience fields. We collect those in the
+    // wizard for V1 but intentionally do NOT persist them here — there is no MVP
+    // slot to store them. The summary step labels them accordingly so the user
+    // is never told they were saved. The genre maps ONLY to the book's `genre`
+    // field; the project's `description` is left null (genre is a book concept,
+    // not a project description). Style preferences are stored on the book's
+    // synopsis slot for now (no dedicated field), mirrored below.
     createBook.mutate(
       {
         project: {
           title: data.title,
-          description: data.genre || null,
+          // genre is NOT a project description — leave it null (no fabrication).
+          description: null,
           language: data.language,
         },
         book: {
@@ -146,6 +156,8 @@ export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
           // Style preferences are captured for V1; stored on the book synopsis
           // slot for now (no dedicated field in the MVP contract).
           synopsis: data.style.trim() ? data.style.trim() : null,
+          // author / pov / audience: collected (data.author/.pov/.audience) but
+          // intentionally NOT persisted — no MVP field exists for them.
         },
       },
       {
@@ -224,7 +236,7 @@ export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
               variant="cta"
               size={34}
               disabled={createBook.isPending}
-              leadingIcon={<Icon icon={Sparkles} size={14} />}
+              leadingIcon={<BrandStar size={14} />}
               onClick={form.handleSubmit(handleCreate)}
             >
               {hu.wizard.create}
@@ -334,6 +346,49 @@ function StepBasics({
 /* Step 2 — Stílus és AI                                                       */
 /* -------------------------------------------------------------------------- */
 
+/** A wrapping group of single-select pills (replaces the joined segmented
+ * control where the Hungarian labels are too long to fit one row — proto 3580). */
+function PillGroup<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <PillButton
+              key={option.value}
+              size={30}
+              role="radio"
+              aria-checked={active}
+              active={active}
+              // Prototype selected pill is a solid accent-strong fill (proto 3580).
+              className={
+                active
+                  ? "border-accent bg-accent-strong font-semibold text-accent-fg"
+                  : undefined
+              }
+              onClick={() => onChange(option.value)}
+            >
+              {option.label}
+            </PillButton>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StepStyle({
   form,
 }: {
@@ -350,47 +405,36 @@ function StepStyle({
         {hu.wizard.step2Eyebrow}
       </p>
       <div className="flex flex-col gap-3.5">
-        <div>
-          <FieldLabel>{hu.wizard.povLabel}</FieldLabel>
-          <SegmentedControl<Pov>
-            aria-label={hu.wizard.povLabel}
-            value={pov}
-            onValueChange={(v) => setValue("pov", v, { shouldDirty: true })}
-            options={[
-              { value: "p1", label: hu.wizard.povFirst },
-              { value: "p3k", label: hu.wizard.povThirdLimited },
-              { value: "p3m", label: hu.wizard.povThirdOmniscient },
-            ]}
-          />
-        </div>
-        <div>
-          <FieldLabel>{hu.wizard.audienceLabel}</FieldLabel>
-          <SegmentedControl<Audience>
-            aria-label={hu.wizard.audienceLabel}
-            value={audience}
-            onValueChange={(v) =>
-              setValue("audience", v, { shouldDirty: true })
-            }
-            options={[
-              { value: "felnott", label: hu.wizard.audienceAdult },
-              { value: "ya", label: hu.wizard.audienceYa },
-              { value: "gyerek", label: hu.wizard.audienceChild },
-            ]}
-          />
-        </div>
-        <div>
-          <FieldLabel>{hu.wizard.lengthLabel}</FieldLabel>
-          <SegmentedControl<Length>
-            aria-label={hu.wizard.lengthLabel}
-            value={length}
-            onValueChange={(v) => setValue("length", v, { shouldDirty: true })}
-            options={[
-              { value: "50", label: hu.wizard.length50 },
-              { value: "80", label: hu.wizard.length80 },
-              { value: "100", label: hu.wizard.length100 },
-            ]}
-          />
-        </div>
+        <PillGroup<Pov>
+          label={hu.wizard.povLabel}
+          value={pov}
+          onChange={(v) => setValue("pov", v, { shouldDirty: true })}
+          options={[
+            { value: "p1", label: hu.wizard.povFirst },
+            { value: "p3k", label: hu.wizard.povThirdLimited },
+            { value: "p3m", label: hu.wizard.povThirdOmniscient },
+          ]}
+        />
+        <PillGroup<Audience>
+          label={hu.wizard.audienceLabel}
+          value={audience}
+          onChange={(v) => setValue("audience", v, { shouldDirty: true })}
+          options={[
+            { value: "felnott", label: hu.wizard.audienceAdult },
+            { value: "ya", label: hu.wizard.audienceYa },
+            { value: "gyerek", label: hu.wizard.audienceChild },
+          ]}
+        />
+        <PillGroup<Length>
+          label={hu.wizard.lengthLabel}
+          value={length}
+          onChange={(v) => setValue("length", v, { shouldDirty: true })}
+          options={[
+            { value: "50", label: hu.wizard.length50 },
+            { value: "80", label: hu.wizard.length80 },
+            { value: "100", label: hu.wizard.length100 },
+          ]}
+        />
         <div>
           <FieldLabel htmlFor="wiz-style">{hu.wizard.styleLabel}</FieldLabel>
           <Textarea
@@ -410,16 +454,30 @@ function StepStyle({
 /* Step 3 — Összegzés                                                          */
 /* -------------------------------------------------------------------------- */
 
+/** Human-readable audience labels for the summary step. */
+const AUDIENCE_LABEL: Record<Audience, string> = {
+  felnott: hu.wizard.audienceAdult,
+  ya: hu.wizard.audienceYa,
+  gyerek: hu.wizard.audienceChild,
+};
+
 function StepSummary({ values }: { values: WizardValues }) {
-  const rows: { label: string; value: string }[] = [
+  // `notSaved` rows are collected for V1 but NOT persisted by the MVP create
+  // (see handleCreate) — we tag them so the user is never told they were saved.
+  const rows: { label: string; value: string; notSaved?: boolean }[] = [
     { label: hu.wizard.summaryTitle, value: values.title },
-    { label: hu.wizard.summaryAuthor, value: values.author },
+    { label: hu.wizard.summaryAuthor, value: values.author, notSaved: true },
     { label: hu.wizard.summaryGenre, value: values.genre },
     {
       label: hu.wizard.summaryLanguage,
       value: values.language === "hu" ? hu.wizard.languageHu : hu.wizard.languageEn,
     },
-    { label: hu.wizard.summaryPov, value: POV_LABEL[values.pov] },
+    { label: hu.wizard.summaryPov, value: POV_LABEL[values.pov], notSaved: true },
+    {
+      label: hu.wizard.summaryAudience,
+      value: AUDIENCE_LABEL[values.audience],
+      notSaved: true,
+    },
     { label: hu.wizard.summaryLength, value: LENGTH_LABEL[values.length] },
   ];
 
@@ -440,7 +498,14 @@ function StepSummary({ values }: { values: WizardValues }) {
             <span className="w-[130px] flex-none text-text-muted">
               {row.label}
             </span>
-            <span className="text-text">{row.value}</span>
+            <span className="text-text">
+              {row.value}
+              {row.notSaved ? (
+                <span className="ml-1.5 text-[11px] text-text-faint">
+                  {hu.wizard.summaryNotSavedTag}
+                </span>
+              ) : null}
+            </span>
           </div>
         ))}
       </div>

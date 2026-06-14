@@ -15,21 +15,28 @@ import { hu } from "@/lib/i18n/hu";
 
 /** Placeholder project list.
  *
- * M3 note: wiring this to `useProjects()` was deferred. The shell's TopBar tests
+ * Note: wiring this to `useProjects()` was deferred. The shell's TopBar tests
  * mount the switcher without a QueryClientProvider, so introducing a Query hook
- * here would require touching unrelated M2 shell tests. Per the M3 spec ("if
- * low-effort … otherwise leave it and note for later") this is left for M4, when
- * the shell test harness can provide the Query/MSW context. */
+ * here would require touching unrelated shell tests. Real project switching
+ * lands when the switcher is wired to `useProjects()` (a later milestone), when
+ * the shell test harness can provide the Query/MSW context. The list is a
+ * sample/demo placeholder for now. */
 const PLACEHOLDER_PROJECTS = [{ id: "demo", title: hu.project.demoTitle }];
 
 /**
  * TopBar project switcher (shown only inside a book). Renders the current book
- * title + chevron and opens a placeholder project list; choosing one routes to
- * the projects picker for now (real switching lands when the switcher is wired
- * to `useProjects()` in M4). Open state is owned by the shared UI store
- * (single-open menu rule).
+ * title + chevron and opens a placeholder project list. The current book entry
+ * routes to its plan view (real book id, never a demo id); other entries fall
+ * back to the projects picker until the switcher is wired to `useProjects()`.
+ * Open state is owned by the shared UI store (single-open menu rule).
  */
-export function ProjectSwitcher({ title }: { title: string }) {
+export function ProjectSwitcher({
+  title,
+  bookId,
+}: {
+  title: string;
+  bookId: string | null;
+}) {
   const navTo = useNavTo();
   const openMenu = useUIStore((s) => s.openMenu);
   const setMenu = useUIStore((s) => s.setMenu);
@@ -52,7 +59,12 @@ export function ProjectSwitcher({ title }: { title: string }) {
           <MenuRow
             key={p.id}
             leadingIcon={<Icon icon={BookOpen} size={15} />}
-            onSelect={() => navTo(routes.projects())}
+            // The current book routes to its plan view with the REAL book id;
+            // every other (placeholder) entry falls back to the projects picker
+            // until real project switching is wired in.
+            onSelect={() =>
+              navTo(bookId ? routes.book(bookId, "terv") : routes.projects())
+            }
           >
             {p.title}
           </MenuRow>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
+import { hu } from "@/lib/i18n/hu";
 
 /**
  * Theme switch button. Shows a sun in light mode and a moon in dark mode, and
@@ -24,8 +25,8 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      aria-label="Téma váltása"
-      title="Téma váltása"
+      aria-label={hu.kit.themeToggle}
+      title={hu.kit.themeToggle}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       style={{
         width: 36,

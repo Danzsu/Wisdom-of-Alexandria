@@ -13,8 +13,10 @@
  * (`/books/{bid}/chapters`) and scenes are chapter-scoped
  * (`/chapters/{cid}/scenes`). The Write route only carries `bookId` + `sceneId`,
  * so {@link useBookTree} loads the whole chapter+scene tree for a book, and
- * {@link useSceneLocation} resolves which chapter owns a given scene id.
+ * {@link findSceneLocation} resolves which chapter owns a given scene id within
+ * that loaded tree.
  */
+import { useCallback } from "react";
 import {
   useMutation,
   useQueries,
@@ -82,6 +84,29 @@ export function useProjectBooks(
     queryFn: () => listBooks(projectId as string),
     enabled: Boolean(projectId),
   });
+}
+
+/**
+ * Resolve a project's first book id, fetching (and caching) the book list via
+ * the query client. Returns the first book's id, or null when the project has no
+ * book yet. Throws on a fetch/parse error so callers can surface it (never
+ * swallowed). Used by the dashboard to open a project at its real BOOK route —
+ * a project owns many books, so its own id must never be used as a `[bookId]`.
+ */
+export function useResolveFirstBookId(): (
+  projectId: string,
+) => Promise<string | null> {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (projectId: string) => {
+      const books = await queryClient.fetchQuery({
+        queryKey: queryKeys.projectBooks(projectId),
+        queryFn: () => listBooks(projectId),
+      });
+      return books[0]?.id ?? null;
+    },
+    [queryClient],
+  );
 }
 
 /** Create a standalone project (invalidates the project list on success). */

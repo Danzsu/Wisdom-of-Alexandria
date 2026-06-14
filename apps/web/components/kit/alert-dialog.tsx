@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hu } from "@/lib/i18n/hu";
 import { Icon } from "./icon";
 import { Button } from "./button";
 
@@ -52,8 +53,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Végleges törlés",
-  cancelLabel = "Mégse",
+  confirmLabel = hu.kit.confirmDelete,
+  cancelLabel = hu.kit.cancel,
   onConfirm,
   onCancel,
   trigger,

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TooltipProvider } from "@/components/kit/tooltip";
+import { renderWithProviders } from "@/test/test-utils";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { useEditorStore } from "@/lib/stores/editor-store";
+import { FAROSZ_BOOK, SCENE_FIRST } from "@/test/msw/fixtures";
 
 const push = vi.fn();
 let pathname = "/konyv/demo/terv";
@@ -14,11 +16,14 @@ vi.mock("next/navigation", () => ({
 
 import { IconRail } from "../icon-rail";
 
-function renderRail(activeSegment: Parameters<typeof IconRail>[0]["activeSegment"]) {
-  return render(
-    <TooltipProvider>
-      <IconRail bookId="demo" activeSegment={activeSegment} />
-    </TooltipProvider>,
+function renderRail(
+  activeSegment: Parameters<typeof IconRail>[0]["activeSegment"],
+  bookId = FAROSZ_BOOK.id,
+) {
+  // IconRail now calls useBookTree to resolve the Write destination, so it needs
+  // the TanStack Query provider (renderWithProviders supplies it + MSW handlers).
+  return renderWithProviders(
+    <IconRail bookId={bookId} activeSegment={activeSegment} />,
   );
 }
 
@@ -27,19 +32,73 @@ describe("IconRail", () => {
     push.mockClear();
     pathname = "/konyv/demo/terv";
     useUIStore.setState({ openMenu: null, commandOpen: false, sparkActive: false });
+    useEditorStore.setState({ aiFreeOn: false });
   });
 
   afterEach(() => {
     useUIStore.getState().clearSpark();
   });
 
-  it("renders the primary workspace items", () => {
+  it("renders the prototype primary workspace items", () => {
     renderRail("terv");
-    expect(screen.getByRole("button", { name: "Áttekintés" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terv" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Írás" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Codex" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Tiszta írás" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Beállítások" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does NOT promote the V1 screens into the primary rail", () => {
+    renderRail("terv");
+    // Áttekintés / Idősor / Kapcsolatok / Cselekményszálak live in the Tools
+    // flyout (proto ~243-249), not as primary rail buttons.
+    expect(
+      screen.queryByRole("button", { name: "Áttekintés" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Idősor" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Kapcsolatok" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cselekményszálak" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces the V1 screens inside the Tools flyout", async () => {
+    renderRail("terv");
+    await userEvent.click(screen.getByRole("button", { name: "Eszközök" }));
+    // The analysis group holds the four V1 destinations.
+    expect(await screen.findByText("Áttekintés")).toBeInTheDocument();
+    expect(screen.getByText("Idősor")).toBeInTheDocument();
+    expect(screen.getByText("Kapcsolatok")).toBeInTheDocument();
+    expect(screen.getByText("Cselekményszálak")).toBeInTheDocument();
+  });
+
+  it("highlights the Tools button when a flyout segment is active", () => {
+    renderRail("idosor");
+    const tools = screen.getByRole("button", { name: "Eszközök" });
+    expect(tools).toHaveAttribute("aria-current", "page");
+    expect(tools.className).toContain("bg-accent-muted");
+  });
+
+  it("Tiszta írás enables AI-free mode and opens the manuscript", async () => {
+    renderRail("terv");
+    await waitFor(() => expect(true).toBe(true));
+    await userEvent.click(screen.getByRole("button", { name: "Tiszta írás" }));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        `/konyv/${FAROSZ_BOOK.id}/iras/${SCENE_FIRST.id}`,
+      ),
+    );
+    expect(useEditorStore.getState().aiFreeOn).toBe(true);
   });
 
   it("marks the active item from the active segment", () => {
@@ -55,14 +114,22 @@ describe("IconRail", () => {
   it("navigates and fires the sparkfield on item click", async () => {
     renderRail("terv");
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
-    expect(push).toHaveBeenCalledWith("/konyv/demo/codex");
+    expect(push).toHaveBeenCalledWith(`/konyv/${FAROSZ_BOOK.id}/codex`);
     expect(useUIStore.getState().sparkActive).toBe(true);
   });
 
-  it("Írás navigates to the scene route", async () => {
+  it("Írás navigates to the book's FIRST real scene (never a demo id)", async () => {
     renderRail("terv");
+    // Wait for the book tree to load so the first scene is resolved.
+    await waitFor(() => expect(true).toBe(true));
     await userEvent.click(screen.getByRole("button", { name: "Írás" }));
-    expect(push).toHaveBeenCalledWith("/konyv/demo/iras/demo");
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        `/konyv/${FAROSZ_BOOK.id}/iras/${SCENE_FIRST.id}`,
+      ),
+    );
+    // It must NOT navigate to a fabricated demo scene id.
+    expect(push).not.toHaveBeenCalledWith(`/konyv/${FAROSZ_BOOK.id}/iras/demo`);
   });
 
   it("opens the Tools flyout and navigates from it", async () => {
@@ -70,6 +137,6 @@ describe("IconRail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Eszközök" }));
     const prompts = await screen.findByText("Prompt Library");
     await userEvent.click(prompts);
-    expect(push).toHaveBeenCalledWith("/konyv/demo/promptok");
+    expect(push).toHaveBeenCalledWith(`/konyv/${FAROSZ_BOOK.id}/promptok`);
   });
 });

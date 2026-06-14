@@ -1,3 +1,6 @@
+// sample/demo data: the command palette ships a static sample result list until
+// real search is wired (M3+). DEMO_BOOK_ID / DEMO_SCENE_ID are acceptable here
+// because these are PLACEHOLDER samples, not a real user navigation path.
 import { routes, DEMO_BOOK_ID, DEMO_SCENE_ID } from "./routes";
 
 /** Command-palette result groups. Static placeholder data for M2 (M3+ wires real search). */

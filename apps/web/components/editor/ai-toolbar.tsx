@@ -263,7 +263,10 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
       <span className="text-border-strong" aria-hidden="true">
         ·
       </span>
-      <SaveIndicator saveState={saveState} />
+      {/* Live region so autosave failures ("Mentés sikertelen") are announced. */}
+      <span role="status" aria-live="polite" className="flex items-center">
+        <SaveIndicator saveState={saveState} />
+      </span>
     </div>
   );
 }

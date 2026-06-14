@@ -40,4 +40,55 @@ describe("SegmentedControl", () => {
     await userEvent.click(screen.getByRole("radio", { name: "Mátrix" }));
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith("matrix");
   });
+
+  it("uses a roving tabindex (only the selected radio is tabbable)", () => {
+    render(
+      <SegmentedControl
+        aria-label="nézet"
+        value="grid"
+        onValueChange={() => {}}
+        options={[...OPTIONS]}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "Rács" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.getByRole("radio", { name: "Mátrix" })).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
+  });
+
+  it("ArrowRight moves selection to the next option (wrapping)", async () => {
+    const onValueChange = vi.fn();
+    render(
+      <SegmentedControl
+        aria-label="nézet"
+        value="grid"
+        onValueChange={onValueChange}
+        options={[...OPTIONS]}
+      />,
+    );
+    const first = screen.getByRole("radio", { name: "Rács" });
+    first.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("matrix");
+  });
+
+  it("ArrowLeft wraps from the first option to the last", async () => {
+    const onValueChange = vi.fn();
+    render(
+      <SegmentedControl
+        aria-label="nézet"
+        value="grid"
+        onValueChange={onValueChange}
+        options={[...OPTIONS]}
+      />,
+    );
+    const first = screen.getByRole("radio", { name: "Rács" });
+    first.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("matrix");
+  });
 });

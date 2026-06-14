@@ -1,17 +1,18 @@
 "use client";
 
 import {
-  LayoutDashboard,
   BookOpen,
   PenLine,
   Database,
+  MessageSquare,
+  Sparkle,
+  Download,
+  Settings,
+  Wrench,
+  Eye,
   CalendarDays,
   Network,
   GitBranch,
-  MessageSquare,
-  Download,
-  Wrench,
-  Eye,
   ListChecks,
   Sparkles,
   AudioLines,
@@ -30,73 +31,71 @@ import {
 } from "@/components/kit/popover-menu";
 import { useNavTo } from "@/lib/use-nav-to";
 import { useUIStore } from "@/lib/stores/ui-store";
-import { routes, DEMO_SCENE_ID, type BookSegment } from "@/lib/routes";
+import { useEditorStore } from "@/lib/stores/editor-store";
+import { useBookTree } from "@/lib/api/hooks";
+import { routes, type BookSegment } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 
 interface RailItem {
-  segment: BookSegment;
+  /** Stable key + the segment whose active route highlights this item. */
+  key: string;
+  /** Route segment that drives the active highlight (null = no segment match). */
+  segment: BookSegment | null;
   label: string;
   icon: LucideIcon;
-  /** Destination override (Write needs a scene id). */
+  /** Destination override (Write resolves a real scene at click time). */
   href: (bookId: string) => string;
 }
 
-/** Primary workspace destinations, in rail order. */
+/**
+ * Primary workspace destinations, in rail order, matching the prototype primary
+ * rail (proto ~222-265): Terv, Írás, Codex, Chat, Tiszta írás, [spacer], Tools,
+ * Export, Beállítások. The V1 screens (Áttekintés / Idősor / Kapcsolatok /
+ * Cselekményszálak) live in the Tools flyout, not the primary rail.
+ */
 const RAIL_ITEMS: RailItem[] = [
   {
-    segment: "attekintes",
-    label: hu.nav.attekintes,
-    icon: LayoutDashboard,
-    href: (b) => routes.book(b, "attekintes"),
-  },
-  {
+    key: "terv",
     segment: "terv",
     label: hu.nav.terv,
     icon: BookOpen,
     href: (b) => routes.book(b, "terv"),
   },
   {
+    key: "iras",
     segment: "iras",
     label: hu.nav.iras,
     icon: PenLine,
-    href: (b) => routes.scene(b, DEMO_SCENE_ID),
+    // The Write destination is resolved at render time from the loaded book
+    // tree (first real scene, else the Plan view) — see `irasHref` below; this
+    // fallback only fires if the tree never loaded.
+    href: (b) => routes.book(b, "terv"),
   },
   {
+    key: "codex",
     segment: "codex",
     label: hu.nav.codex,
     icon: Database,
     href: (b) => routes.book(b, "codex"),
   },
   {
-    segment: "idosor",
-    label: hu.nav.idosor,
-    icon: CalendarDays,
-    href: (b) => routes.book(b, "idosor"),
-  },
-  {
-    segment: "kapcsolatok",
-    label: hu.nav.kapcsolatok,
-    icon: Network,
-    href: (b) => routes.book(b, "kapcsolatok"),
-  },
-  {
-    segment: "cselekmenyszalak",
-    label: hu.nav.cselekmenyszalak,
-    icon: GitBranch,
-    href: (b) => routes.book(b, "cselekmenyszalak"),
-  },
-  {
+    key: "chat",
     segment: "chat",
     label: hu.nav.chat,
     icon: MessageSquare,
     href: (b) => routes.book(b, "chat"),
   },
-  {
-    segment: "export",
-    label: hu.nav.export,
-    icon: Download,
-    href: (b) => routes.book(b, "export"),
-  },
+];
+
+/** Segments surfaced inside the Tools flyout (drive the Tools active dot). */
+const TOOLS_SEGMENTS: BookSegment[] = [
+  "attekintes",
+  "idosor",
+  "kapcsolatok",
+  "cselekmenyszalak",
+  "feladatok",
+  "promptok",
+  "hangok",
 ];
 
 export interface IconRailProps {
@@ -110,29 +109,49 @@ export interface IconRailProps {
  * 56px vertical workspace rail. Each item navigates (+sparkfield) and exposes
  * its Hungarian label as a tooltip and aria-label. The active item — derived
  * from the route segment — gets the accent-muted highlight + a `woaRailPop`
- * pop on its icon. A Tools flyout (warning dot + "AI feladatok" badge) opens a
- * PopoverMenu of secondary destinations.
+ * pop on its icon. The "Tiszta írás" item routes to the manuscript and enables
+ * the AI-free writing mode. A Tools flyout (warning dot + "AI feladatok" badge)
+ * holds the V1 analysis screens + the prompt/voice libraries.
  */
 export function IconRail({ bookId, activeSegment }: IconRailProps) {
   const navTo = useNavTo();
   const openMenu = useUIStore((s) => s.openMenu);
   const setMenu = useUIStore((s) => s.setMenu);
+  const setAiFree = useEditorStore((s) => s.setAiFree);
   const toolsOpen = openMenu === "tools";
+  const toolsActive =
+    activeSegment != null && TOOLS_SEGMENTS.includes(activeSegment);
+
+  // Resolve the Write destination to the book's FIRST real scene; if the book
+  // has no scene yet (or the tree hasn't loaded) fall back to the Plan view,
+  // where scene creation will live (M7) — never a fabricated demo scene id.
+  const tree = useBookTree(bookId || undefined);
+  const firstSceneId = tree.chapters[0]?.scenes[0]?.id;
+  const irasHref = firstSceneId
+    ? routes.scene(bookId, firstSceneId)
+    : routes.book(bookId, "terv");
+
+  /** Tiszta írás: open the manuscript in AI-free mode (prototype gocleanwrite). */
+  function goCleanWrite() {
+    setAiFree(true);
+    navTo(irasHref);
+  }
 
   return (
     <nav
-      aria-label="Munkaterület"
+      aria-label={hu.shell.railAria}
       className="flex w-rail flex-none flex-col items-center gap-1 border-r border-border bg-bg-subtle py-2.5"
     >
       {RAIL_ITEMS.map((item) => {
         const active = item.segment === activeSegment;
+        const href = item.segment === "iras" ? irasHref : item.href(bookId);
         return (
-          <Tooltip key={item.segment} content={item.label} side="right">
+          <Tooltip key={item.key} content={item.label} side="right">
             <button
               type="button"
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              onClick={() => navTo(item.href(bookId))}
+              onClick={() => navTo(href)}
               className={cn(
                 "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
                 active
@@ -150,6 +169,18 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
         );
       })}
 
+      {/* Tiszta írás — toggles AI-free writing mode then opens the manuscript. */}
+      <Tooltip content={hu.nav.cleanWrite} side="right">
+        <button
+          type="button"
+          aria-label={hu.nav.cleanWrite}
+          onClick={goCleanWrite}
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+        >
+          <Icon icon={Sparkle} size={18} />
+        </button>
+      </Tooltip>
+
       <div className="flex-1" />
 
       {/* Tools flyout */}
@@ -162,9 +193,10 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
             <button
               type="button"
               aria-label={hu.nav.tools}
+              aria-current={toolsActive ? "page" : undefined}
               className={cn(
                 "relative flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
-                toolsOpen
+                toolsOpen || toolsActive
                   ? "bg-accent-muted text-accent-text"
                   : "text-text-muted hover:bg-surface-muted hover:text-text",
               )}
@@ -181,6 +213,30 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
         <PopoverMenuContent side="right" align="end" className="min-w-[220px]">
           <MenuSection label={hu.tools.sectionAnalysis} />
           <MenuRow
+            leadingIcon={<Icon icon={Eye} size={15} />}
+            onSelect={() => navTo(routes.book(bookId, "attekintes"))}
+          >
+            {hu.tools.review}
+          </MenuRow>
+          <MenuRow
+            leadingIcon={<Icon icon={CalendarDays} size={15} />}
+            onSelect={() => navTo(routes.book(bookId, "idosor"))}
+          >
+            {hu.tools.timeline}
+          </MenuRow>
+          <MenuRow
+            leadingIcon={<Icon icon={Network} size={15} />}
+            onSelect={() => navTo(routes.book(bookId, "kapcsolatok"))}
+          >
+            {hu.tools.relations}
+          </MenuRow>
+          <MenuRow
+            leadingIcon={<Icon icon={GitBranch} size={15} />}
+            onSelect={() => navTo(routes.book(bookId, "cselekmenyszalak"))}
+          >
+            {hu.tools.subplots}
+          </MenuRow>
+          <MenuRow
             leadingIcon={<Icon icon={ListChecks} size={15} />}
             trailing={
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-ai px-1 text-[9px] font-bold text-white">
@@ -190,12 +246,6 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
             onSelect={() => navTo(routes.book(bookId, "feladatok"))}
           >
             {hu.tools.jobs}
-          </MenuRow>
-          <MenuRow
-            leadingIcon={<Icon icon={Eye} size={15} />}
-            onSelect={() => navTo(routes.book(bookId, "attekintes"))}
-          >
-            {hu.tools.review}
           </MenuRow>
           <MenuSeparator />
           <MenuSection label={hu.tools.sectionStores} />
@@ -213,6 +263,40 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           </MenuRow>
         </PopoverMenuContent>
       </PopoverMenu>
+
+      <Tooltip content={hu.nav.export} side="right">
+        <button
+          type="button"
+          aria-label={hu.nav.export}
+          aria-current={activeSegment === "export" ? "page" : undefined}
+          onClick={() => navTo(routes.book(bookId, "export"))}
+          className={cn(
+            "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+            activeSegment === "export"
+              ? "bg-accent-muted text-accent-text"
+              : "text-text-muted hover:bg-surface-muted hover:text-text",
+          )}
+        >
+          <Icon icon={Download} size={18} />
+        </button>
+      </Tooltip>
+
+      <Tooltip content={hu.nav.settings} side="right">
+        <button
+          type="button"
+          aria-label={hu.nav.settings}
+          aria-current={activeSegment === "beallitasok" ? "page" : undefined}
+          onClick={() => navTo(routes.book(bookId, "beallitasok"))}
+          className={cn(
+            "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+            activeSegment === "beallitasok"
+              ? "bg-accent-muted text-accent-text"
+              : "text-text-muted hover:bg-surface-muted hover:text-text",
+          )}
+        >
+          <Icon icon={Settings} size={18} />
+        </button>
+      </Tooltip>
     </nav>
   );
 }

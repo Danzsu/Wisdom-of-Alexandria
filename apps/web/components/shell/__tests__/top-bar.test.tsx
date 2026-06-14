@@ -22,7 +22,11 @@ import { TopBar } from "../top-bar";
 function renderTopBar(props: Partial<Parameters<typeof TopBar>[0]> = {}) {
   return render(
     <TooltipProvider>
-      <TopBar inBook={props.inBook ?? true} isWrite={props.isWrite ?? false} />
+      <TopBar
+        inBook={props.inBook ?? true}
+        isWrite={props.isWrite ?? false}
+        bookId={props.bookId ?? "demo"}
+      />
     </TooltipProvider>,
   );
 }

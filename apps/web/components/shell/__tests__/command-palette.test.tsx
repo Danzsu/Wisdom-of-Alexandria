@@ -90,4 +90,43 @@ describe("CommandPalette", () => {
     expect(setThemeMock).toHaveBeenCalledWith("dark");
     expect(useUIStore.getState().commandOpen).toBe(false);
   });
+
+  it("exposes a listbox with selectable options and a default active row", async () => {
+    renderPalette();
+    useUIStore.getState().openCommand();
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBeGreaterThan(1);
+    // First result is active by default.
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    expect(options[1]).toHaveAttribute("aria-selected", "false");
+    // The input points at the active row via aria-activedescendant.
+    const input = await screen.findByPlaceholderText(/Keresés a projektben/);
+    expect(input).toHaveAttribute("aria-activedescendant", options[0].id);
+  });
+
+  it("ArrowDown then Enter runs the active result (roving keyboard nav)", async () => {
+    renderPalette();
+    useUIStore.getState().openCommand();
+    const input = await screen.findByPlaceholderText(/Keresés a projektben/);
+    input.focus();
+    // Move the active row down once, then activate it with Enter.
+    await userEvent.keyboard("{ArrowDown}");
+    const options = screen.getAllByRole("option");
+    expect(options[1]).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{Enter}");
+    // The second result is a scene row → navigates and closes the palette.
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(useUIStore.getState().commandOpen).toBe(false);
+  });
+
+  it("ArrowUp wraps the active row to the last result", async () => {
+    renderPalette();
+    useUIStore.getState().openCommand();
+    const input = await screen.findByPlaceholderText(/Keresés a projektben/);
+    input.focus();
+    await userEvent.keyboard("{ArrowUp}");
+    const options = screen.getAllByRole("option");
+    expect(options[options.length - 1]).toHaveAttribute("aria-selected", "true");
+  });
 });

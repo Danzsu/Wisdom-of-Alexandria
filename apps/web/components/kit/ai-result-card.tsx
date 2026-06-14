@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Check, Copy, Star, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hu } from "@/lib/i18n/hu";
 import { Icon } from "./icon";
 import { IconButton } from "./icon-button";
 import { Button } from "./button";
@@ -117,13 +118,13 @@ export function AIResultCard({
               Elvet
             </Button>
             <div className="flex-1" />
-            <IconButton size={30} aria-label="Másolás" onClick={onCopy}>
+            <IconButton size={30} aria-label={hu.kit.copy} onClick={onCopy}>
               <Icon icon={Copy} size={14} />
             </IconButton>
             <IconButton
               size={30}
               variant="ai"
-              aria-label="Mentés Snippetként"
+              aria-label={hu.kit.saveAsSnippet}
               onClick={onStar}
             >
               <Icon icon={Star} size={14} />

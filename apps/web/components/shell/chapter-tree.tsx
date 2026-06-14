@@ -45,7 +45,7 @@ export function ChapterTree() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">
         {tree.isLoading ? (
-          <div className="flex items-center gap-2 px-2 py-3 text-[13px] text-text-faint">
+          <div className="flex items-center gap-2 px-2 py-3 text-[13px] text-text-muted">
             <Spinner size={13} />
             {hu.write.treeLoading}
           </div>
@@ -54,7 +54,7 @@ export function ChapterTree() {
             {hu.write.treeError}
           </p>
         ) : tree.chapters.length === 0 ? (
-          <p className="m-0 px-2 py-3 text-[13px] text-text-faint">
+          <p className="m-0 px-2 py-3 text-[13px] text-text-muted">
             {hu.write.treeEmpty}
           </p>
         ) : (
@@ -110,7 +110,7 @@ function ChapterRow({
 
       {open ? (
         chapter.scenes.length === 0 ? (
-          <p className="m-0 px-2 py-1.5 pl-[34px] text-[12px] text-text-faint">
+          <p className="m-0 px-2 py-1.5 pl-[34px] text-[12px] text-text-muted">
             {hu.write.sceneEmpty}
           </p>
         ) : (

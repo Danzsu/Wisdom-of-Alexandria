@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useShellChrome } from "@/lib/use-shell-chrome";
 import { useEditorStore } from "@/lib/stores/editor-store";
-import { DEMO_BOOK_ID } from "@/lib/routes";
+import { hu } from "@/lib/i18n/hu";
 import { TopBar } from "./top-bar";
 import { IconRail } from "./icon-rail";
 import { ChapterTree } from "./chapter-tree";
@@ -54,7 +54,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg text-text">
       {focusMode ? null : (
-        <TopBar inBook={chrome.inBook} isWrite={chrome.isWrite} />
+        <TopBar
+          inBook={chrome.inBook}
+          isWrite={chrome.isWrite}
+          bookId={chrome.bookId}
+        />
       )}
 
       <div className="flex min-h-0 flex-1">
@@ -64,7 +68,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           ) : chrome.leftSidebar === "codex" ? (
             <CodexSidebar />
           ) : (
-            <IconRail bookId={DEMO_BOOK_ID} activeSegment={chrome.segment} />
+            // The rail only renders inside a book, so bookId is always present
+            // here; the `?? ""` keeps the prop type strict without a non-null !.
+            <IconRail
+              bookId={chrome.bookId ?? ""}
+              activeSegment={chrome.segment}
+            />
           )
         ) : null}
 
@@ -72,12 +81,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {chrome.isWrite && !focusMode ? (
           <aside
-            aria-label="AI segéd"
+            aria-label={hu.shell.aiInspectorAria}
             className="flex w-inspector flex-none flex-col border-l border-border bg-surface"
           >
             {/* Placeholder — the AI inspector is filled in M5. */}
-            <div className="p-4 text-[13px] text-text-faint">
-              Az AI segéd az M5-ben érkezik.
+            <div className="p-4 text-[13px] text-text-muted">
+              {hu.shell.aiInspectorComingSoon}
             </div>
           </aside>
         ) : null}

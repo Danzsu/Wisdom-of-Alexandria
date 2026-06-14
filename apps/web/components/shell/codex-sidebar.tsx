@@ -11,7 +11,7 @@ import { hu } from "@/lib/i18n/hu";
 export function CodexSidebar() {
   return (
     <nav
-      aria-label="Codex"
+      aria-label={hu.shell.codexSidebarAria}
       className="flex w-codex-sidebar flex-none flex-col border-r border-border bg-bg-subtle"
     >
       <div className="flex items-center gap-[11px] border-b border-border p-3.5">
@@ -27,9 +27,9 @@ export function CodexSidebar() {
           </p>
         </div>
       </div>
-      <div className="flex-1 p-3.5 text-[13px] text-text-faint">
+      <div className="flex-1 p-3.5 text-[13px] text-text-muted">
         {/* Placeholder — Codex list arrives in M6. */}
-        <p className="m-0">A Codex-lista az M6-ban érkezik.</p>
+        <p className="m-0">{hu.shell.codexComingSoon}</p>
       </div>
     </nav>
   );

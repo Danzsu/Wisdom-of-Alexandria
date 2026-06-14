@@ -6,7 +6,7 @@
  * loading (Skeletons), empty (kit empty state) and error (inline retry) states.
  * The "Új könyv" / "Új projekt" affordances open the New-book wizard.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   ChevronDown,
@@ -14,7 +14,6 @@ import {
   Library,
   Plus,
   Search,
-  Sparkle,
   Sparkles,
   Wand2,
   X,
@@ -30,7 +29,8 @@ import {
   Skeleton,
   toast,
 } from "@/components/kit";
-import { useProjects } from "@/lib/api/hooks";
+import { BrandStar } from "@/components/kit/brand-star";
+import { useProjects, useResolveFirstBookId } from "@/lib/api/hooks";
 import type { ProjectRead } from "@/lib/api/types";
 import { useNavTo } from "@/lib/use-nav-to";
 import { routes } from "@/lib/routes";
@@ -44,8 +44,32 @@ type ViewKey = "grid" | "list";
 
 export function ProjectsDashboard() {
   const navTo = useNavTo();
+  const resolveFirstBookId = useResolveFirstBookId();
   const [wizardOpen, setWizardOpen] = useState(false);
   const projectsQuery = useProjects();
+
+  /**
+   * Open a project at its real BOOK route. A project owns many books, so its own
+   * id must never be threaded into the `[bookId]` segment — we resolve the
+   * project's first book id and navigate to that book's plan view. If the project
+   * has no book yet, or the lookup fails, we surface a toast (never swallow).
+   */
+  const openProject = useCallback(
+    (projectId: string) => {
+      resolveFirstBookId(projectId)
+        .then((bookId) => {
+          if (bookId) {
+            navTo(routes.book(bookId, "terv"));
+          } else {
+            // M7: chapter/scene + first-book creation flow lands here; for now a
+            // project with no book just tells the user there's nothing to open.
+            toast.info(hu.projects.noBookInProject);
+          }
+        })
+        .catch(() => toast.error(hu.projects.openProjectError));
+    },
+    [navTo, resolveFirstBookId],
+  );
 
   return (
     <div
@@ -65,12 +89,12 @@ export function ProjectsDashboard() {
 
         <DailySpark />
 
-        <ContinueSection query={projectsQuery} onNavigate={navTo} />
+        <ContinueSection query={projectsQuery} onOpenProject={openProject} />
 
         <AllProjectsSection
           query={projectsQuery}
           onNewProject={() => setWizardOpen(true)}
-          onNavigate={navTo}
+          onOpenProject={openProject}
         />
       </div>
 
@@ -197,8 +221,15 @@ function WelcomeHero() {
 /* -------------------------------------------------------------------------- */
 
 function QuickActions({ onNewBook }: { onNewBook: () => void }) {
-  const navTo = useNavTo();
-  const actions = [
+  const actions: {
+    key: string;
+    icon: typeof Plus;
+    label: string;
+    primary: boolean;
+    /** AI treatment on the icon chip (import — proto 1364). */
+    ai?: boolean;
+    onClick: () => void;
+  }[] = [
     {
       key: "new",
       icon: Plus,
@@ -211,6 +242,7 @@ function QuickActions({ onNewBook }: { onNewBook: () => void }) {
       icon: FileUp,
       label: hu.projects.quickImport,
       primary: false,
+      ai: true,
       onClick: () => toast.info(hu.projects.importToast),
     },
     {
@@ -225,7 +257,10 @@ function QuickActions({ onNewBook }: { onNewBook: () => void }) {
       icon: Sparkles,
       label: hu.projects.quickPromptLibrary,
       primary: false,
-      onClick: () => navTo(routes.book("demo", "promptok")),
+      // The Prompt Library is global, but routes are book-scoped and there is no
+      // book context on the dashboard — so we toast rather than navigate with a
+      // fabricated "demo" book id. A real global Prompt Library route is future.
+      onClick: () => toast.info(hu.projects.promptLibraryToast),
     },
   ];
 
@@ -249,7 +284,9 @@ function QuickActions({ onNewBook }: { onNewBook: () => void }) {
               "flex h-[34px] w-[34px] items-center justify-center rounded-[9px] " +
               (a.primary
                 ? "bg-accent-strong text-accent-fg"
-                : "bg-surface-muted text-accent-text")
+                : a.ai
+                  ? "bg-ai-muted text-ai-text"
+                  : "bg-surface-muted text-accent-text")
             }
           >
             <Icon icon={a.icon} size={17} />
@@ -280,7 +317,7 @@ function DailySpark() {
       className="mb-8 flex w-full items-center gap-3 rounded-xl border border-border border-l-[3px] border-l-accent bg-surface-soft p-[13px_16px] text-left transition-shadow hover:shadow-card"
     >
       <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-accent-muted text-accent-text">
-        <Icon icon={Sparkle} size={18} />
+        <BrandStar size={18} className="fill-current" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-text">
@@ -315,10 +352,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function ContinueSection({
   query,
-  onNavigate,
+  onOpenProject,
 }: {
   query: ReturnType<typeof useProjects>;
-  onNavigate: (href: string) => void;
+  onOpenProject: (projectId: string) => void;
 }) {
   const recent = useMemo(() => {
     if (!query.data) return [];
@@ -341,7 +378,7 @@ function ContinueSection({
                 key={p.id}
                 project={p}
                 variant={i % 2 === 0 ? "gold" : "blueGrey"}
-                onClick={() => onNavigate(routes.book(p.id, "terv"))}
+                onClick={() => onOpenProject(p.id)}
               />
             ))}
       </div>
@@ -410,11 +447,11 @@ function RecentCardSkeleton() {
 function AllProjectsSection({
   query,
   onNewProject,
-  onNavigate,
+  onOpenProject,
 }: {
   query: ReturnType<typeof useProjects>;
   onNewProject: () => void;
-  onNavigate: (href: string) => void;
+  onOpenProject: (projectId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -491,7 +528,7 @@ function AllProjectsSection({
               project={p}
               variant={i % 2 === 0 ? "gold" : "blueGrey"}
               view={view}
-              onClick={() => onNavigate(routes.book(p.id, "terv"))}
+              onClick={() => onOpenProject(p.id)}
             />
           ))}
           {view === "grid" ? (
@@ -587,9 +624,10 @@ function ProjectCard({
         : "linear-gradient(150deg,#5b7a8c 0%,#42606f 60%,#2f4855 100%)",
     color: variant === "gold" ? "var(--accent-fg)" : "rgba(255,255,255,.85)",
   };
-  const meta = `${hu.projects.metaBooks(1)} · ${
-    project.description ?? "—"
-  }`;
+  // ProjectRead exposes no book-count/word-count aggregate, so we show only REAL
+  // data — the relative last-updated date — rather than a fabricated "1 könyv"
+  // constant. (Real per-project book counts would cost one request per card.)
+  const meta = hu.projects.relativeUpdated(project.updated_at);
 
   if (view === "list") {
     return (

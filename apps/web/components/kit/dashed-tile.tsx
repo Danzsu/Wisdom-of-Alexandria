@@ -15,16 +15,16 @@ const dashedTileVariants = cva(
         add: "min-h-[170px] w-full rounded-[14px] bg-transparent text-[13px]",
         // Import dropzone.
         import:
-          "min-h-[150px] w-full rounded-[14px] bg-surface-soft text-[12px] text-text-faint",
+          "min-h-[150px] w-full rounded-[14px] bg-surface-soft text-[12px] text-text-muted",
         // Inline image placeholder dropzone.
         image:
-          "min-h-[160px] w-full rounded-xl bg-surface-muted text-[12px] text-text-faint",
+          "min-h-[160px] w-full rounded-xl bg-surface-muted text-[12px] text-text-muted",
         // Square portrait upload.
         portrait:
-          "h-[84px] w-[84px] gap-[3px] rounded-xl bg-surface-muted text-[10px] text-text-faint",
+          "h-[84px] w-[84px] gap-[3px] rounded-xl bg-surface-muted text-[10px] text-text-muted",
         // Book-cover upload.
         cover:
-          "h-[106px] w-[76px] gap-[5px] rounded-[10px] bg-surface-muted text-[10px] text-text-faint",
+          "h-[106px] w-[76px] gap-[5px] rounded-[10px] bg-surface-muted text-[10px] text-text-muted",
       },
     },
     defaultVariants: {
@@ -61,7 +61,7 @@ export const DashedTile = forwardRef<HTMLButtonElement, DashedTileProps>(
       >
         {icon}
         {label ? <span className="font-semibold">{label}</span> : null}
-        {hint ? <span className="text-text-faint">{hint}</span> : null}
+        {hint ? <span className="text-text-muted">{hint}</span> : null}
       </button>
     );
   },

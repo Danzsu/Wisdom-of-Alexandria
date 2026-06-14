@@ -1,11 +1,12 @@
 import { ScreenPlaceholder } from "@/components/shell";
+import { hu } from "@/lib/i18n/hu";
 
 /** Prompt Library placeholder — filled in M10 (V1). */
 export default function PromptokPage() {
   return (
     <ScreenPlaceholder
-      label="Prompt Library"
-      hint="A Prompt Library az M10-ben érkezik."
+      label={hu.placeholders.promptokLabel}
+      hint={hu.placeholders.promptokHint}
     />
   );
 }

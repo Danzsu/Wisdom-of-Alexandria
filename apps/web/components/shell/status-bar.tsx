@@ -47,7 +47,10 @@ export function StatusBar() {
       </span>
       <span className="truncate">{locationText}</span>
       <div className="flex-1" />
-      <SaveState saveState={saveState} />
+      {/* Live region so autosave failures ("Mentés sikertelen") are announced. */}
+      <span role="status" aria-live="polite" className="flex items-center">
+        <SaveState saveState={saveState} />
+      </span>
       <div className="flex-1" />
       <span className="flex h-5 items-center gap-1.5 rounded-full bg-ai-muted px-2 text-[11px] font-semibold text-ai-text">
         <Icon icon={Cpu} size={11} />

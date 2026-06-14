@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTheme } from "next-themes";
 import { Search, SearchX, PenLine, Download, Moon, Plus } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { Avatar } from "@/components/kit/avatar";
+import { cn } from "@/lib/utils";
 import { useNavTo } from "@/lib/use-nav-to";
 import { useUIStore } from "@/lib/stores/ui-store";
 import {
@@ -63,11 +64,47 @@ export function CommandPalette() {
     })).filter((g) => g.items.length > 0);
   }, [results]);
 
+  // Flatten the grouped results in render order so Up/Down roving and the
+  // active highlight share one index space across the groups.
+  const flatResults = useMemo(
+    () => grouped.flatMap((g) => g.items),
+    [grouped],
+  );
+
+  // Roving active index into `flatResults`. Reset whenever the query changes
+  // (the result set changes) so the highlight never points past the list.
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  const activeId =
+    flatResults.length > 0
+      ? `command-option-${flatResults[Math.min(activeIndex, flatResults.length - 1)]?.id}`
+      : undefined;
+
   function handleOpenChange(open: boolean) {
     if (!open) {
       closeCommand();
       // Reset the query so the next open starts clean.
       setQuery("");
+      setActiveIndex(0);
+    }
+  }
+
+  /** Arrow roving + Enter on the input; Esc is handled by Radix Dialog. */
+  function handleInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (flatResults.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % flatResults.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => (i - 1 + flatResults.length) % flatResults.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const result = flatResults[Math.min(activeIndex, flatResults.length - 1)];
+      if (result) runResult(result);
     }
   }
 
@@ -108,8 +145,14 @@ export function CommandPalette() {
             <input
               id="command-palette-input"
               type="text"
+              role="combobox"
+              aria-expanded={hasResults}
+              aria-controls="command-palette-listbox"
+              aria-activedescendant={activeId}
+              autoComplete="off"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleInputKeyDown}
               placeholder={hu.command.placeholder}
               className="min-w-0 flex-1 border-none bg-transparent text-[14px] text-text outline-none placeholder:text-text-faint"
             />
@@ -119,30 +162,46 @@ export function CommandPalette() {
           </div>
 
           {hasResults ? (
-            <div className="flex flex-col gap-px p-[7px]">
+            <div
+              id="command-palette-listbox"
+              role="listbox"
+              aria-label={hu.topbar.searchAria}
+              className="flex flex-col gap-px p-[7px]"
+            >
               {grouped.map((group) => (
                 <div key={group.key} className="flex flex-col gap-px">
                   <p className="mb-[3px] mt-[5px] px-[9px] text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
                     {GROUP_LABEL[group.key]}
                   </p>
-                  {group.items.map((result) => (
-                    <button
-                      key={result.id}
-                      type="button"
-                      onClick={() => runResult(result)}
-                      className="flex items-center gap-2.5 rounded-lg px-[9px] py-2 text-left transition-colors hover:bg-surface-muted"
-                    >
-                      <ResultLeading result={result} />
-                      <span className="flex-1 text-[13px] text-text">
-                        {result.label}
-                      </span>
-                      {result.meta ? (
-                        <span className="text-[11px] text-text-muted">
-                          {result.meta}
+                  {group.items.map((result) => {
+                    const flatIndex = flatResults.indexOf(result);
+                    const isActive = flatIndex === activeIndex;
+                    return (
+                      <button
+                        key={result.id}
+                        id={`command-option-${result.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={isActive}
+                        onClick={() => runResult(result)}
+                        onMouseMove={() => setActiveIndex(flatIndex)}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-lg px-[9px] py-2 text-left transition-colors",
+                          isActive ? "bg-accent-muted" : "hover:bg-surface-muted",
+                        )}
+                      >
+                        <ResultLeading result={result} />
+                        <span className="flex-1 text-[13px] text-text">
+                          {result.label}
                         </span>
-                      ) : null}
-                    </button>
-                  ))}
+                        {result.meta ? (
+                          <span className="text-[11px] text-text-muted">
+                            {result.meta}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
               ))}
             </div>

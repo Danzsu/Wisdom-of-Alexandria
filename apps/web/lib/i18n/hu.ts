@@ -43,7 +43,9 @@ export const hu = {
     kapcsolatok: "Kapcsolatok",
     cselekmenyszalak: "Cselekményszálak",
     chat: "Chat",
+    cleanWrite: "Tiszta írás",
     export: "Export",
+    settings: "Beállítások",
     tools: "Eszközök",
   },
   /** Tools flyout entries. */
@@ -51,6 +53,9 @@ export const hu = {
     sectionAnalysis: "Elemzés",
     sectionStores: "Tárak",
     review: "Áttekintés",
+    timeline: "Idősor",
+    relations: "Kapcsolatok",
+    subplots: "Cselekményszálak",
     jobs: "AI feladatok",
     prompts: "Prompt Library",
     audio: "Hangkönyvtár",
@@ -248,6 +253,59 @@ export const hu = {
   toast: {
     comingSoon: "Hamarosan",
   },
+  /** App shell chrome (rail aria, AI inspector slot, codex sidebar placeholder). */
+  shell: {
+    /** Icon-rail accessible name. */
+    railAria: "Munkaterület",
+    /** AI inspector slot (Write route) accessible name. */
+    aiInspectorAria: "AI segéd",
+    /** AI inspector placeholder copy — the panel is filled in M5. */
+    aiInspectorComingSoon: "Az AI segéd az M5-ben érkezik.",
+    /** Codex list sidebar accessible name. */
+    codexSidebarAria: "Codex",
+    /** Codex list placeholder copy — the list is filled in M6. */
+    codexComingSoon: "A Codex-lista az M6-ban érkezik.",
+  },
+  /** Reusable kit-component default labels. */
+  kit: {
+    /** ConfirmDialog default confirm label (destructive). */
+    confirmDelete: "Végleges törlés",
+    /** ConfirmDialog default cancel label. */
+    cancel: "Mégse",
+    /** AIResultCard copy-to-clipboard action. */
+    copy: "Másolás",
+    /** AIResultCard save-as-Snippet (star) action. */
+    saveAsSnippet: "Mentés Snippetként",
+    /** Theme toggle aria-label / title. */
+    themeToggle: "Téma váltása",
+  },
+  /** Book-route placeholder screens (M2 verifiable nav; real screens later). */
+  placeholders: {
+    attekintesLabel: "Áttekintés",
+    attekintesHint: "Az Áttekintés az M10-ben érkezik.",
+    beallitasokLabel: "Beállítások",
+    beallitasokHint: "A Beállítások az M8-ban érkezik.",
+    chatLabel: "Chat",
+    chatHint: "A Chat az M10-ben érkezik.",
+    codexLabel: "Codex",
+    codexHint: "A Codex az M6-ban érkezik.",
+    cselekmenyszalakLabel: "Cselekményszálak",
+    cselekmenyszalakHint: "A Cselekményszálak az M10-ben érkezik.",
+    exportLabel: "Export",
+    exportHint: "Az Export az M8-ban érkezik.",
+    feladatokLabel: "AI feladatok",
+    feladatokHint: "Az AI feladatok az M10-ben érkezik.",
+    hangokLabel: "Hangkönyvtár",
+    hangokHint: "A Hangkönyvtár az M11-ben (V2) érkezik.",
+    idosorLabel: "Idősor",
+    idosorHint: "Az Idősor az M10-ben érkezik.",
+    kapcsolatokLabel: "Kapcsolatok",
+    kapcsolatokHint: "A Kapcsolatok az M10-ben érkezik.",
+    promptokLabel: "Prompt Library",
+    promptokHint: "A Prompt Library az M10-ben érkezik.",
+    tervLabel: "Terv",
+    tervHint: "A Plan Board az M7-ben érkezik.",
+  },
   /** Projektek dashboard (`showprojects` prototype screen). */
   projects: {
     onboardEyebrow: "Üdvözlünk az Alexandriában",
@@ -283,6 +341,31 @@ export const hu = {
     addProjectTitle: "Új projekt",
     addProjectHint: "vagy kézirat importálása (.docx, .md)",
     metaBooks: (n: number) => `${n} könyv`,
+    /**
+     * Hungarian relative-time label for a project's last-updated date, relative
+     * to `now` (defaults to the call moment). Used on the cards instead of a
+     * fabricated book count — only real `updated_at` data is shown.
+     */
+    relativeUpdated: (iso: string, now: Date = new Date()): string => {
+      const then = new Date(iso).getTime();
+      if (Number.isNaN(then)) return "";
+      const diffMs = now.getTime() - then;
+      const day = 86_400_000;
+      const days = Math.floor(diffMs / day);
+      if (days <= 0) return "Frissítve ma";
+      if (days === 1) return "Frissítve tegnap";
+      if (days < 7) return `Frissítve ${days} napja`;
+      if (days < 30) {
+        const weeks = Math.floor(days / 7);
+        return `Frissítve ${weeks} hete`;
+      }
+      if (days < 365) {
+        const months = Math.floor(days / 30);
+        return `Frissítve ${months} hónapja`;
+      }
+      const years = Math.floor(days / 365);
+      return `Frissítve ${years} éve`;
+    },
     loadingAria: "Projektek betöltése",
     emptyTitle: "Még nincs projekted",
     emptyHint: "Hozd létre az első könyvedet, és kezdődhet az írás.",
@@ -292,6 +375,11 @@ export const hu = {
     importToast: "A kézirat importálása hamarosan érkezik",
     cleanWriteToast: "A tiszta írás mód hamarosan érkezik",
     sparkToast: "Az írói szikra hamarosan érkezik",
+    promptLibraryToast: "A Prompt Library hamarosan érkezik",
+    /** Shown when a project card is opened but the project has no book yet. */
+    noBookInProject: "Nincs könyv ebben a projektben",
+    /** Generic "opening project…" failure when the book lookup errors. */
+    openProjectError: "Nem sikerült megnyitni a projektet",
   },
   /** Új könyv wizard (`wizon` prototype modal). */
   wizard: {
@@ -331,7 +419,10 @@ export const hu = {
     summaryGenre: "Műfaj",
     summaryLanguage: "Nyelv",
     summaryPov: "Nézőpont",
+    summaryAudience: "Célközönség",
     summaryLength: "Terjedelmi cél",
+    /** Suffix on summary rows whose value is collected but not yet persisted. */
+    summaryNotSavedTag: "(később menthető / V1)",
     summaryNote: "A beállítások később bármikor módosíthatók a könyv beállításaiban.",
     back: "← Vissza",
     next: "Tovább →",
