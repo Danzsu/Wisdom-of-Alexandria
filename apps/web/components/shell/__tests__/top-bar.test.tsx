@@ -1,0 +1,107 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { TooltipProvider } from "@/components/kit/tooltip";
+import { useUIStore } from "@/lib/stores/ui-store";
+
+const push = vi.fn();
+let pathname = "/konyv/demo/terv";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => pathname,
+}));
+
+const setThemeMock = vi.fn();
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light", setTheme: setThemeMock }),
+}));
+
+import { TopBar } from "../top-bar";
+
+function renderTopBar(props: Partial<Parameters<typeof TopBar>[0]> = {}) {
+  return render(
+    <TooltipProvider>
+      <TopBar inBook={props.inBook ?? true} isWrite={props.isWrite ?? false} />
+    </TooltipProvider>,
+  );
+}
+
+describe("TopBar", () => {
+  beforeEach(() => {
+    push.mockClear();
+    setThemeMock.mockClear();
+    pathname = "/konyv/demo/terv";
+    useUIStore.setState({ openMenu: null, commandOpen: false, sparkActive: false });
+  });
+
+  afterEach(() => {
+    useUIStore.getState().clearSpark();
+  });
+
+  it("renders the brand, search, theme toggle and user menu", () => {
+    renderTopBar();
+    expect(screen.getByRole("button", { name: "Projektek" })).toBeInTheDocument();
+    expect(screen.getByText("Alexandria")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keresés" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Téma váltása" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Felhasználói menü" }),
+    ).toBeInTheDocument();
+    // Static model pill.
+    expect(screen.getByText("ollama/llama3.2")).toBeInTheDocument();
+  });
+
+  it("shows the project switcher + share only in a book", () => {
+    const { unmount } = renderTopBar({ inBook: true });
+    expect(
+      screen.getByRole("button", { name: "A Fárosz őrzője" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Megosztás" })).toBeInTheDocument();
+    unmount();
+
+    renderTopBar({ inBook: false });
+    expect(
+      screen.queryByRole("button", { name: "A Fárosz őrzője" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Megosztás" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the scene breadcrumb only on the Write route", () => {
+    const { unmount } = renderTopBar({ isWrite: true });
+    expect(screen.getByText("3. jelenet — Rejtett jelek")).toBeInTheDocument();
+    unmount();
+
+    renderTopBar({ isWrite: false });
+    expect(
+      screen.queryByText("3. jelenet — Rejtett jelek"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("the search button opens the command palette", async () => {
+    renderTopBar();
+    await userEvent.click(screen.getByRole("button", { name: "Keresés" }));
+    expect(useUIStore.getState().commandOpen).toBe(true);
+  });
+
+  it("the brand navigates to the projects picker", async () => {
+    renderTopBar();
+    await userEvent.click(screen.getByRole("button", { name: "Projektek" }));
+    expect(push).toHaveBeenCalledWith("/projekt");
+  });
+
+  it("opens the user menu and fires its item actions", async () => {
+    renderTopBar();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Felhasználói menü" }),
+    );
+    expect(await screen.findByText("Profil")).toBeInTheDocument();
+    expect(screen.getByText("Kijelentkezés")).toBeInTheDocument();
+    expect(screen.getByText("lilla@alexandria.app")).toBeInTheDocument();
+    // Clicking an item closes the menu (Radix selection).
+    await userEvent.click(screen.getByText("Profil"));
+    expect(useUIStore.getState().openMenu).toBeNull();
+  });
+});

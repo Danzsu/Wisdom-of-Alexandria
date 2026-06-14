@@ -1,0 +1,16 @@
+{
+  "name": "forgewriter-ai",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "husky": "^9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

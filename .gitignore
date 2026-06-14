@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+coverage.xml
+htmlcov/
+test.db
+
+# Node
+node_modules/
+.next/
+dist/
+.turbo/
+
+# Docker
+.env
+postgres_data/
+
+# IDE
+.vscode/
+.idea/
