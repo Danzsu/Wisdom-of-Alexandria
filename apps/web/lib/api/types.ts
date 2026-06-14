@@ -90,6 +90,38 @@ export const chapterReadSchema = z.object({
 });
 export type ChapterRead = z.infer<typeof chapterReadSchema>;
 
+/**
+ * Request body for creating a chapter under a book (`ChapterCreate`). Mirrors
+ * `apps/api/app/schemas/chapter.py`: `order_index` defaults to 0 server-side and
+ * `status` to "draft".
+ */
+export const chapterCreateSchema = z.object({
+  title: z.string().min(1).max(255),
+  summary: z.string().nullable().optional(),
+  order_index: z.number().int().default(0),
+  status: z.string().default("draft"),
+});
+export type ChapterCreate = z.infer<typeof chapterCreateSchema>;
+
+/** Request body for patching a chapter (`ChapterUpdate`). All fields optional. */
+export const chapterUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  summary: z.string().nullable().optional(),
+  order_index: z.number().int().optional(),
+  status: z.string().optional(),
+});
+export type ChapterUpdate = z.infer<typeof chapterUpdateSchema>;
+
+/**
+ * Reorder body for chapters (`ChapterReorder`). The backend assigns
+ * `order_index = position-in-list` for every id present, then returns the
+ * re-sorted list. Ids not in the book are ignored server-side.
+ */
+export const chapterReorderSchema = z.object({
+  order: z.array(idString),
+});
+export type ChapterReorder = z.infer<typeof chapterReorderSchema>;
+
 /* ---------------------------------------------------------------------------
  * Scene — mirrors app/schemas/scene.py
  * ------------------------------------------------------------------------- */
@@ -109,6 +141,34 @@ export const sceneReadSchema = z.object({
   updated_at: z.string(),
 });
 export type SceneRead = z.infer<typeof sceneReadSchema>;
+
+/**
+ * Request body for creating a scene under a chapter (`SceneCreate`). Mirrors
+ * `apps/api/app/schemas/scene.py`: `word_count` is computed server-side from
+ * `content`, so the client never sends it; `order_index` defaults to 0 and
+ * `status` to "draft" server-side.
+ */
+export const sceneCreateSchema = z.object({
+  title: z.string().min(1).max(255),
+  content: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  order_index: z.number().int().default(0),
+  status: z.string().default("draft"),
+  pov_character_id: idString.nullable().optional(),
+});
+export type SceneCreate = z.infer<typeof sceneCreateSchema>;
+
+/**
+ * Reorder body for scenes within a chapter (`SceneReorder`). The backend sets
+ * `order_index = position-in-list` for each id, then returns the re-sorted
+ * (non-archived) list. NOTE: this reorders WITHIN a single chapter — the backend
+ * has no cross-chapter move (SceneUpdate carries no `chapter_id`), so scene drag
+ * is constrained to its own chapter (see lib/api/hooks.ts useReorderScenes).
+ */
+export const sceneReorderSchema = z.object({
+  order: z.array(idString),
+});
+export type SceneReorder = z.infer<typeof sceneReorderSchema>;
 
 /**
  * Request body for patching a scene (`SceneUpdate`). All fields optional; the

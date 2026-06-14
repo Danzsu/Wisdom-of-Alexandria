@@ -483,6 +483,98 @@ export const hu = {
     createdToast: "Új Codex-bejegyzés létrehozva",
     createError: "Nem sikerült létrehozni a bejegyzést",
   },
+  /**
+   * Plan Board (`Alexandria App.dc.html` showplan ~line 817). Mode pills, view
+   * toggle (Rács / Mátrix / Vázlat), density toggle, the SceneCard, act/chapter
+   * headers, the bottom action bar. Copy is verbatim from the prototype.
+   */
+  plan: {
+    /** Top mode pills (route to the book's plan / write / chat screens). */
+    modeTerv: "Terv",
+    modeIras: "Írás",
+    modeChat: "Chat",
+    /** View toggle (SegmentedControl). */
+    viewGrid: "Rács",
+    viewMatrix: "Mátrix",
+    viewOutline: "Vázlat",
+    viewToggleAria: "Nézet",
+    /** Density toggle (icon SegmentedControl). */
+    densityAria: "Kártya-sűrűség",
+    densityDefault: "Normál sűrűség",
+    densityCompact: "Kompakt sűrűség",
+    densitySlim: "Slim sűrűség",
+    /** Search field (filter scenes). */
+    searchPlaceholder: "Jelenetek szűrése…",
+    searchAria: "Jelenetek szűrése",
+    /** Loading / error / empty states. */
+    loading: "Terv betöltése…",
+    error: "Nem sikerült betölteni a tervet",
+    /** Empty-book state — the create→write loop entry point. */
+    emptyTitle: "Még üres a könyv",
+    emptyHint:
+      "Hozd létre az első fejezetet, és kezdődhet a tervezés. A fejezetekbe jelenetek kerülnek — onnan egy kattintással az írásban folytatod.",
+    emptyCta: "Első fejezet létrehozása",
+    /** Act header (the prototype groups chapters under "I. felvonás"). */
+    actLabel: "I. felvonás",
+    /** Per-act summary "{n} fejezet" (word count omitted — only real data shown). */
+    actChapterCount: (n: number) => `${n} fejezet`,
+    /** Act-level "+ Új fejezet" and per-chapter "+ Új jelenet". */
+    newChapter: "Új fejezet",
+    newScene: "Új jelenet",
+    /** Chapter word-count suffix on a column header. */
+    chapterWords: (n: string) => `${n} szó`,
+    /** SceneCard: "N. jelenet" title fallback + empty summary placeholder. */
+    sceneNumber: (n: number) => `${n}. jelenet`,
+    summaryPlaceholder: "Összefoglaló hozzáadása…",
+    /** SceneCard open-for-writing button. */
+    openSceneAria: "Megnyitás írásra",
+    sceneMenuAria: "Jelenet műveletek",
+    /** Scene kebab menu rows (verbatim). */
+    kebabOpen: "Megnyitás írásra",
+    kebabPov: "POV váltás",
+    kebabDuplicate: "Duplikálás",
+    kebabArchive: "Archiválás",
+    kebabDelete: "Törlés",
+    /** Matrix view footnote. */
+    matrixHint:
+      "A jelenetek státusz szerint rendezve. Kattints egy cellára a jelenet megnyitásához.",
+    matrixChapterColLabel: "Fejezet",
+    /** Outline view: "· jelenlegi" marker on the active scene. */
+    outlineCurrent: "· jelenlegi",
+    /** Bottom action bar. */
+    addAct: "Felvonás hozzáadása",
+    createFromOutline: "Létrehozás vázlatból",
+    importManuscript: "Importálás",
+    /** Default titles for newly-created chapters / scenes (the backend requires
+     * a non-empty title; the prototype's "+ Új fejezet / + Új jelenet" create
+     * unnamed rows, so we seed a sensible Hungarian default). */
+    newChapterDefaultTitle: (n: number) => `${n}. fejezet`,
+    newSceneDefaultTitle: (n: number) => `${n}. jelenet`,
+    /** Delete confirm dialog (reuses ConfirmDialog). */
+    deleteTitle: "Jelenet törlése",
+    deleteDescription: (name: string) =>
+      `Biztosan törlöd a(z) „${name}" jelenetet? Ez a művelet nem visszavonható.`,
+    /** Toasts (verbatim from the prototype handlers). */
+    toastSceneMoved: "Jelenet áthelyezve",
+    toastChapterMoved: "Fejezet áthelyezve",
+    toastChapterCreated: "Fejezet létrehozva",
+    toastSceneCreated: "Új jelenet hozzáadva a fejezet végéhez",
+    toastSceneDeleted: "Jelenet törölve",
+    toastSceneArchived: "Jelenet archiválva — az Archívumban visszaállítható",
+    toastSceneDuplicated: "Jelenet duplikálva",
+    toastPov: "POV váltás — válassz karaktert",
+    toastCreateFromOutline: "A Létrehozás vázlatból az M9-ben érkezik",
+    toastImport: "A kézirat importálása az M9-ben érkezik",
+    toastAddAct: "A felvonások az M9-ben érkeznek — egyelőre egy felvonás",
+    /** Mutation error toasts. */
+    errorChapterCreate: "Nem sikerült létrehozni a fejezetet",
+    errorSceneCreate: "Nem sikerült létrehozni a jelenetet",
+    errorSceneDelete: "A törlés sikertelen",
+    errorSceneArchive: "Az archiválás sikertelen",
+    errorReorder: "Az átrendezés sikertelen",
+    /** Drag handle accessible name (the grip on cards/columns). */
+    dragHandleAria: "Áthelyezés húzással",
+  },
   command: {
     placeholder: "Keresés a projektben… jelenetek, Codex, műveletek",
     escHint: "Esc",

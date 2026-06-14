@@ -556,6 +556,21 @@ select:focus-visible,
   text-indent: 1.6em;
 }
 
+/* Plan Board drag-over highlights (verbatim from the prototype, lines 62-63).
+   `woa-scene-over` draws an accent top-edge + accent border on the scene card
+   the pointer is hovering over during a drag; `woa-chap-over` rings a chapter
+   column. The `!important` mirrors the prototype so it wins over the card's own
+   border/shadow styling. */
+.woa-scene-over {
+  box-shadow:
+    0 -3px 0 -1px var(--accent),
+    var(--shadow-card) !important;
+  border-color: var(--accent) !important;
+}
+.woa-chap-over {
+  box-shadow: 0 0 0 2px var(--accent) !important;
+}
+
 /* Skeleton shimmer: a moving gradient across a muted surface. */
 .woa-skel {
   background: linear-gradient(

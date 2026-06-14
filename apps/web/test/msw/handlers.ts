@@ -16,18 +16,25 @@ import {
   SCENE_BEATS_FIXTURE,
   SCENES_BY_CHAPTER,
   makeAiResult,
+  makeChapter,
   makeCodexEntry,
   makeDescribeResult,
   makeRevision,
+  makeScene,
   makeSnippet,
 } from "./fixtures";
 import type {
   BookRead,
+  ChapterCreate,
+  ChapterRead,
+  ChapterUpdate,
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
   ProjectRead,
+  SceneCreate,
   SceneRead,
+  SceneUpdate,
 } from "@/lib/api/types";
 import type { DescribeRequest } from "@/lib/api/ai-types";
 
@@ -111,6 +118,169 @@ export function resetCodexStore(): void {
   codexStore.reset();
 }
 
+/* ---------------------------------------------------------------------------
+ * In-memory Chapter + Scene store (M7) — stateful CRUD/reorder so the Plan
+ * Board and ChapterTree tests exercise create → list → reorder/delete flows.
+ * Seeded from CHAPTERS_FIXTURE + SCENES_BY_CHAPTER. Call `resetPlanStore()` in a
+ * test's beforeEach for isolation. Mirrors the real backend semantics:
+ *  - chapters listed sorted by order_index,
+ *  - scenes listed sorted by order_index, archived excluded by default,
+ *  - reorder assigns order_index by position for the ids present,
+ *  - archive sets status="archived",
+ *  - chapter delete cascades to its scenes.
+ * ------------------------------------------------------------------------- */
+const planStore = {
+  chaptersByBook: new Map<string, ChapterRead[]>(),
+  scenesByChapter: new Map<string, SceneRead[]>(),
+
+  seed(): void {
+    this.chaptersByBook = new Map<string, ChapterRead[]>();
+    this.scenesByChapter = new Map<string, SceneRead[]>();
+    this.chaptersByBook.set(
+      FAROSZ_BOOK.id,
+      CHAPTERS_FIXTURE.map((c) => ({ ...c })),
+    );
+    for (const [chapterId, scenes] of Object.entries(SCENES_BY_CHAPTER)) {
+      this.scenesByChapter.set(
+        chapterId,
+        scenes.map((s) => ({ ...s })),
+      );
+    }
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  listChapters(bookId: string): ChapterRead[] {
+    const list = this.chaptersByBook.get(bookId) ?? [];
+    return [...list].sort((a, b) => a.order_index - b.order_index);
+  },
+
+  createChapter(bookId: string, body: ChapterCreate): ChapterRead {
+    const created = makeChapter(bookId, body);
+    const list = this.chaptersByBook.get(bookId) ?? [];
+    list.push(created);
+    this.chaptersByBook.set(bookId, list);
+    this.scenesByChapter.set(created.id, []);
+    return created;
+  },
+
+  updateChapter(
+    bookId: string,
+    chapterId: string,
+    patch: ChapterUpdate,
+  ): ChapterRead | undefined {
+    const list = this.chaptersByBook.get(bookId);
+    if (!list) return undefined;
+    const index = list.findIndex((c) => c.id === chapterId);
+    if (index === -1) return undefined;
+    const merged: ChapterRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-14T17:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  deleteChapter(bookId: string, chapterId: string): boolean {
+    const list = this.chaptersByBook.get(bookId);
+    if (!list) return false;
+    const index = list.findIndex((c) => c.id === chapterId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    this.scenesByChapter.delete(chapterId); // cascade
+    return true;
+  },
+
+  reorderChapters(bookId: string, order: string[]): ChapterRead[] {
+    const list = this.chaptersByBook.get(bookId) ?? [];
+    const byId = new Map(list.map((c) => [c.id, c]));
+    order.forEach((id, idx) => {
+      const chapter = byId.get(id);
+      if (chapter) chapter.order_index = idx;
+    });
+    return this.listChapters(bookId);
+  },
+
+  listScenes(chapterId: string, includeArchived = false): SceneRead[] {
+    const list = this.scenesByChapter.get(chapterId) ?? [];
+    return [...list]
+      .filter((s) => includeArchived || s.status !== "archived")
+      .sort((a, b) => a.order_index - b.order_index);
+  },
+
+  getScene(chapterId: string, sceneId: string): SceneRead | undefined {
+    return (this.scenesByChapter.get(chapterId) ?? []).find(
+      (s) => s.id === sceneId,
+    );
+  },
+
+  createScene(chapterId: string, body: SceneCreate): SceneRead {
+    const created = makeScene(chapterId, body);
+    const list = this.scenesByChapter.get(chapterId) ?? [];
+    list.push(created);
+    this.scenesByChapter.set(chapterId, list);
+    return created;
+  },
+
+  updateScene(
+    chapterId: string,
+    sceneId: string,
+    patch: SceneUpdate,
+  ): SceneRead | undefined {
+    const list = this.scenesByChapter.get(chapterId);
+    if (!list) return undefined;
+    const index = list.findIndex((s) => s.id === sceneId);
+    if (index === -1) return undefined;
+    const merged: SceneRead = {
+      ...list[index],
+      ...patch,
+      word_count:
+        patch.content !== undefined
+          ? wordCount(patch.content)
+          : list[index].word_count,
+      updated_at: "2026-06-14T16:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  deleteScene(chapterId: string, sceneId: string): boolean {
+    const list = this.scenesByChapter.get(chapterId);
+    if (!list) return false;
+    const index = list.findIndex((s) => s.id === sceneId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    return true;
+  },
+
+  archiveScene(chapterId: string, sceneId: string): SceneRead | undefined {
+    const scene = this.getScene(chapterId, sceneId);
+    if (!scene) return undefined;
+    scene.status = "archived";
+    scene.updated_at = "2026-06-14T16:00:00Z";
+    return scene;
+  },
+
+  reorderScenes(chapterId: string, order: string[]): SceneRead[] {
+    const list = this.scenesByChapter.get(chapterId) ?? [];
+    const byId = new Map(list.map((s) => [s.id, s]));
+    order.forEach((id, idx) => {
+      const scene = byId.get(id);
+      if (scene) scene.order_index = idx;
+    });
+    return this.listScenes(chapterId);
+  },
+};
+planStore.seed();
+
+/** Reset the in-memory chapter/scene store (call in a test's beforeEach). */
+export function resetPlanStore(): void {
+  planStore.reset();
+}
+
 /** Build a `ProjectRead` echo for a POST /projects body. */
 function makeProject(body: Partial<ProjectRead>): ProjectRead {
   const now = "2026-06-14T15:00:00Z";
@@ -173,19 +343,93 @@ export const handlers = [
     });
   }),
 
-  /* ---- Chapters (book-scoped) ---- */
-  http.get(`${base}/books/:bookId/chapters`, () =>
-    HttpResponse.json(CHAPTERS_FIXTURE),
+  /* ---- Chapters (book-scoped, full CRUD + reorder — M7) ---- */
+  http.get(`${base}/books/:bookId/chapters`, ({ params }) =>
+    HttpResponse.json(planStore.listChapters(String(params.bookId))),
   ),
 
-  /* ---- Scenes (chapter-scoped) ---- */
-  http.get(`${base}/chapters/:chapterId/scenes`, ({ params }) =>
-    HttpResponse.json(SCENES_BY_CHAPTER[String(params.chapterId)] ?? []),
+  http.post(
+    `${base}/books/:bookId/chapters`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as ChapterCreate;
+      const created = planStore.createChapter(String(params.bookId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.post(
+    `${base}/books/:bookId/chapters/reorder`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as { order: string[] };
+      return HttpResponse.json(
+        planStore.reorderChapters(String(params.bookId), body.order),
+      );
+    },
+  ),
+
+  http.patch(
+    `${base}/books/:bookId/chapters/:chapterId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as ChapterUpdate;
+      const updated = planStore.updateChapter(
+        String(params.bookId),
+        String(params.chapterId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Chapter not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(`${base}/books/:bookId/chapters/:chapterId`, ({ params }) => {
+    const ok = planStore.deleteChapter(
+      String(params.bookId),
+      String(params.chapterId),
+    );
+    if (!ok) {
+      return HttpResponse.json({ detail: "Chapter not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  /* ---- Scenes (chapter-scoped, full CRUD + reorder + archive — M7) ---- */
+  http.get(`${base}/chapters/:chapterId/scenes`, ({ params, request }) => {
+    const includeArchived =
+      new URL(request.url).searchParams.get("include_archived") === "true";
+    return HttpResponse.json(
+      planStore.listScenes(String(params.chapterId), includeArchived),
+    );
+  }),
+
+  http.post(
+    `${base}/chapters/:chapterId/scenes`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as SceneCreate;
+      const created = planStore.createScene(String(params.chapterId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.post(
+    `${base}/chapters/:chapterId/scenes/reorder`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as { order: string[] };
+      return HttpResponse.json(
+        planStore.reorderScenes(String(params.chapterId), body.order),
+      );
+    },
   ),
 
   http.get(`${base}/chapters/:chapterId/scenes/:sceneId`, ({ params }) => {
-    const scenes = SCENES_BY_CHAPTER[String(params.chapterId)] ?? [];
-    const scene = scenes.find((s) => s.id === params.sceneId);
+    const scene = planStore.getScene(
+      String(params.chapterId),
+      String(params.sceneId),
+    );
     if (!scene) {
       return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
     }
@@ -195,23 +439,41 @@ export const handlers = [
   http.patch(
     `${base}/chapters/:chapterId/scenes/:sceneId`,
     async ({ params, request }) => {
-      const scenes = SCENES_BY_CHAPTER[String(params.chapterId)] ?? [];
-      const scene = scenes.find((s) => s.id === params.sceneId);
-      if (!scene) {
+      const body = (await request.json()) as SceneUpdate;
+      const updated = planStore.updateScene(
+        String(params.chapterId),
+        String(params.sceneId),
+        body,
+      );
+      if (!updated) {
         return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
       }
-      const body = (await request.json()) as Partial<SceneRead>;
-      const merged: SceneRead = {
-        ...scene,
-        ...body,
-        // The backend recomputes word_count from content on update.
-        word_count:
-          body.content !== undefined
-            ? wordCount(body.content)
-            : scene.word_count,
-        updated_at: "2026-06-14T16:00:00Z",
-      };
-      return HttpResponse.json(merged);
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(`${base}/chapters/:chapterId/scenes/:sceneId`, ({ params }) => {
+    const ok = planStore.deleteScene(
+      String(params.chapterId),
+      String(params.sceneId),
+    );
+    if (!ok) {
+      return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(
+    `${base}/chapters/:chapterId/scenes/:sceneId/archive`,
+    ({ params }) => {
+      const archived = planStore.archiveScene(
+        String(params.chapterId),
+        String(params.sceneId),
+      );
+      if (!archived) {
+        return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
+      }
+      return HttpResponse.json(archived);
     },
   ),
 

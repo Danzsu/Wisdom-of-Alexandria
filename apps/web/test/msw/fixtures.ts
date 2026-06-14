@@ -118,6 +118,67 @@ export const SCENES_BY_CHAPTER: Record<string, SceneRead[]> = {
   [CHAPTER_TWO.id]: [SCENE_ACTIVE],
 };
 
+let chapterSeq = 0;
+let sceneSeq = 0;
+
+/** Build a `ChapterRead` echo for a POST /books/{bid}/chapters body. */
+export function makeChapter(
+  bookId: string,
+  body: {
+    title?: string;
+    summary?: string | null;
+    order_index?: number;
+    status?: string;
+  },
+): ChapterRead {
+  chapterSeq += 1;
+  return {
+    id: `chapter-new-${chapterSeq}`,
+    book_id: bookId,
+    title: body.title ?? "Névtelen fejezet",
+    summary: body.summary ?? null,
+    order_index: body.order_index ?? 0,
+    status: body.status ?? "draft",
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/** Recompute word count the way the backend does (whitespace split). */
+function fixtureWordCount(text: string | null | undefined): number {
+  if (!text) return 0;
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** Build a `SceneRead` echo for a POST /chapters/{cid}/scenes body. */
+export function makeScene(
+  chapterId: string,
+  body: {
+    title?: string;
+    content?: string | null;
+    summary?: string | null;
+    order_index?: number;
+    status?: string;
+    pov_character_id?: string | null;
+  },
+): SceneRead {
+  sceneSeq += 1;
+  return {
+    id: `scene-new-${sceneSeq}`,
+    chapter_id: chapterId,
+    title: body.title ?? "Névtelen jelenet",
+    content: body.content ?? null,
+    summary: body.summary ?? null,
+    order_index: body.order_index ?? 0,
+    status: body.status ?? "draft",
+    word_count: fixtureWordCount(body.content),
+    pov_character_id: body.pov_character_id ?? null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
 export const FAROSZ_CODEX: CodexEntryRead[] = [
   {
     id: "codex-szelene",

@@ -1,13 +1,10 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+import { PlanBoard } from "@/components/plan";
 
-// M7: chapter/scene creation (Plan Board / scene CRUD) lands here.
-/** Terv (Plan board) placeholder — filled in M7. */
+/**
+ * Terv (Plan Board) route — Rács / Mátrix / Vázlat views, dnd-kit reorder and
+ * chapter/scene CREATE (M7). The whole screen is the client {@link PlanBoard};
+ * the route param `bookId` is read inside it via `useParams`.
+ */
 export default function TervPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.tervLabel}
-      hint={hu.placeholders.tervHint}
-    />
-  );
+  return <PlanBoard />;
 }

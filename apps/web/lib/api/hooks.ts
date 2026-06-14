@@ -22,13 +22,27 @@ import {
   useQueries,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks } from "./books";
-import { listChapters } from "./chapters";
-import { listScenes, updateScene } from "./scenes";
+import {
+  createChapter,
+  deleteChapter,
+  listChapters,
+  reorderChapters,
+  updateChapter,
+} from "./chapters";
+import {
+  archiveScene,
+  createScene,
+  deleteScene,
+  listScenes,
+  reorderScenes,
+  updateScene,
+} from "./scenes";
 import { createBeat, listBeats } from "./beats";
 import {
   createCodexEntry,
@@ -42,12 +56,15 @@ import type {
   BeatRead,
   BookCreate,
   BookRead,
+  ChapterCreate,
   ChapterRead,
+  ChapterUpdate,
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
   ProjectCreate,
   ProjectRead,
+  SceneCreate,
   SceneRead,
   SceneUpdate,
 } from "./types";
@@ -294,6 +311,376 @@ export function useUpdateScene(): UseMutationResult<
       );
     },
   });
+}
+
+/* ---------------------------------------------------------------------------
+ * order_index derivation for appends (M7 create)
+ *
+ * The backend create endpoints STORE the `order_index` they are sent (schema
+ * default 0); they do NOT auto-append. To append at the end we must compute the
+ * next index ourselves. Reading a captured render value (`.length`) is unsafe:
+ * two rapid creates fired before the invalidation refetch land would compute the
+ * SAME index → an order_index collision. Instead we read the FRESHEST cached
+ * list at mutation time via `getQueryData` and take `max(order_index)+1`, so a
+ * second create that fires after the first has settled (and its refetch landed)
+ * sees the new item. The create callbacks also self-gate on the pending flag so
+ * a double-click cannot fire two creates inside one render cycle.
+ * ------------------------------------------------------------------------- */
+
+/** Next append index from a list, or 0 when empty: `max(order_index)+1`. */
+function appendIndex(items: { order_index: number }[] | undefined): number {
+  if (!items || items.length === 0) return 0;
+  return Math.max(...items.map((i) => i.order_index)) + 1;
+}
+
+/**
+ * Next `order_index` for a chapter appended to a book — derived from the
+ * FRESHEST cached chapter list (not a captured render value), so back-to-back
+ * creates after a settled refetch get distinct indices. Falls back to 0 when the
+ * list is not yet cached.
+ */
+export function nextChapterOrderIndex(
+  queryClient: QueryClient,
+  bookId: string,
+): number {
+  return appendIndex(
+    queryClient.getQueryData<ChapterRead[]>(queryKeys.bookChapters(bookId)),
+  );
+}
+
+/**
+ * Next `order_index` for a scene appended to a chapter — derived from the
+ * FRESHEST cached scene list. Falls back to 0 when the list is not yet cached.
+ */
+export function nextSceneOrderIndex(
+  queryClient: QueryClient,
+  chapterId: string,
+): number {
+  return appendIndex(
+    queryClient.getQueryData<SceneRead[]>(queryKeys.chapterScenes(chapterId)),
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * Chapter CRUD + reorder (M7 Plan Board / ChapterTree create)
+ *
+ * Create/update/delete invalidate the book's chapter list (so the tree/board
+ * pick up the change). Reorder is OPTIMISTIC: the cached chapter list is
+ * reordered immediately, then the server is asked to persist; on error the
+ * snapshot is rolled back. `onSettled` invalidates so the cache EVENTUALLY
+ * re-syncs with the canonical server order — the FINAL state converges. On a
+ * rapid sequence of same-key drags an earlier mutation's `onSettled` refetch can
+ * momentarily clobber a later optimistic state before it settles (a brief stale
+ * flicker), but each persist still lands and the last settle wins, so the
+ * converged order is correct. We do NOT serialize same-key reorders: dropping or
+ * deferring a later drag would risk losing it, a worse outcome than the flicker.
+ * ------------------------------------------------------------------------- */
+
+/** Input for the chapter-create mutation (book id + body). */
+export interface CreateChapterInput {
+  bookId: string;
+  data: ChapterCreate;
+}
+
+/**
+ * Create a chapter under a book; invalidates the book's chapter list on success
+ * so the Plan Board / ChapterTree pick up the new chapter. Returns the created
+ * chapter (its id drives any follow-up scene create / navigation). Errors
+ * propagate via the mutation's `error`.
+ */
+export function useCreateChapter(): UseMutationResult<
+  ChapterRead,
+  Error,
+  CreateChapterInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, data }: CreateChapterInput) =>
+      createChapter(bookId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.bookChapters(created.book_id),
+      }),
+  });
+}
+
+/** Input for the chapter-update mutation (book + chapter id + patch). */
+export interface UpdateChapterInput {
+  bookId: string;
+  chapterId: string;
+  patch: ChapterUpdate;
+}
+
+/** Patch a chapter; invalidates the book's chapter list on success. */
+export function useUpdateChapter(): UseMutationResult<
+  ChapterRead,
+  Error,
+  UpdateChapterInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, chapterId, patch }: UpdateChapterInput) =>
+      updateChapter(bookId, chapterId, patch),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.bookChapters(updated.book_id),
+      }),
+  });
+}
+
+/** Input for the chapter-delete mutation (book + chapter id). */
+export interface DeleteChapterInput {
+  bookId: string;
+  chapterId: string;
+}
+
+/** Delete a chapter; invalidates the book's chapter list on success. */
+export function useDeleteChapter(): UseMutationResult<
+  void,
+  Error,
+  DeleteChapterInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, chapterId }: DeleteChapterInput) =>
+      deleteChapter(bookId, chapterId),
+    onSuccess: (_data, { bookId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.bookChapters(bookId),
+      }),
+  });
+}
+
+/** Input for the chapter-reorder mutation (book id + the new id sequence). */
+export interface ReorderChaptersInput {
+  bookId: string;
+  /** Full list of chapter ids in their new order. */
+  order: string[];
+}
+
+/** Snapshot kept across the optimistic chapter-reorder for rollback. */
+interface ReorderChaptersContext {
+  previous: ChapterRead[] | undefined;
+}
+
+/**
+ * Reorder a book's chapters with an optimistic cache update + rollback. The
+ * cached chapter list is reordered to `order` immediately (so the board does not
+ * flicker for a single drag), then the server persists the order. On error the
+ * previous snapshot is restored; `onSettled` always invalidates so the cache
+ * EVENTUALLY re-syncs with the canonical server order. Guarantee: the FINAL
+ * state converges — every persist lands and the last settle wins. NOT
+ * guaranteed: freedom from an intermediate flicker on rapid same-key drags,
+ * where an earlier mutation's settle-refetch can briefly clobber a later
+ * optimistic order before it settles. The `bookId` guard in the caller
+ * (`usePlanBoard.reorderChapters`) skips the call when the route has no book.
+ * Errors propagate via the mutation's `error`.
+ */
+export function useReorderChapters(): UseMutationResult<
+  ChapterRead[],
+  Error,
+  ReorderChaptersInput,
+  ReorderChaptersContext
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, order }: ReorderChaptersInput) =>
+      reorderChapters(bookId, order),
+    onMutate: async ({ bookId, order }) => {
+      const key = queryKeys.bookChapters(bookId);
+      // Cancel in-flight list refetches so they cannot clobber our optimistic
+      // write between onMutate and the mutation resolving.
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<ChapterRead[]>(key);
+      if (previous) {
+        queryClient.setQueryData<ChapterRead[]>(
+          key,
+          reorderByIds(previous, order),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, { bookId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          queryKeys.bookChapters(bookId),
+          context.previous,
+        );
+      }
+    },
+    onSettled: (_data, _err, { bookId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.bookChapters(bookId),
+      }),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Scene CRUD + reorder (M7 Plan Board / ChapterTree create)
+ * ------------------------------------------------------------------------- */
+
+/** Input for the scene-create mutation (chapter id + body). */
+export interface CreateSceneInput {
+  chapterId: string;
+  data: SceneCreate;
+}
+
+/**
+ * Create a scene under a chapter; invalidates the chapter's scene list on
+ * success so the board/tree pick up the new scene. Returns the created scene
+ * (its id drives the create→open navigation that closes the create→write loop).
+ * Errors propagate via the mutation's `error`.
+ */
+export function useCreateScene(): UseMutationResult<
+  SceneRead,
+  Error,
+  CreateSceneInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ chapterId, data }: CreateSceneInput) =>
+      createScene(chapterId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.chapterScenes(created.chapter_id),
+      }),
+  });
+}
+
+/** Input for the scene-delete mutation (chapter + scene id). */
+export interface DeleteSceneInput {
+  chapterId: string;
+  sceneId: string;
+}
+
+/** Delete a scene; invalidates the chapter's scene list on success. */
+export function useDeleteScene(): UseMutationResult<
+  void,
+  Error,
+  DeleteSceneInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ chapterId, sceneId }: DeleteSceneInput) =>
+      deleteScene(chapterId, sceneId),
+    onSuccess: (_data, { chapterId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.chapterScenes(chapterId),
+      }),
+  });
+}
+
+/** Input for the scene-archive mutation (chapter + scene id). */
+export interface ArchiveSceneInput {
+  chapterId: string;
+  sceneId: string;
+}
+
+/**
+ * Archive a scene (soft-delete). The list endpoint excludes archived scenes, so
+ * invalidating the chapter's scene list drops it from the board/tree. Errors
+ * propagate via the mutation's `error`.
+ */
+export function useArchiveScene(): UseMutationResult<
+  SceneRead,
+  Error,
+  ArchiveSceneInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ chapterId, sceneId }: ArchiveSceneInput) =>
+      archiveScene(chapterId, sceneId),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.chapterScenes(updated.chapter_id),
+      }),
+  });
+}
+
+/** Input for the scene-reorder mutation (chapter id + the new id sequence). */
+export interface ReorderScenesInput {
+  chapterId: string;
+  /** Full list of scene ids within the chapter in their new order. */
+  order: string[];
+}
+
+/** Snapshot kept across the optimistic scene-reorder for rollback. */
+interface ReorderScenesContext {
+  previous: SceneRead[] | undefined;
+}
+
+/**
+ * Reorder the scenes of a chapter with an optimistic cache update + rollback.
+ * Mirrors {@link useReorderChapters}: the cached scene list is reordered
+ * immediately, the server persists, and on error the snapshot is restored.
+ * `onSettled` invalidates so the cache EVENTUALLY re-syncs with the server
+ * order — the FINAL state converges, but an intermediate flicker is possible on
+ * rapid same-key drags (see {@link useReorderChapters} for the full reasoning).
+ * Reordering is WITHIN a single chapter only — the backend has no cross-chapter
+ * scene move, and `chapterId` is part of the cache key, so (unlike the chapter
+ * reorder) no extra book-scope guard is needed here.
+ */
+export function useReorderScenes(): UseMutationResult<
+  SceneRead[],
+  Error,
+  ReorderScenesInput,
+  ReorderScenesContext
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ chapterId, order }: ReorderScenesInput) =>
+      reorderScenes(chapterId, order),
+    onMutate: async ({ chapterId, order }) => {
+      const key = queryKeys.chapterScenes(chapterId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<SceneRead[]>(key);
+      if (previous) {
+        queryClient.setQueryData<SceneRead[]>(
+          key,
+          reorderByIds(previous, order),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, { chapterId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          queryKeys.chapterScenes(chapterId),
+          context.previous,
+        );
+      }
+    },
+    onSettled: (_data, _err, { chapterId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.chapterScenes(chapterId),
+      }),
+  });
+}
+
+/**
+ * Reorder a list of entities to match an `order` array of ids. Items present in
+ * `order` come first in that exact sequence; any item not referenced in `order`
+ * keeps its relative position at the end (defensive — the board always passes
+ * the full id set, but this guarantees no item is silently dropped).
+ */
+function reorderByIds<T extends { id: string }>(
+  items: T[],
+  order: string[],
+): T[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const ordered: T[] = [];
+  for (const id of order) {
+    const item = byId.get(id);
+    if (item) {
+      ordered.push(item);
+      byId.delete(id);
+    }
+  }
+  // Append any leftovers (not referenced in `order`) in their original order.
+  for (const item of items) {
+    if (byId.has(item.id)) ordered.push(item);
+  }
+  return ordered;
 }
 
 /* ---------------------------------------------------------------------------

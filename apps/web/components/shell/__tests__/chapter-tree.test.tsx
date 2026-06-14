@@ -92,4 +92,83 @@ describe("ChapterTree", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("the header '+' creates a chapter (M7 — was non-functional)", async () => {
+    const user = userEvent.setup();
+    render(
+      <Providers>
+        <ChapterTree />
+      </Providers>,
+    );
+    await screen.findByText(CHAPTER_TWO.title);
+
+    let postedTitle: string | null = null;
+    server.use(
+      http.post(`${base}/books/:bookId/chapters`, async ({ request }) => {
+        const body = (await request.json()) as { title: string };
+        postedTitle = body.title;
+        return HttpResponse.json(
+          {
+            id: "chapter-created-1",
+            book_id: FAROSZ_BOOK.id,
+            title: body.title,
+            summary: null,
+            order_index: 2,
+            status: "draft",
+            created_at: "2026-06-14T18:00:00Z",
+            updated_at: "2026-06-14T18:00:00Z",
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Új fejezet" }));
+    await waitFor(() => expect(postedTitle).toBe("3. fejezet"));
+  });
+
+  it("a chapter '+ Új jelenet' creates a scene and navigates to it", async () => {
+    const user = userEvent.setup();
+    render(
+      <Providers>
+        <ChapterTree />
+      </Providers>,
+    );
+    await screen.findByText(CHAPTER_TWO.title);
+
+    server.use(
+      http.post(
+        `${base}/chapters/:chapterId/scenes`,
+        async ({ params: p }) =>
+          HttpResponse.json(
+            {
+              id: "scene-created-1",
+              chapter_id: String(p.chapterId),
+              title: "Új jelenet",
+              content: null,
+              summary: null,
+              order_index: 1,
+              status: "draft",
+              word_count: 0,
+              pov_character_id: null,
+              created_at: "2026-06-14T18:00:00Z",
+              updated_at: "2026-06-14T18:00:00Z",
+            },
+            { status: 201 },
+          ),
+      ),
+    );
+
+    // One "+ Új jelenet" per chapter; click the first.
+    const newSceneButtons = await screen.findAllByRole("button", {
+      name: "Új jelenet",
+    });
+    await user.click(newSceneButtons[0]);
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        `/konyv/${FAROSZ_BOOK.id}/iras/scene-created-1`,
+      ),
+    );
+  });
 });

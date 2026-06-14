@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { server } from "./test/msw/server";
+import { resetCodexStore, resetPlanStore } from "./test/msw/handlers";
 
 // Start the MSW server before any test runs; fail loudly on a request that no
 // handler covers so a missing mock can never be mistaken for a passing test.
@@ -9,11 +10,14 @@ beforeAll(() => {
   server.listen({ onUnhandledRequest: "error" });
 });
 
-// Unmount React trees, reset the DOM and reset any per-test MSW overrides
-// between tests so mounts/handlers never leak state into one another.
+// Unmount React trees, reset the DOM, reset any per-test MSW overrides and the
+// in-memory stateful stores between tests so mounts/handlers/store state never
+// leak from one test into another.
 afterEach(() => {
   cleanup();
   server.resetHandlers();
+  resetPlanStore();
+  resetCodexStore();
 });
 
 afterAll(() => {
