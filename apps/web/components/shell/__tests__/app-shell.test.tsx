@@ -10,9 +10,11 @@ let pathname = "/konyv/demo/terv";
 let params: Record<string, string | undefined> = { bookId: "demo" };
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace: vi.fn() }),
   usePathname: () => pathname,
   useParams: () => params,
+  // The Codex sidebar reads the selected entry from the URL search params.
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("next-themes", () => ({

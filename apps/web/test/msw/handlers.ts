@@ -16,12 +16,16 @@ import {
   SCENE_BEATS_FIXTURE,
   SCENES_BY_CHAPTER,
   makeAiResult,
+  makeCodexEntry,
   makeDescribeResult,
   makeRevision,
   makeSnippet,
 } from "./fixtures";
 import type {
   BookRead,
+  CodexEntryCreate,
+  CodexEntryRead,
+  CodexEntryUpdate,
   ProjectRead,
   SceneRead,
 } from "@/lib/api/types";
@@ -35,6 +39,77 @@ function wordCount(text: string | null | undefined): number {
 }
 
 const base = `${API_BASE_URL}/api/v1`;
+
+/* ---------------------------------------------------------------------------
+ * In-memory Codex store — gives the CRUD handlers realistic, stateful behaviour
+ * within a test (create then list shows the new entry; patch/delete mutate it).
+ * Seeded from FAROSZ_CODEX; call `codexStore.reset()` in a test's beforeEach to
+ * isolate state between tests.
+ * ------------------------------------------------------------------------- */
+const codexStore = {
+  byProject: new Map<string, CodexEntryRead[]>(),
+
+  seed(): void {
+    this.byProject = new Map<string, CodexEntryRead[]>();
+    this.byProject.set(
+      FAROSZ_PROJECT.id,
+      FAROSZ_CODEX.map((e) => ({ ...e })),
+    );
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(projectId: string): CodexEntryRead[] {
+    return this.byProject.get(projectId) ?? [];
+  },
+
+  get(projectId: string, entryId: string): CodexEntryRead | undefined {
+    return this.list(projectId).find((e) => e.id === entryId);
+  },
+
+  create(projectId: string, body: CodexEntryCreate): CodexEntryRead {
+    const created = makeCodexEntry(projectId, body);
+    const list = this.byProject.get(projectId) ?? [];
+    list.push(created);
+    this.byProject.set(projectId, list);
+    return created;
+  },
+
+  update(
+    projectId: string,
+    entryId: string,
+    patch: CodexEntryUpdate,
+  ): CodexEntryRead | undefined {
+    const list = this.byProject.get(projectId);
+    if (!list) return undefined;
+    const index = list.findIndex((e) => e.id === entryId);
+    if (index === -1) return undefined;
+    const merged: CodexEntryRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-14T17:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  remove(projectId: string, entryId: string): boolean {
+    const list = this.byProject.get(projectId);
+    if (!list) return false;
+    const index = list.findIndex((e) => e.id === entryId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    return true;
+  },
+};
+codexStore.seed();
+
+/** Reset the in-memory Codex store (call in a test's beforeEach for isolation). */
+export function resetCodexStore(): void {
+  codexStore.reset();
+}
 
 /** Build a `ProjectRead` echo for a POST /projects body. */
 function makeProject(body: Partial<ProjectRead>): ProjectRead {
@@ -140,9 +215,68 @@ export const handlers = [
     },
   ),
 
-  /* ---- Codex (project-scoped, read-only for M4) ---- */
-  http.get(`${base}/projects/:projectId/codex`, () =>
-    HttpResponse.json(FAROSZ_CODEX),
+  /* ---- Codex (project-scoped, full CRUD — M6) ---- */
+  http.get(`${base}/projects/:projectId/codex`, ({ params }) =>
+    HttpResponse.json(codexStore.list(String(params.projectId))),
+  ),
+
+  http.get(`${base}/projects/:projectId/codex/:entryId`, ({ params }) => {
+    const entry = codexStore.get(
+      String(params.projectId),
+      String(params.entryId),
+    );
+    if (!entry) {
+      return HttpResponse.json(
+        { detail: "Codex entry not found" },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(entry);
+  }),
+
+  http.post(
+    `${base}/projects/:projectId/codex`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as CodexEntryCreate;
+      const created = codexStore.create(String(params.projectId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.patch(
+    `${base}/projects/:projectId/codex/:entryId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as CodexEntryUpdate;
+      const updated = codexStore.update(
+        String(params.projectId),
+        String(params.entryId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Codex entry not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(
+    `${base}/projects/:projectId/codex/:entryId`,
+    ({ params }) => {
+      const ok = codexStore.remove(
+        String(params.projectId),
+        String(params.entryId),
+      );
+      if (!ok) {
+        return HttpResponse.json(
+          { detail: "Codex entry not found" },
+          { status: 404 },
+        );
+      }
+      return new HttpResponse(null, { status: 204 });
+    },
   ),
 
   /* ---- Beats (scene-scoped) ---- */

@@ -7,6 +7,7 @@ import { Icon } from "@/components/kit/icon";
 import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { resolveCodexMention } from "../codex-data";
+import { useCodexMentionIndex } from "../codex-mention-data";
 
 /**
  * NodeView for a CodexMention: a dotted-accent underline span that reveals a
@@ -17,7 +18,8 @@ import { resolveCodexMention } from "../codex-data";
 export function CodexMentionView({ node, extension }: NodeViewProps) {
   const [open, setOpen] = useState(false);
   const label = String(node.attrs.label ?? "");
-  const entry = resolveCodexMention(label);
+  const index = useCodexMentionIndex();
+  const entry = resolveCodexMention(label, index);
   const onOpenCodex = extension.options.onOpenCodex as
     | ((id: string) => void)
     | undefined;

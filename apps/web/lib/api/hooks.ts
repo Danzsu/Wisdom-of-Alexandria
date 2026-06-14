@@ -30,14 +30,22 @@ import { createBook, listBooks } from "./books";
 import { listChapters } from "./chapters";
 import { listScenes, updateScene } from "./scenes";
 import { createBeat, listBeats } from "./beats";
-import { listCodexEntries } from "./codex";
+import {
+  createCodexEntry,
+  deleteCodexEntry,
+  getCodexEntry,
+  listCodexEntries,
+  updateCodexEntry,
+} from "./codex";
 import type {
   BeatCreate,
   BeatRead,
   BookCreate,
   BookRead,
   ChapterRead,
+  CodexEntryCreate,
   CodexEntryRead,
+  CodexEntryUpdate,
   ProjectCreate,
   ProjectRead,
   SceneRead,
@@ -52,6 +60,8 @@ export const queryKeys = {
     ["projects", projectId, "books"] as const,
   projectCodex: (projectId: string) =>
     ["projects", projectId, "codex"] as const,
+  codexEntry: (projectId: string, entryId: string) =>
+    ["projects", projectId, "codex", entryId] as const,
   bookChapters: (bookId: string) => ["books", bookId, "chapters"] as const,
   chapterScenes: (chapterId: string) =>
     ["chapters", chapterId, "scenes"] as const,
@@ -336,5 +346,113 @@ export function useCodexEntries(
     queryKey: queryKeys.projectCodex(projectId ?? "__none__"),
     queryFn: () => listCodexEntries(projectId as string),
     enabled: Boolean(projectId),
+  });
+}
+
+/**
+ * Fetch one codex entry. Disabled until both ids are present. The detail screen
+ * uses this to refetch the canonical entry (e.g. after a deep-link), but it also
+ * works off the cached list entry when present.
+ */
+export function useCodexEntry(
+  projectId: string | undefined,
+  entryId: string | undefined,
+): UseQueryResult<CodexEntryRead, Error> {
+  return useQuery({
+    queryKey: queryKeys.codexEntry(
+      projectId ?? "__none__",
+      entryId ?? "__none__",
+    ),
+    queryFn: () => getCodexEntry(projectId as string, entryId as string),
+    enabled: Boolean(projectId) && Boolean(entryId),
+  });
+}
+
+/** Input for the codex-create mutation (project id + body). */
+export interface CreateCodexEntryInput {
+  projectId: string;
+  data: CodexEntryCreate;
+}
+
+/**
+ * Create a codex entry under a project; invalidates the project's codex list on
+ * success so the sidebar picks up the new entry. Returns the created entry (its
+ * id drives the post-create selection). Errors propagate via the mutation.
+ */
+export function useCreateCodexEntry(): UseMutationResult<
+  CodexEntryRead,
+  Error,
+  CreateCodexEntryInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, data }: CreateCodexEntryInput) =>
+      createCodexEntry(projectId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectCodex(created.project_id),
+      }),
+  });
+}
+
+/** Input for the codex-update mutation (project + entry id + patch). */
+export interface UpdateCodexEntryInput {
+  projectId: string;
+  entryId: string;
+  patch: CodexEntryUpdate;
+}
+
+/**
+ * Patch a codex entry (name / description / role / aliases / ai_visible). On
+ * success the single-entry cache + the list entry are updated in place so the
+ * detail and the sidebar reflect the change without a refetch flicker. Errors
+ * propagate via the mutation's `error` (never swallowed).
+ */
+export function useUpdateCodexEntry(): UseMutationResult<
+  CodexEntryRead,
+  Error,
+  UpdateCodexEntryInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, entryId, patch }: UpdateCodexEntryInput) =>
+      updateCodexEntry(projectId, entryId, patch),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        queryKeys.codexEntry(updated.project_id, updated.id),
+        updated,
+      );
+      queryClient.setQueryData<CodexEntryRead[]>(
+        queryKeys.projectCodex(updated.project_id),
+        (prev) =>
+          prev ? prev.map((e) => (e.id === updated.id ? updated : e)) : prev,
+      );
+    },
+  });
+}
+
+/** Input for the codex-delete mutation (project + entry id). */
+export interface DeleteCodexEntryInput {
+  projectId: string;
+  entryId: string;
+}
+
+/**
+ * Delete a codex entry; invalidates the project's codex list on success. Errors
+ * propagate via the mutation's `error`.
+ */
+export function useDeleteCodexEntry(): UseMutationResult<
+  void,
+  Error,
+  DeleteCodexEntryInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, entryId }: DeleteCodexEntryInput) =>
+      deleteCodexEntry(projectId, entryId),
+    onSuccess: (_data, { projectId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectCodex(projectId),
+      }),
   });
 }

@@ -8,6 +8,7 @@ import { toast } from "@/components/kit/toast";
 import {
   AiToolbar,
   CleanWriteBar,
+  CodexMentionDataProvider,
   ManuscriptEditor,
   StoryTimelineRail,
   captureSelection,
@@ -203,9 +204,15 @@ export default function IrasPage() {
     [editor, triggerAi, setInspectorTab],
   );
 
-  const handleOpenCodex = useCallback(() => {
-    if (bookId) navTo(routes.book(bookId, "codex"));
-  }, [bookId, navTo]);
+  const handleOpenCodex = useCallback(
+    (codexId: string) => {
+      if (!bookId) return;
+      // Deep-link to the specific entry via the shared `?entry` selection param
+      // (see components/codex/use-codex-selection) so the detail opens directly.
+      navTo(`${routes.book(bookId, "codex")}?entry=${codexId}`);
+    },
+    [bookId, navTo],
+  );
 
   const slashCallbacks: SlashMenuCallbacks = useMemo(
     () => ({
@@ -337,28 +344,32 @@ function WriteViewBody({
       )}
 
       <div className="flex min-h-0 flex-1">
-        <ManuscriptEditor
-          key={scene.id}
-          sceneId={scene.id}
-          initialContent={scene.content}
-          kicker={kicker}
-          title={chapter.title}
-          subtitle={scene.title}
-          modelName={modelName}
-          onChange={onChange}
-          onEditorReady={onEditorReady}
-          onOpenCodex={onOpenCodex}
-          onBubbleAction={onBubbleAction}
-          // The inline beat card runs its OWN real generation + approve→insert;
-          // these callbacks only surface the matching toasts.
-          onBeatGenerate={() => undefined}
-          onBeatApply={() => toast(hu.write.toastBeatApplied)}
-          onBeatDiscard={() => toast(hu.write.toastBeatDiscarded)}
-          onImageUpload={() => toast(hu.write.toastImagePlaceholder)}
-          onAudioActivate={() => toast(hu.write.toastAudioPrototype)}
-          onTableAction={() => toast(hu.write.toastTableInserted)}
-          slashCallbacks={slashCallbacks}
-        />
+        {/* Provide the REAL project Codex to the mention popover (M6). The
+            editor resolves it through the chapter's owning book id. */}
+        <CodexMentionDataProvider bookId={chapter.book_id}>
+          <ManuscriptEditor
+            key={scene.id}
+            sceneId={scene.id}
+            initialContent={scene.content}
+            kicker={kicker}
+            title={chapter.title}
+            subtitle={scene.title}
+            modelName={modelName}
+            onChange={onChange}
+            onEditorReady={onEditorReady}
+            onOpenCodex={onOpenCodex}
+            onBubbleAction={onBubbleAction}
+            // The inline beat card runs its OWN real generation + approve→insert;
+            // these callbacks only surface the matching toasts.
+            onBeatGenerate={() => undefined}
+            onBeatApply={() => toast(hu.write.toastBeatApplied)}
+            onBeatDiscard={() => toast(hu.write.toastBeatDiscarded)}
+            onImageUpload={() => toast(hu.write.toastImagePlaceholder)}
+            onAudioActivate={() => toast(hu.write.toastAudioPrototype)}
+            onTableAction={() => toast(hu.write.toastTableInserted)}
+            slashCallbacks={slashCallbacks}
+          />
+        </CodexMentionDataProvider>
 
         {!aiFreeOn && !focusOn ? (
           <StoryTimelineRail

@@ -331,6 +331,158 @@ export const hu = {
     metaLastSaved: "Utolsó mentés",
     metaUnknown: "—",
   },
+  /**
+   * Codex screen (`Alexandria App.dc.html` showcodex sidebar ~line 330,
+   * Character Detail ~line 941, New-Codex modal ~line 2948). Copy is verbatim
+   * from the prototype; the backend Codex is a generic card so aliases + role
+   * are folded into the real `tags` list (see lib/api/codex.ts).
+   */
+  codex: {
+    /** Sidebar accessible name + tabs. */
+    sidebarAria: "Codex",
+    tabCodex: "Codex",
+    tabSnippets: "Snippetek",
+    tabChats: "Chatek",
+    searchPlaceholder: "Keresés…",
+    filterAria: "Szűrés",
+    addNew: "Új",
+    addNewAria: "Új Codex-bejegyzés",
+    scopeBook: "Ez a könyv",
+    scopeSeries: "Sorozat",
+    // Sorozat scope is V1 — disabled with an honest note.
+    scopeSeriesDisabledTitle: "A sorozat-szintű Codex a V1-ben érkezik.",
+    seriesEmptyTitle: "Még üres a sorozat-Codex",
+    seriesEmptyHint:
+      "A több könyvön átívelő szereplők és helyszínek itt jelennek meg. A sorozat-Codex a V1-ben érkezik.",
+    // List states.
+    listLoading: "Codex betöltése…",
+    listError: "Nem sikerült betölteni a Codexet",
+    listEmptyTitle: "Még üres a Codex",
+    listEmptyHint:
+      "Szereplők, helyszínek, tárgyak — az AI ebből merít. Hozd létre az első bejegyzést.",
+    listEmptyCta: "Új bejegyzés",
+    // Snippetek / Chatek tabs (V1 — honest empty states).
+    snippetsEmpty: "A Snippetek nézet a V1-ben érkezik.",
+    chatsEmpty: "A Chatek nézet a V1-ben érkezik.",
+    // Group headings (by entry type) — "{label} · {count}".
+    groupHeading: (label: string, count: number) => `${label} · ${count}`,
+    /** Entry-type group labels (plural, sidebar headings). */
+    typeGroupLabel: {
+      character: "Karakterek",
+      location: "Helyszínek",
+      object: "Tárgyak",
+      organization: "Szervezetek",
+      lore: "Lore",
+      rule: "Szabályok",
+      custom: "Egyéb",
+    } as Record<string, string>,
+    /** Entry-type singular labels (the detail type pill). */
+    typeLabel: {
+      character: "Karakter",
+      location: "Helyszín",
+      object: "Tárgy",
+      organization: "Szervezet",
+      lore: "Lore",
+      rule: "Szabály",
+      custom: "Egyéb",
+    } as Record<string, string>,
+    /** Mention-count suffix on a list row / detail header. */
+    mentionCount: (n: number) => `${n} megemlítés`,
+    noDescription: "Nincs leírás",
+    // Detail header.
+    detailScreenLabel: "Codex — Karakter Detail",
+    addTag: "+ címke",
+    portraitAria: "Portré feltöltése",
+    portraitTitle: "Portré feltöltése — húzd ide vagy tallózz",
+    portraitLabel: "Portré",
+    portraitStubToast: "A portréfeltöltés a V2-ben érkezik",
+    pin: "Kitűzés",
+    pinStubToast: "Kitűzés a Codex-listára (V1)",
+    nameAria: "Bejegyzés neve",
+    // Detail tabs.
+    tabDetails: "Részletek",
+    tabResearch: "Kutatás",
+    tabRelations: "Kapcsolatok",
+    tabProgress: "Progresszió",
+    tabMentions: "Megemlítések",
+    tabTracking: "Nyomon követés",
+    detailTabsAria: "Bejegyzés nézetek",
+    // Részletek tab.
+    aliasesLabel: "Álnevek / Becenevek",
+    aliasesHint:
+      "A felismeréshez használt nevek — a prózában nem lesznek helyesírás-ellenőrizve.",
+    aliasesPlaceholder: "vesszővel elválasztva…",
+    aliasesSuggestLabel: "Javaslatok:",
+    aliasesSuggestAria: "Álnév-javaslat az AI-tól",
+    aliasSuggestStubToast: "Az AI álnév-javaslat a V1-ben érkezik",
+    aliasRemoveAria: (alias: string) => `${alias} eltávolítása`,
+    descriptionLabel: "Leírás",
+    descriptionSuggestAria: "Leírás-javaslat az AI-tól",
+    descriptionSuggestStubToast: "Az AI leírás-javaslat a V1-ben érkezik",
+    descriptionWordCount: (n: number) => `${n} szó`,
+    roleLabel: "Szerep a történetben",
+    rolePlaceholder: "Pl. Protagonista…",
+    addDetail: "Részlet hozzáadása",
+    saving: "Mentés…",
+    saved: "Mentve",
+    saveError: "A mentés sikertelen",
+    // Megemlítések tab.
+    mentionsLoading: "Jelenetek betöltése…",
+    mentionsEmpty:
+      "Ez a bejegyzés (név / álnév szerint) még egyetlen jelenetben sem szerepel.",
+    mentionsScene: (chapter: string, scene: string) => `${chapter} · ${scene}`,
+    // Nyomon követés tab.
+    trackingByName: "Nyomkövetés névvel / álnévvel",
+    trackingAiContextLabel: "AI kontextus",
+    trackingAlways: "Mindig belekerül az AI kontextusba",
+    trackingAlwaysHint: "Globális bejegyzésként mindig az AI elé kerül.",
+    trackingWhenRecognized: "Beleszámít, ha felismerve",
+    trackingDefaultTag: "Alapértelmezett",
+    trackingHidden: "Rejtett az AI-tól",
+    trackingHiddenHint: "(spoiler-védelem)",
+    // Kutatás / Kapcsolatok / Progresszió — honest V1 placeholders.
+    researchV1Title: "A Kutatás (AI Q&A) a V1-ben érkezik",
+    researchV1Hint:
+      "Itt kérdezhetsz majd az AI-tól a bejegyzésről — a válaszok a kéziratból és a Codexből merítenek (RAG).",
+    relationsV1Title: "A Kapcsolatok a V1-ben érkezik",
+    relationsV1Hint:
+      "A szereplők közötti kapcsolatok (szövetséges, mentor, ellenség) itt jelennek majd meg.",
+    progressV1Title: "A Progresszió a V1-ben érkezik",
+    progressV1Hint:
+      "A karakter állapota a történet előrehaladtával — az AI a jelenet idejének megfelelő állapotot húzza be.",
+    // Delete.
+    deleteAria: "Bejegyzés törlése",
+    deleteTitle: "Bejegyzés törlése",
+    deleteDescription: (name: string) =>
+      `Biztosan törlöd a(z) „${name}" bejegyzést? Ez a művelet nem visszavonható.`,
+    deleted: "Bejegyzés törölve",
+    deleteError: "A törlés sikertelen",
+    // New-Codex modal.
+    modalTitle: "Új Codex-bejegyzés",
+    modalBackAria: "Vissza",
+    modalPickerPrompt: "Válaszd ki a bejegyzés típusát:",
+    /** Type-picker grid cards (label + sub-hint). */
+    pickerCards: {
+      character: { label: "Karakter", hint: "szereplő, POV" },
+      location: { label: "Helyszín", hint: "város, épület, táj" },
+      object: { label: "Tárgy", hint: "eszköz, ereklye" },
+      organization: { label: "Szervezet", hint: "rend, frakció" },
+      lore: { label: "Lore", hint: "háttér, mítosz" },
+      rule: { label: "Szabály", hint: "mágiarendszer, törvény" },
+    } as Record<string, { label: string; hint: string }>,
+    modalTypeSuffix: "típusú bejegyzés",
+    modalNameLabel: "Név",
+    modalNamePlaceholder: "A bejegyzés neve…",
+    modalNameRequired: "A név megadása kötelező.",
+    modalAliasesLabel: "Álnevek",
+    modalDescriptionLabel: "Leírás",
+    modalDescriptionPlaceholder: "Rövid leírás — az AI is segíthet kitölteni…",
+    modalTrackLabel: "Nyomon követés névvel a kéziratban",
+    modalCancel: "Mégse",
+    modalCreate: "Bejegyzés létrehozása",
+    createdToast: "Új Codex-bejegyzés létrehozva",
+    createError: "Nem sikerült létrehozni a bejegyzést",
+  },
   command: {
     placeholder: "Keresés a projektben… jelenetek, Codex, műveletek",
     escHint: "Esc",

@@ -144,6 +144,35 @@ export const codexEntryReadSchema = z.object({
 });
 export type CodexEntryRead = z.infer<typeof codexEntryReadSchema>;
 
+/**
+ * Request body for creating a codex entry (`CodexEntryCreate`).
+ *
+ * Mirrors `apps/api/app/schemas/codex_entry.py` EXACTLY — the backend Codex is a
+ * generic card: `title` (the entry NAME), `entry_type` (Character/Location/…),
+ * `content` (the DESCRIPTION), `ai_visible` (spoiler-protection toggle) and a
+ * single `tags` list. There are no dedicated `aliases` / `role` columns, so the
+ * frontend folds aliases + role into `tags` via a documented codec (see
+ * `lib/api/codex.ts`). `entry_type` defaults to "custom" server-side.
+ */
+export const codexEntryCreateSchema = z.object({
+  title: z.string().min(1).max(255),
+  entry_type: z.string().max(100).default("custom"),
+  content: z.string().nullable().optional(),
+  ai_visible: z.boolean().default(true),
+  tags: z.array(z.string()).default([]),
+});
+export type CodexEntryCreate = z.infer<typeof codexEntryCreateSchema>;
+
+/** Request body for patching a codex entry (`CodexEntryUpdate`). All optional. */
+export const codexEntryUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  entry_type: z.string().max(100).optional(),
+  content: z.string().nullable().optional(),
+  ai_visible: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+});
+export type CodexEntryUpdate = z.infer<typeof codexEntryUpdateSchema>;
+
 /* ---------------------------------------------------------------------------
  * Beat — mirrors app/schemas/beat.py (BeatRead / BeatCreate). Scene-scoped.
  * ------------------------------------------------------------------------- */

@@ -14,5 +14,9 @@ export {
 } from "./selection-bubble-menu";
 export { SlashMenu, buildSlashItems, type SlashMenuCallbacks } from "./slash-menu";
 export { useAutosave, AUTOSAVE_DELAY_MS } from "./use-autosave";
+export {
+  CodexMentionDataProvider,
+  useCodexMentionIndex,
+} from "./codex-mention-data";
 export { textToDoc } from "./manuscript-content";
 export { captureSelection } from "./capture-selection";

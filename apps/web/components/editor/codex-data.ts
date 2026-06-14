@@ -1,21 +1,25 @@
 /**
- * Codex lookup for the CodexMention hover popover (M4).
+ * Codex lookup for the CodexMention hover popover.
  *
- * SEAM (M6): the real Codex list is project-scoped and owned by M6's Codex CRUD
- * + sidebar. M4 only renders mention marks with a read-only hover card, so we
- * carry a small typed placeholder keyed by the mention label. `useCodexEntries`
- * (lib/api/hooks) exists for M6 to wire the live list; the Write route only has
- * `bookId` (codex needs `project_id`), so resolving the live list is deferred to
- * M6 when the book→project link is available. The labels + descriptions here are
- * verbatim from the prototype mentions (Alexandria App.dc.html ~line 665).
+ * M6 wires this to the REAL project Codex. The Write route only carries
+ * `bookId`, so the live list is resolved via `useBookProjectId(bookId)` →
+ * `useCodexEntries(projectId)` (see the CodexMentionDataProvider in
+ * `codex-mention-data.tsx`) and threaded to the mention NodeView through a
+ * React context. {@link buildCodexMentionIndex} turns the real
+ * `CodexEntryRead[]` into the label-keyed index the popover renders; the
+ * static `CODEX_MENTIONS` below is the FALLBACK used only when no provider is
+ * mounted (e.g. the extension unit harness).
  */
+import { povSlot } from "@/lib/pov-color";
+import { decodeTags } from "@/lib/api/codex";
+import type { CodexEntryRead } from "@/lib/api/types";
 
 /** Visual type of a codex entry (drives the avatar tone in the popover). */
 export type CodexMentionKind = "character" | "location";
 
 /** A resolved codex entry for the mention popover. */
 export interface CodexMentionEntry {
-  /** Stable id (placeholder until M6 wires real ids). */
+  /** Stable id (real codex id once wired). */
   id: string;
   /** The mention label as it appears in the manuscript. */
   label: string;
@@ -64,9 +68,67 @@ export const CODEX_MENTIONS: Record<string, CodexMentionEntry> = {
   },
 };
 
-/** Resolve a mention label to its codex entry, or null when unknown. */
+/** A label→entry index the popover resolves against. */
+export type CodexMentionIndex = Record<string, CodexMentionEntry>;
+
+/** 1–2 char initials from a name (mirrors the kit Avatar logic). */
+function initialsFrom(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const HU_TYPE_LINE: Record<string, string> = {
+  character: "Karakter",
+  location: "Helyszín",
+  object: "Tárgy",
+  organization: "Szervezet",
+  lore: "Lore",
+  rule: "Szabály",
+};
+
+/**
+ * Build the label-keyed mention index from the real project Codex. A character
+ * gets a POV-coloured initials avatar (stable per name); other types render as
+ * a location-style chip in the popover. Each entry is indexed by its title AND
+ * every alias (lowercased) so a mention of an alias still resolves.
+ */
+export function buildCodexMentionIndex(
+  entries: readonly CodexEntryRead[],
+): CodexMentionIndex {
+  const index: CodexMentionIndex = {};
+  for (const entry of entries) {
+    const { aliases, role } = decodeTags(entry.tags);
+    const isCharacter = entry.entry_type === "character";
+    const typeName = HU_TYPE_LINE[entry.entry_type] ?? "Bejegyzés";
+    const mention: CodexMentionEntry = {
+      id: entry.id,
+      label: entry.title,
+      typeLine: role ? `${typeName} · ${role}` : typeName,
+      kind: isCharacter ? "character" : "location",
+      povSlot: isCharacter ? povSlot(entry.title) : null,
+      initials: isCharacter ? initialsFrom(entry.title) : null,
+      description: entry.content?.trim() ?? "",
+    };
+    index[entry.title.trim().toLowerCase()] = mention;
+    for (const alias of aliases) {
+      const key = alias.trim().toLowerCase();
+      if (key && !index[key]) index[key] = { ...mention, label: alias };
+    }
+  }
+  return index;
+}
+
+/**
+ * Resolve a mention label against an optional live index, falling back to the
+ * static placeholder map when the index is absent or has no match. Passing
+ * `null` (no provider mounted) reproduces the pre-M6 behaviour exactly.
+ */
 export function resolveCodexMention(
   label: string,
+  index?: CodexMentionIndex | null,
 ): CodexMentionEntry | null {
-  return CODEX_MENTIONS[label.trim().toLowerCase()] ?? null;
+  const key = label.trim().toLowerCase();
+  return index?.[key] ?? CODEX_MENTIONS[key] ?? null;
 }

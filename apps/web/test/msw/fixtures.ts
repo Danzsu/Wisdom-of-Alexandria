@@ -126,11 +126,51 @@ export const FAROSZ_CODEX: CodexEntryRead[] = [
     entry_type: "character",
     content: "A Nagykönyvtár éjszakai írnoka.",
     ai_visible: true,
-    tags: ["főszereplő"],
+    // The __woa: codec folds aliases + story role into the real `tags` list
+    // (see lib/api/codex.ts); "főszereplő" is a plain user label.
+    tags: ["__woa:alias=Lené", "__woa:role=Protagonista", "főszereplő"],
+    created_at: "2026-06-14T14:32:00Z",
+    updated_at: "2026-06-14T14:32:00Z",
+  },
+  {
+    id: "codex-nagykonyvtar",
+    project_id: FAROSZ_PROJECT.id,
+    title: "Nagykönyvtár",
+    entry_type: "location",
+    content: "A keleti szárny és a tiltott termek.",
+    ai_visible: true,
+    tags: [],
     created_at: "2026-06-14T14:32:00Z",
     updated_at: "2026-06-14T14:32:00Z",
   },
 ];
+
+let codexSeq = 0;
+
+/** Build a `CodexEntryRead` echo for a POST /projects/{pid}/codex body. */
+export function makeCodexEntry(
+  projectId: string,
+  body: {
+    title?: string;
+    entry_type?: string;
+    content?: string | null;
+    ai_visible?: boolean;
+    tags?: string[];
+  },
+): CodexEntryRead {
+  codexSeq += 1;
+  return {
+    id: `codex-new-${codexSeq}`,
+    project_id: projectId,
+    title: body.title ?? "Névtelen bejegyzés",
+    entry_type: body.entry_type ?? "custom",
+    content: body.content ?? null,
+    ai_visible: body.ai_visible ?? true,
+    tags: body.tags ?? [],
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
 
 /* ---------------------------------------------------------------------------
  * AI flow fixtures (M5) — mirror app/api/v1/ai.py response shapes.
