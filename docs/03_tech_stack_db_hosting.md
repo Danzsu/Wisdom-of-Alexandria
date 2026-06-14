@@ -226,15 +226,16 @@ AI request
 
 ### Ajánlott keretrendszer
 
-**LangGraph**
+**PydanticAI** *(frissítve 2026-06-08 — LangGraph helyett)*
 
 Indok:
 
-- explicit állapotgép;
-- jól illik többkörös agentic workflow-khoz;
-- jobban kontrollálható, mint egy laza multi-agent chat;
-- könnyű human approval node-okat beépíteni;
-- jó chapter generation pipeline-hoz.
+- nincs LangChain dependency;
+- típusbiztos input/output sémák Pydantic modellekkel;
+- könnyebb tesztelni mock provider-rel;
+- illeszkedik a codebase többi Python kódjához;
+- human approval node-ok könnyen beépíthetők;
+- MVP-ben közvetlen LiteLLM hívások, PydanticAI agensek V1-ben kerülnek be.
 
 ### Scene generation workflow
 
@@ -275,13 +276,17 @@ flowchart TD
 
 ### Komponensek
 
+<!-- frissítve 2026-06-08 — Qdrant helyett pgvector -->
+
 | Komponens | Technológia | Feladat |
 |---|---|---|
-| Structured DB | PostgreSQL | Projekt, kézirat, Codex, revision |
-| Vector DB | Qdrant | Szemantikus retrieval |
+| Structured DB | PostgreSQL 16 | Projekt, kézirat, Codex, revision |
+| Vector search | pgvector 0.7.x (PostgreSQL extension) | Szemantikus retrieval, nincs külön service |
 | Keyword search | PostgreSQL full-text | Pontos keresés nevekre, tárgyakra |
-| Embedding worker | Python worker | Embedding frissítés |
+| Embedding worker | Python RQ worker | Embedding frissítés |
 | Context pack builder | Backend service | Releváns kontextus összeállítása AI-kéréshez |
+
+> **Megjegyzés:** Qdrant kivéve az MVP és V1 stack-ből. pgvector elegendő a várható corpus mérethez (< 100k vector/projekt). Qdrant opcionális upgrade V2-ben ha a retrieval latency meghaladja a 200ms-t vagy a corpus 500k vector fölé nő.
 
 ### Indexelendő tartalmak
 

@@ -225,12 +225,19 @@ The MVP must include:
 - Project / Book / Chapter / Scene entities
 - Beat CRUD
 - Character / Location / Worldbuilding Codex
+- Character `aliases` field (name detection in manuscript)
+- `ai_visible` boolean on all Codex entities (hide entry from AI context)
+- CodexRelation table — CRUD only, no UI yet (V1)
+- CodexProgression table — CRUD only, AI does not filter yet (V1)
+- Snippet entity — basic CRUD
 - StyleGuide entity
 - basic Tiptap editor with autosave
 - chapter and scene board
 - JWT auth (single-user, .env credentials)
 - Ollama connection via LiteLLM
+- scene continuation (auto mode)
 - selected-text rewrite
+- Describe sensory rewriting — selection-triggered, 6 channels (Látás / Hang / Tapintás / Szag / Íz / Metaforák), result cards in AI panel, star to Snippet
 - scene generation from beat list
 - AI output saved as Revision (never auto-overwrites)
 - manual approve/insert step
@@ -285,6 +292,37 @@ Before any large change, Claude Code should produce:
 5. test plan
 6. known risks
 
+## Testing framework
+
+**Development philosophy:** Feature + Test-Driven Development (FTDD) — every feature starts with a failing test.
+
+Frontend (`apps/web`):
+
+- **Vitest** + `@testing-library/react` — unit and component tests
+- **MSW** (Mock Service Worker) — API mocking in component tests
+- **Playwright** — E2E tests (runs on CI against local dev server)
+
+Backend (`apps/api`):
+
+- **pytest** + **httpx** + **pytest-asyncio** — async endpoint tests
+- **pytest-mock** — service layer unit tests (mocked repositories)
+- **SQLite** (`aiosqlite`) — local integration tests (non-pgvector)
+- **GitHub Actions Postgres service** — full integration + pgvector tests on CI
+- `@pytest.mark.postgres` — marks pgvector-dependent tests, skipped on SQLite
+
+Pre-push hooks (Husky):
+
+- type-check + lint + unit tests run locally before every push (~20–30s)
+- broken pushes are blocked before reaching GitHub
+
+CI pipeline (GitHub Actions on push to main):
+
+- `ci-frontend` + `ci-backend` jobs run in parallel
+- `e2e` job runs after both pass (Playwright, local dev server)
+- `deploy` job runs only if E2E passes → Vercel + Cloud Run
+
+Full CI/CD and testing documentation: `docs/13_ci_cd_and_testing.md`
+
 ## Testing expectations
 
 Minimum test coverage for:
@@ -294,7 +332,7 @@ Minimum test coverage for:
 - AI workflow input/output contracts
 - export pipeline
 - generation job state transitions
-- Codex retrieval logic
+- Codex retrieval logic (pgvector, `@pytest.mark.postgres`)
 
 ## AI workflow principles
 

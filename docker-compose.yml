@@ -1,0 +1,91 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forgewriter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forgewriter}
+      POSTGRES_DB: ${POSTGRES_DB:-forgewriter}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forgewriter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/prompts:/app/prompts:ro
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["uv", "run", "rq", "worker", "--url", "redis://redis:6379"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/prompts:/app/prompts:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:

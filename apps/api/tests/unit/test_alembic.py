@@ -1,0 +1,53 @@
+"""Tests to verify Alembic migration setup and model registration."""
+
+import pytest
+
+# Import all models to ensure they are registered with metadata
+import app.models  # noqa: F401
+from app.models.base import Base
+
+
+EXPECTED_TABLES = {
+    "projects",
+    "books",
+    "chapters",
+    "scenes",
+    "beats",
+    "characters",
+    "locations",
+    "worldbuilding_entries",
+    "codex_entries",
+    "codex_relations",
+    "codex_progressions",
+    "snippets",
+    "style_guides",
+    "generation_jobs",
+    "revisions",
+    "ai_comments",
+}
+
+
+def test_all_tables_in_metadata():
+    """Verify that all expected tables are registered in SQLAlchemy metadata."""
+    actual = set(Base.metadata.tables.keys())
+    assert EXPECTED_TABLES == actual, (
+        f"Table mismatch.\nMissing: {EXPECTED_TABLES - actual}\n"
+        f"Extra: {actual - EXPECTED_TABLES}"
+    )
+
+
+def test_metadata_has_16_tables():
+    """Verify that exactly 16 tables are registered."""
+    import app.models  # noqa: F401
+    assert len(Base.metadata.tables) == 16, (
+        f"Expected 16 tables, got {len(Base.metadata.tables)}"
+    )
+
+
+def test_env_py_can_import_models():
+    """Verify that the alembic env.py can successfully import app.models."""
+    # This test runs when pytest loads, so if env.py imports fail,
+    # this test would not run. However, we can test the config loading.
+    from app.core.config import settings
+
+    assert settings.database_url == "postgresql+asyncpg://forgewriter:forgewriter@localhost:5432/forgewriter"

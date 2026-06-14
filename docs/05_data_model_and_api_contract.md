@@ -22,7 +22,7 @@ The system should support a structured NovelCrafter-like workspace with:
 
 Use PostgreSQL for structured data.
 
-Use Qdrant for semantic retrieval over Codex and manuscript summaries.
+Use pgvector (PostgreSQL extension) for semantic retrieval over Codex and manuscript summaries. No separate Qdrant service in MVP/V1.
 
 Use Redis for background job queues.
 
@@ -63,6 +63,10 @@ User
         ├── TimelineEvent
         ├── Plotline
         ├── Relationship
+        ├── CodexRelation        ← NEW: kapcsolatok Codex entryk között
+        ├── CodexProgression     ← NEW: temporális Codex változások
+        ├── CodexEntry           (search/index layer)
+        ├── Snippet              ← NEW: félretett szövegek, töredékek
         ├── StyleGuide
         ├── GenerationJob
         ├── Revision
@@ -240,6 +244,7 @@ emotional_tone
 scene_goal
 scene_conflict
 scene_outcome
+archived_at TIMESTAMP nullable
 created_at
 updated_at
 ```
@@ -313,6 +318,7 @@ arc_summary
 backstory
 appearance
 tags TEXT[]
+ai_visible BOOLEAN DEFAULT true
 created_at
 updated_at
 ```
@@ -361,6 +367,87 @@ created_at
 updated_at
 ```
 
+## CodexRelation
+
+### Purpose
+
+Defines relationships between any two Codex entities (Character, Location, WorldbuildingEntry). When the AI retrieves one entity, related entities are candidates for automatic context expansion.
+
+### Fields
+
+```txt
+id
+project_id
+source_type         (character / location / worldbuilding)
+source_id
+target_type         (character / location / worldbuilding)
+target_id
+relation_type       (related / connected / requires / excludes / influences)
+description nullable
+auto_include_in_context BOOLEAN DEFAULT true
+created_at
+updated_at
+```
+
+Bidirectional: A→B implies B→A for context expansion unless excluded. `auto_include_in_context` controls whether the Saliency Engine pulls the related entry when the source is relevant.
+
+---
+
+## CodexProgression
+
+### Purpose
+
+Tracks time-based changes to a Codex entry. An AI generating a scene only receives the Codex state valid up to that scene's point in the narrative — preventing spoilers and maintaining consistency.
+
+### Fields
+
+```txt
+id
+project_id
+codex_entry_type    (character / location / worldbuilding)
+codex_entry_id
+title               (e.g. "Loses right hand", "True identity revealed")
+description         (what changed and why)
+override_field nullable   (which field is overridden, e.g. "appearance")
+override_value TEXT nullable  (the new value after this progression activates)
+activation_type     (after_scene / after_chapter / after_timeline_event)
+activates_after_scene_id UUID nullable
+activates_after_chapter_id UUID nullable
+activates_after_chapter_order INT nullable
+is_spoiler BOOLEAN DEFAULT true
+created_at
+updated_at
+```
+
+MVP: schema and CRUD only — the AI layer does not yet filter by progressions. V1: context pack builder respects progressions and filters out future states when building AI context for a given scene.
+
+---
+
+## Snippet
+
+### Purpose
+
+Short-form notes, saved text fragments, to-dos, research notes, and discarded drafts. Not part of the manuscript but stored in the project.
+
+### Fields
+
+```txt
+id
+project_id
+book_id nullable
+chapter_id nullable
+scene_id nullable
+title nullable
+content TEXT
+content_type        (note / todo / saved_draft / research / idea / reference / describe_result)
+source_sense nullable  (sight / sound / touch / smell / taste / metaphor / emotional_atmosphere)
+tags TEXT[]
+created_at
+updated_at
+```
+
+---
+
 ## Location
 
 ### Purpose
@@ -373,6 +460,7 @@ Codex entity for places.
 id
 project_id
 name
+aliases TEXT[]
 type
 short_description
 long_description
@@ -381,6 +469,7 @@ mood
 rules
 associated_characters UUID[]
 tags TEXT[]
+ai_visible BOOLEAN DEFAULT true
 created_at
 updated_at
 ```
@@ -397,6 +486,7 @@ Codex entry for lore, systems, organizations, rules, history.
 id
 project_id
 title
+aliases TEXT[]
 category
 short_description
 content
@@ -405,6 +495,7 @@ contradictions_to_avoid
 related_characters UUID[]
 related_locations UUID[]
 tags TEXT[]
+ai_visible BOOLEAN DEFAULT true
 created_at
 updated_at
 ```
@@ -568,6 +659,8 @@ completed_at nullable
 ```txt
 brainstorm
 rewrite
+describe
+quick_edit
 expand
 compress
 scene_draft
@@ -833,13 +926,47 @@ POST /api/v1/projects/{project_id}/semantic-search
 
 ```http
 POST /api/v1/ai/rewrite
+POST /api/v1/ai/quick-edit
+POST /api/v1/ai/write-continue
+POST /api/v1/ai/write-guided
 POST /api/v1/ai/brainstorm
+POST /api/v1/ai/describe
+POST /api/v1/ai/expand
+POST /api/v1/ai/compress
 POST /api/v1/ai/generate-scene
 POST /api/v1/ai/check-continuity
 POST /api/v1/ai/polish-hungarian
+POST /api/v1/ai/feedback
 GET /api/v1/generation-jobs/{job_id}
 POST /api/v1/generation-jobs/{job_id}/accept
 POST /api/v1/generation-jobs/{job_id}/reject
+```
+
+### Codex Relation endpoints
+
+```http
+GET /api/v1/projects/{project_id}/codex-relations
+POST /api/v1/projects/{project_id}/codex-relations
+PATCH /api/v1/codex-relations/{relation_id}
+DELETE /api/v1/codex-relations/{relation_id}
+```
+
+### Codex Progression endpoints
+
+```http
+GET /api/v1/projects/{project_id}/codex-progressions
+POST /api/v1/projects/{project_id}/codex-progressions
+PATCH /api/v1/codex-progressions/{progression_id}
+DELETE /api/v1/codex-progressions/{progression_id}
+```
+
+### Snippet endpoints
+
+```http
+GET /api/v1/projects/{project_id}/snippets
+POST /api/v1/projects/{project_id}/snippets
+PATCH /api/v1/snippets/{snippet_id}
+DELETE /api/v1/snippets/{snippet_id}
 ```
 
 ### AI rewrite request
@@ -868,6 +995,64 @@ POST /api/v1/generation-jobs/{job_id}/reject
   }
 }
 ```
+
+### AI describe request
+
+```json
+{
+  "project_id": "uuid",
+  "scene_id": "uuid",
+  "selected_text": "a rozsdás kapupánt",
+  "preceding_context": "Az utca végén megállt. Valami húzta visszafelé...",
+  "senses": ["sight", "sound", "touch", "smell", "taste", "metaphor"],
+  "model_preference": "local"
+}
+```
+
+The `preceding_context` field should contain up to 200 words before the selection. The `senses` array controls which channels are generated — all six are included by default.
+
+### AI describe response
+
+```json
+{
+  "job_id": "uuid",
+  "status": "requires_review",
+  "results": [
+    {
+      "sense": "sight",
+      "label": "Látás",
+      "text": "A vas rozsdafoltjai barnásvörös virágként nyíltak szét a kapupánton..."
+    },
+    {
+      "sense": "sound",
+      "label": "Hang",
+      "text": "A fém nyikorgása betört a csendbe, mint egy rekedt figyelmeztetés..."
+    },
+    {
+      "sense": "touch",
+      "label": "Tapintás",
+      "text": "Ujjai hegyén a hideg fém szúrt, az egyenetlen felület mint megszáradt seb..."
+    },
+    {
+      "sense": "smell",
+      "label": "Szag",
+      "text": "Vas, nedves kő és valami régi, savanyú szag — az elhagyatottság illata..."
+    },
+    {
+      "sense": "taste",
+      "label": "Íz",
+      "text": "A száján érezte a rozsda kesernyés fémízét, mint amikor régi érmét szorít a nyelve alá..."
+    },
+    {
+      "sense": "metaphor",
+      "label": "Metaforák",
+      "text": "A kapupánt olyan volt, mint egy megöregedett katonai kitüntetés — régen fényes, most már csak a sebek emléke maradt..."
+    }
+  ]
+}
+```
+
+Each result card is shown independently in the AI panel. The user can select text within a card to insert it into the manuscript, or star the card to save it as a Snippet (`content_type: describe_result`, `source_sense: sight` etc.).
 
 ### Generate scene request
 

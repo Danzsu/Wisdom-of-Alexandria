@@ -9,6 +9,8 @@ __pycache__/
 coverage.xml
 htmlcov/
 test.db
+test_debug.db
+*.db
 
 # Node
 node_modules/

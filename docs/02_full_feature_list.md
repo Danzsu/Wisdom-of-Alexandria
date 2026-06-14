@@ -56,18 +56,26 @@ Jelölések:
 | Codex típusok | MVP | Character, Location, Object, Organization, Lore, Rule, Event |
 | Egyedi Codex típusok | V1 | Felhasználó által létrehozható típusok |
 | Karakterprofil | MVP | Név, szerep, leírás, cél, motiváció, félelem, konfliktus |
+| Karakter aliasok | MVP | Több név / becenév egy entryhez (detektáláshoz és contexthez) |
+| Codex AI láthatóság | MVP | ai_visible boolean — entry elrejtése az AI elől (spoiler védelem) |
+| Codex Relations (séma) | MVP | CodexRelation tábla — entryk közti kapcsolatok; UI V1-ben jön |
+| Codex Progressions (séma) | MVP | CodexProgression tábla — temporális Codex változások séma szinten; AI V1-ben figyeli |
 | Karakterhang | V1 | Beszédstílus, szóhasználat, tiltott fordulatok |
 | Karakterív | V1 | Starting state, midpoint state, final state |
 | Karakterkapcsolatok | V1 | Relationship graph, kapcsolat típusa és leírása |
+| Codex Progressions (UI + AI) | V1 | Temporális Codex state UI-ban: mikor aktiválódik, AI figyeli scene context alapján |
+| Codex Relations (UI) | V1 | Kapcsolatok vizuális megjelenítése, auto context expansion |
+| AI Visibility per trait | V1 | Mezőszintű AI láthatóság (pl. csak a gyilkos motívuma rejtett) |
 | Helyszínprofil | MVP | Leírás, hangulat, szabályok, kapcsolódó jelenetek |
 | Világépítési bejegyzések | MVP | Társadalom, technológia, mágia, politika, szabályok |
+| Snippet / notes | V1 | Félretett szövegek, töredékek, to-do-k, kutatási jegyzetek |
 | Timeline event | V1 | Események időrendben |
+| Scene archive (soft delete) | V1 | Jelenetek archiválása törlés helyett |
 | Codex quick create | V1 | AI vagy kijelölt szöveg alapján gyors Codex bejegyzés |
 | AI character extraction | V2 | Szövegből karakterek automatikus kinyerése |
 | AI location extraction | V2 | Szövegből helyszínek automatikus kinyerése |
-| Codex relation map | V1 | Kapcsolatok vizuális megjelenítése |
 | Codex consistency check | V2 | Ellentmondások keresése Codex és kézirat között |
-| Codex RAG index | V1 | Codex bejegyzések vektorizálása retrievalhez |
+| Codex RAG index | V1 | Codex bejegyzések pgvector-alapú vektorizálása retrievalhez |
 
 ---
 
@@ -102,6 +110,9 @@ Jelölések:
 | Kontextusválasztó | V1 | Codex, chapter summary, previous scene, style guide kiválasztása |
 | AI válasz mentése revisionként | MVP | Output mentése, nem automatikus felülírás |
 | AI output beszúrás | MVP | Insert / Replace / Append opciók |
+| Quick Edit (Ctrl+K) | V1 | Inline AI szerkesztés: instrukció → áthúzott eredeti + új szöveg → accept/reject/refine |
+| Prompt Preview | V1 | Pontosan látható / másolható, mi megy az AI-nak (kontextus transzparencia) |
+| Saliency Engine | V1 | Okos context selection: az AI nem kap mindent, csak a relevánsat |
 | Streaming válasz | V1 | SSE vagy WebSocket streaming |
 | AI history | V1 | Korábbi promptok és válaszok listája |
 | Prompt debugger | Later | Milyen kontextust kapott az AI |
@@ -113,18 +124,21 @@ Jelölések:
 | Funkció | Prioritás | Leírás |
 |---|---:|---|
 | Brainstorm | V1 | Ötletek, konfliktusok, fordulatok |
+| Brainstorm Keepers List | V1 | Jó ötletek mentése listába, rosszak eldobása |
 | Alternative plot ideas | V1 | Több cselekményirány |
-| Scene continuation | MVP | Jelenet folytatása a meglévő kontextusból |
+| Scene continuation (Auto) | MVP | Jelenet folytatása instrukció nélkül |
+| Scene continuation (Guided) | V1 | Jelenet folytatása user instrukció alapján |
 | Rewrite | MVP | Kijelölt szöveg újraírása |
 | Rewrite modes | V1 | Rövidebb, drámaibb, természetesebb, irodalmibb, sötétebb |
 | Expand | V1 | Rövid szöveg kibővítése |
 | Compress | V1 | Túl hosszú szöveg tömörítése |
-| Describe | V1 | Érzékletes leírás generálása |
+| Describe (sensory) | MVP | Érzékletes leírás generálása érzékszervenként: Látás, Hang, Tapintás, Szag, Íz, Metaforák — kártyánként, Snippet-be menthetők |
+| Describe — Érzelmi atmoszféra (7. csatorna) | V1 | Magyar prózára specifikus extra csatorna: érzelmi és hangulati atmoszféra leírása |
 | Dialogue improvement | V1 | Párbeszéd természetesebbé tétele |
 | Show, don’t tell | V1 | Magyarázó részek jelenetszerűsítése |
 | Character voice rewrite | V2 | Adott karakter hangjára írás |
 | Mood shift | V2 | Hangulatváltás: feszültebb, könnyedebb, baljósabb |
-| Feedback | V1 | Szerkesztői visszajelzés jelenetre vagy fejezetre |
+| Feedback (margin comments) | V1 | Szerkesztői margókommentek jelenetre/fejezetre, Story Bible-aware |
 | Beta reader simulation | V2 | Olvasói reakciók szimulálása |
 | Visualize prompt | Later | Képalkotó prompt karakterhez/helyszínhez |
 
@@ -194,10 +208,13 @@ Jelölések:
 | Scene summary | MVP | Jelenet rövid összefoglalója |
 | Character state memory | V1 | Karakter aktuális állapota fejezetenként |
 | Timeline memory | V1 | Időrendi események |
-| Codex embedding | V1 | Codex bejegyzések vektoros indexelése |
+| Codex embedding | V1 | Codex bejegyzések pgvector-alapú vektoros indexelése |
 | Scene embedding | V1 | Jelenetek és summary-k indexelése |
 | Hybrid search | V1 | Keyword + vector search |
 | Context pack builder | V1 | AI kéréshez releváns kontextuscsomag |
+| Saliency Engine | V1 | Okos context selection: relevancia alapján szűr, nem dumpol mindent |
+| Chapter Continuity linking | V1 | Dokumentumok összekapcsolása; AI visszaolvashat előző fejezetekből (akár 20k szó) |
+| Codex Progression context | V1 | Az AI csak a scene aktuális idejéig érvényes Codex állapotot kapja |
 | Long context compression | V2 | Régi fejezetek tömörített memóriája |
 | Memory update after approval | V1 | Csak jóváhagyott szöveg kerüljön memóriába |
 
@@ -286,6 +303,7 @@ Az MVP akkor kész, ha az alábbiak működnek:
 - [ ] Save AI output as revision
 - [ ] Manual approve/insert
 - [ ] Scene summary generation
+- [ ] Describe sensory rewriting (érzékletes leírás, 6 csatorna)
 - [ ] Markdown export
 - [ ] DOCX export
 - [ ] Docker Compose local setup
@@ -295,15 +313,27 @@ Az MVP akkor kész, ha az alábbiak működnek:
 ## 16. V1 release checklist
 
 - [ ] Drag-and-drop outline board
-- [ ] Codex RAG Qdranttal
+- [ ] Codex RAG pgvector-rel
 - [ ] AI context pack builder
-- [ ] Brainstorm funkció
+- [ ] Saliency Engine (okos context selection)
+- [ ] Chapter Continuity linking
+- [ ] Codex Progressions UI + AI filtering
+- [ ] CodexRelation UI + context expansion
+- [ ] AI Visibility per trait (mezőszintű)
+- [ ] Quick Edit (Ctrl+K) inline
+- [ ] Prompt Preview / context transparency
+- [ ] Brainstorm funkció + Keepers List
+- [ ] Scene continuation Guided mode
+- [ ] Describe — Érzelmi atmoszféra (7. csatorna)
 - [ ] Expand / Compress
 - [ ] Dialogue improver
+- [ ] Feedback margin comments
 - [ ] Hungarian style editor
 - [ ] Continuity checker
 - [ ] Diff panel
 - [ ] Revision history
+- [ ] Snippet modul
+- [ ] Scene archive (soft delete)
 - [ ] Generation queue
 - [ ] EPUB export
 
@@ -311,7 +341,7 @@ Az MVP akkor kész, ha az alábbiak működnek:
 
 ## 17. V2 release checklist
 
-- [ ] LangGraph chapter pipeline
+- [ ] PydanticAI chapter pipeline
 - [ ] Chapter Planner Agent
 - [ ] Scene Writer Agent
 - [ ] Continuity Checker Agent
