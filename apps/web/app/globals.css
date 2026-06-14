@@ -545,6 +545,12 @@ select:focus-visible,
   border-radius: 3px;
   padding: 0 2px;
 }
+/* Transient flash on freshly-inserted accepted AI text (woaFlash, ~1.1s fade).
+   Applied as a ProseMirror decoration on the inserted range, then cleared. */
+.woa-manuscript-prose .woa-ai-flash {
+  border-radius: 3px;
+  animation: woaFlash 1.1s ease-out;
+}
 /* First-line paragraph indent toggle. */
 .woa-manuscript-article[data-indent="on"] .woa-manuscript-prose p {
   text-indent: 1.6em;

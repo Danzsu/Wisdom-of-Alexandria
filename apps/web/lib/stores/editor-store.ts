@@ -41,6 +41,32 @@ export type BeatWords = "200" | "400" | "600";
 export const FONT_SIZE_MIN = 13;
 export const FONT_SIZE_MAX = 24;
 
+/** The five AI-inspector tabs (vertical icon+label rail). */
+export type InspectorTab = "ai" | "codex" | "beats" | "warnings" | "meta";
+
+/**
+ * A snapshot of the manuscript selection at the moment an AI action is
+ * triggered. The inspector reads `text` (shown in the QuoteBox + sent to the
+ * model); `from`/`to` record the ProseMirror range so an accepted rewrite can
+ * replace exactly the originating selection. `null` when there is no selection.
+ */
+export interface SelectionSnapshot {
+  text: string;
+  from: number;
+  to: number;
+}
+
+/**
+ * A function the editor registers so the inspector can insert accepted AI text.
+ * `range` (when present) is the originating selection — a rewrite replaces it;
+ * a generate/continue/describe insert with no range appends after the cursor.
+ * Implementations MUST apply the `woaFlash` highlight on the inserted text.
+ */
+export type ApplySuggestionFn = (
+  text: string,
+  range: { from: number; to: number } | null,
+) => void;
+
 interface EditorState {
   /* ---- Format-menu-driven manuscript settings (live on the article) ---- */
   msFont: EditorFont;
@@ -63,6 +89,24 @@ interface EditorState {
   beatState: BeatState;
   beatWords: BeatWords;
 
+  /* ---- AI inspector ---- */
+  /** Which inspector tab is shown (AI / Codex / Beatek / Figyelmeztetések / Meta). */
+  inspectorTab: InspectorTab;
+  /**
+   * The user-chosen active model id, or `null` to use the backend default. Set by
+   * the ModelSelector; read by every generation call + the beat card badge.
+   * Never a hardcoded name — the id always comes from the config-driven list.
+   */
+  activeModel: string | null;
+  /** Selection captured when the active AI action was triggered (null = none). */
+  aiSelection: SelectionSnapshot | null;
+  /**
+   * Bridge the editor registers so the inspector can insert accepted text. Lives
+   * in the store (not React state) so the inspector — rendered by the shell,
+   * across the route boundary — can reach the editor without prop-drilling.
+   */
+  applySuggestion: ApplySuggestionFn | null;
+
   /* ---- Format actions ---- */
   setFont: (font: EditorFont) => void;
   decFontSize: () => void;
@@ -82,6 +126,16 @@ interface EditorState {
   /* ---- Beat actions ---- */
   setBeatState: (state: BeatState) => void;
   setBeatWords: (words: BeatWords) => void;
+
+  /* ---- AI inspector actions ---- */
+  setInspectorTab: (tab: InspectorTab) => void;
+  /** Set the active model id (from the config-driven ModelSelector). */
+  setActiveModel: (model: string | null) => void;
+  /** Capture the current selection (or clear it). */
+  setAiSelection: (selection: SelectionSnapshot | null) => void;
+  /** Register / clear the editor's insert bridge (editor mount / unmount). */
+  setApplySuggestion: (fn: ApplySuggestionFn | null) => void;
+
   /** Reset transient signals when the active scene changes / on unmount. */
   resetForScene: () => void;
 }
@@ -116,6 +170,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   beatState: "hidden",
   beatWords: "400",
 
+  inspectorTab: "ai",
+  activeModel: null,
+  aiSelection: null,
+  applySuggestion: null,
+
   setFont: (font) => set({ msFont: font }),
   decFontSize: () =>
     set((s) => ({ fmSize: Math.max(FONT_SIZE_MIN, s.fmSize - 1) })),
@@ -134,6 +193,16 @@ export const useEditorStore = create<EditorState>((set) => ({
   setBeatState: (state) => set({ beatState: state }),
   setBeatWords: (words) => set({ beatWords: words }),
 
+  setInspectorTab: (tab) => set({ inspectorTab: tab }),
+  setActiveModel: (model) => set({ activeModel: model }),
+  setAiSelection: (selection) => set({ aiSelection: selection }),
+  setApplySuggestion: (fn) => set({ applySuggestion: fn }),
+
   resetForScene: () =>
-    set({ saveState: "saved", wordCount: 0, beatState: "hidden" }),
+    set({
+      saveState: "saved",
+      wordCount: 0,
+      beatState: "hidden",
+      aiSelection: null,
+    }),
 }));

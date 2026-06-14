@@ -1,9 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render as rtlRender,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+  type RenderResult,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { Providers } from "@/test/test-utils";
 import { BeatCard } from "../extensions/beat-card";
 import { SlashMenu, buildSlashItems } from "../slash-menu";
+
+/** Render inside the query providers (the inline beat card calls AI hooks). */
+function render(ui: ReactElement): RenderResult {
+  return rtlRender(<Providers>{ui}</Providers>);
+}
 
 function SlashHarness({
   onBeat = vi.fn(),

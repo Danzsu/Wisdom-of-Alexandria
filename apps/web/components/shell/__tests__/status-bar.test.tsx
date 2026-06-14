@@ -18,7 +18,11 @@ import { StatusBar } from "../status-bar";
 describe("StatusBar", () => {
   beforeEach(() => {
     params = { bookId: FAROSZ_BOOK.id, sceneId: SCENE_ACTIVE.id };
-    useEditorStore.setState({ wordCount: 0, saveState: "saved" });
+    useEditorStore.setState({
+      wordCount: 0,
+      saveState: "saved",
+      activeModel: null,
+    });
   });
 
   it("shows the live word count (tabular, Hungarian-grouped)", () => {
@@ -70,12 +74,18 @@ describe("StatusBar", () => {
     expect(screen.getByText("Mentve")).toBeInTheDocument();
   });
 
-  it("shows a static model badge", () => {
+  it("shows the active (config-driven) model badge", async () => {
     render(
       <Providers>
         <StatusBar />
       </Providers>,
     );
-    expect(screen.getByText(/ollama\/llama3\.2 — lokális/)).toBeInTheDocument();
+    // The model badge is config-driven (loaded from /ai/models via MSW), not a
+    // hardcoded literal — it appears once the model list resolves.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/ollama\/llama3\.2 — lokális/),
+      ).toBeInTheDocument(),
+    );
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -10,11 +10,13 @@ import {
   ImagePlaceholder,
   ManuscriptTable,
   BeatCard,
+  SuggestionInsert,
 } from "./extensions";
 import {
   useEditorStore,
   fontFamilyFor,
   maxWidthFor,
+  type ApplySuggestionFn,
 } from "@/lib/stores/editor-store";
 import { countWords } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
@@ -25,8 +27,12 @@ import {
   type BubbleAction,
 } from "./selection-bubble-menu";
 
-/** Static model name (real ModelRouter model is M5). */
-export const STATIC_MODEL_NAME = "ollama/llama3.2";
+/**
+ * Fallback model name shown before the real model list loads. The active model
+ * is config-driven (ModelSelector / `useModels`) and threaded in via `modelName`
+ * — this is only the pre-load placeholder, never a hardcoded production value.
+ */
+export const STATIC_MODEL_NAME = "—";
 
 export interface ManuscriptEditorProps {
   /**
@@ -44,13 +50,19 @@ export interface ManuscriptEditorProps {
   title: string;
   /** Scene subtitle (H2), optional. */
   subtitle?: string;
+  /**
+   * Active model name (config-driven, from `useModels` / the ModelSelector).
+   * Shown on the inline beat card; never a hardcoded literal.
+   */
+  modelName: string;
   /** Called (debounced upstream) whenever the editor content changes. */
   onChange: (content: string, wordCount: number) => void;
   /** Open a codex entry (mention click). */
   onOpenCodex: (codexId: string) => void;
   /** AI / stub actions (bubble menu, beat, image, audio, table). M5/M6 fill. */
   onBubbleAction: (action: BubbleAction) => void;
-  onBeatGenerate: () => void;
+  /** Fired when the user triggers beat generation (with the chosen word count). */
+  onBeatGenerate: (words: "200" | "400" | "600") => void;
   onBeatApply: () => void;
   onBeatDiscard: () => void;
   onImageUpload: () => void;
@@ -76,6 +88,7 @@ export function ManuscriptEditor({
   kicker,
   title,
   subtitle,
+  modelName,
   onChange,
   onOpenCodex,
   onBubbleAction,
@@ -87,7 +100,7 @@ export function ManuscriptEditor({
   onTableAction,
   slashCallbacks,
   onEditorReady,
-}: ManuscriptEditorProps) {
+}: Readonly<ManuscriptEditorProps>) {
   const msFont = useEditorStore((s) => s.msFont);
   const fmSize = useEditorStore((s) => s.fmSize);
   const fmSpacing = useEditorStore((s) => s.fmSpacing);
@@ -111,11 +124,13 @@ export function ManuscriptEditor({
       ImagePlaceholder.configure({ onUpload: onImageUpload }),
       ManuscriptTable.configure({ onAction: onTableAction }),
       BeatCard.configure({
-        modelName: STATIC_MODEL_NAME,
+        modelName,
+        sceneId,
         onGenerate: onBeatGenerate,
         onApply: onBeatApply,
         onDiscard: onBeatDiscard,
       }),
+      SuggestionInsert,
     ],
     content: textToDoc(initialContent),
     editorProps: {
@@ -155,6 +170,24 @@ export function ManuscriptEditor({
     onEditorReady?.(editor);
     return () => onEditorReady?.(null);
   }, [editor, onEditorReady]);
+
+  // Register the insert bridge in the store so the AI inspector (rendered by the
+  // shell, across the route boundary) can apply ACCEPTED suggestions into the
+  // editor. This is the ONLY path AI text reaches the manuscript, and it fires
+  // only from the inspector's explicit Accept handler — never automatically.
+  const setApplySuggestion = useEditorStore((s) => s.setApplySuggestion);
+  const applySuggestion = useCallback<ApplySuggestionFn>(
+    (text, range) => {
+      if (!editor) return;
+      editor.chain().focus().applySuggestion(text, range).run();
+    },
+    [editor],
+  );
+  useEffect(() => {
+    if (!editor) return;
+    setApplySuggestion(applySuggestion);
+    return () => setApplySuggestion(null);
+  }, [editor, applySuggestion, setApplySuggestion]);
 
   const articleStyle = useMemo<CSSProperties>(
     () => ({

@@ -3,9 +3,14 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { BeatCard } from "../extensions/beat-card";
-import { BEAT_STUB_PREVIEW } from "../extensions/beat-card-view";
+import { Providers } from "@/test/test-utils";
+import { AI_GENERATED_TEXT, SCENE_ACTIVE } from "@/test/msw/fixtures";
 
-/** A tiny harness mounting an editor with the BeatCard, inserting one card. */
+/**
+ * A tiny harness mounting an editor with the BeatCard, inserting one card. The
+ * card now calls the REAL generate-scene endpoint (mocked by MSW), so the
+ * harness is wrapped in the query providers.
+ */
 function BeatHarness({
   onGenerate = vi.fn(),
   onApply = vi.fn(),
@@ -21,6 +26,7 @@ function BeatHarness({
       StarterKit,
       BeatCard.configure({
         modelName: "ollama/llama3.2",
+        sceneId: SCENE_ACTIVE.id,
         onGenerate,
         onApply,
         onDiscard,
@@ -42,9 +48,17 @@ function BeatHarness({
   );
 }
 
+function renderHarness(props?: Parameters<typeof BeatHarness>[0]) {
+  return render(
+    <Providers>
+      <BeatHarness {...props} />
+    </Providers>,
+  );
+}
+
 describe("InlineBeatCard state machine", () => {
-  it("inserts in the config state with the word chips", async () => {
-    render(<BeatHarness />);
+  it("inserts in the config state with the word chips + beat input", async () => {
+    renderHarness();
     fireEvent.click(screen.getByText("insert-beat"));
 
     expect(
@@ -53,32 +67,34 @@ describe("InlineBeatCard state machine", () => {
     expect(screen.getByRole("button", { name: "200" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "400" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "600" })).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Jelenet beat leírása"),
+    ).toBeInTheDocument();
   });
 
-  it("config → generating → ready, then Apply inserts prose + fires onApply", async () => {
+  it("config → generating → ready (real endpoint), Apply approves + inserts", async () => {
     const onGenerate = vi.fn();
     const onApply = vi.fn();
-    render(<BeatHarness onGenerate={onGenerate} onApply={onApply} />);
+    renderHarness({ onGenerate, onApply });
 
     fireEvent.click(screen.getByText("insert-beat"));
     const generate = await screen.findByRole("button", {
       name: "Beat generálása",
     });
 
-    // config → generating
+    // config → generating (the real generate-scene call fires).
     fireEvent.click(generate);
     expect(onGenerate).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Generálás folyamatban…")).toBeInTheDocument();
 
-    // generating → ready (stub timer ~1600ms — wait for the preview).
+    // generating → ready: the REAL generated text (from MSW) appears.
     expect(
-      await screen.findByText(BEAT_STUB_PREVIEW, undefined, { timeout: 3000 }),
+      await screen.findByText(AI_GENERATED_TEXT, undefined, { timeout: 3000 }),
     ).toBeInTheDocument();
     const apply = screen.getByRole("button", { name: "Alkalmaz" });
 
-    // ready → applied (card removed, prose inserted)
+    // ready → applied (revision approved, prose inserted, card removed)
     fireEvent.click(apply);
-    expect(onApply).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Alkalmaz" }),
@@ -88,7 +104,7 @@ describe("InlineBeatCard state machine", () => {
 
   it("Elvet discards the card and fires onDiscard", async () => {
     const onDiscard = vi.fn();
-    render(<BeatHarness onDiscard={onDiscard} />);
+    renderHarness({ onDiscard });
     fireEvent.click(screen.getByText("insert-beat"));
     await screen.findByRole("button", { name: "Beat generálása" });
 

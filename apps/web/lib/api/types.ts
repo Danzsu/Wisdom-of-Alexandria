@@ -144,6 +144,34 @@ export const codexEntryReadSchema = z.object({
 });
 export type CodexEntryRead = z.infer<typeof codexEntryReadSchema>;
 
+/* ---------------------------------------------------------------------------
+ * Beat — mirrors app/schemas/beat.py (BeatRead / BeatCreate). Scene-scoped.
+ * ------------------------------------------------------------------------- */
+
+/** A scene beat as returned by the API (`BeatRead`). */
+export const beatReadSchema = z.object({
+  id: idString,
+  scene_id: idString,
+  description: z.string(),
+  beat_type: z.string().nullable(),
+  order_index: z.number().int(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type BeatRead = z.infer<typeof beatReadSchema>;
+
+/** Request body for creating a beat under a scene (`BeatCreate`). */
+export const beatCreateSchema = z.object({
+  description: z.string().min(1),
+  beat_type: z.string().max(100).nullable().optional(),
+  order_index: z.number().int().default(0),
+  notes: z.string().nullable().optional(),
+});
+export type BeatCreate = z.infer<typeof beatCreateSchema>;
+
+export const beatListSchema = z.array(beatReadSchema);
+
 /** Array schemas used by list endpoints. */
 export const projectListSchema = z.array(projectReadSchema);
 export const bookListSchema = z.array(bookReadSchema);

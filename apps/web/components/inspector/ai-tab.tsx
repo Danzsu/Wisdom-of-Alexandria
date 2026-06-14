@@ -1,0 +1,173 @@
+"use client";
+
+import { useState } from "react";
+import {
+  RotateCcw,
+  Eye,
+  ChevronsUpDown,
+  Shrink,
+  MessageSquare,
+  Sparkles,
+} from "lucide-react";
+import { Icon } from "@/components/kit/icon";
+import { Textarea } from "@/components/kit/textarea";
+import { ModelSelector } from "@/components/kit/model-selector";
+import { AIResultCard } from "@/components/kit/ai-result-card";
+import { hu } from "@/lib/i18n/hu";
+import { cn } from "@/lib/utils";
+import { useEditorStore } from "@/lib/stores/editor-store";
+import { GeneratingCard } from "./generating-card";
+import { DescribePanel } from "./describe-panel";
+import { useInspectorModels } from "./use-inspector-models";
+import {
+  useAiGeneration,
+  type AiActionKind,
+} from "./ai-generation-context";
+
+/** The 2×3 action grid (Átírás primary). "Leírás" opens the Describe panel. */
+const GRID: { id: AiActionKind | "describe"; label: string; icon: typeof RotateCcw }[] =
+  [
+    { id: "rewrite", label: hu.inspector.actRewrite, icon: RotateCcw },
+    { id: "describe", label: hu.inspector.actDescribe, icon: Eye },
+    { id: "expand", label: hu.inspector.actExpand, icon: ChevronsUpDown },
+    { id: "compress", label: hu.inspector.actCompress, icon: Shrink },
+    { id: "dialog", label: hu.inspector.actDialog, icon: MessageSquare },
+    { id: "fix", label: hu.inspector.actFix, icon: Sparkles },
+  ];
+
+/**
+ * The AI inspector tab. Shows the selected-text QuoteBox, the 2×3 action grid,
+ * the custom-instruction field, the config-driven ModelSelector and the
+ * Generálás button; then the GeneratingCard → AIResultCard flow. "Leírás" swaps
+ * to the 6-channel Describe panel. Nothing is inserted until the user accepts.
+ */
+export function AiTab() {
+  const aiSelection = useEditorStore((s) => s.aiSelection);
+  const models = useInspectorModels();
+  const gen = useAiGeneration();
+  const [instruction, setInstruction] = useState("");
+  const [view, setView] = useState<"main" | "describe">("main");
+
+  if (view === "describe") {
+    return <DescribePanel onBack={() => setView("main")} />;
+  }
+
+  const hasSelection = Boolean(aiSelection && aiSelection.text.trim().length > 0);
+  const selectionText = aiSelection?.text ?? "";
+
+  const onGridClick = (id: AiActionKind | "describe") => {
+    if (id === "describe") {
+      setView("describe");
+      return;
+    }
+    gen.trigger(id, instruction);
+  };
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      {/* Selected-text QuoteBox (Literata italic). */}
+      <div>
+        <p className="m-0 mb-[7px] text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+          {hu.inspector.selectedTextLabel}
+        </p>
+        {hasSelection ? (
+          <div className="rounded-r-[10px] rounded-l-none border-l-2 border-accent bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft">
+            {`„${selectionText}"`}
+          </div>
+        ) : (
+          <p className="m-0 text-[12px] leading-[1.5] text-text-muted">
+            {hu.inspector.noSelectionHint}
+          </p>
+        )}
+      </div>
+
+      {/* 2×3 action grid. */}
+      <div className="grid grid-cols-2 gap-2">
+        {GRID.map((action, index) => (
+          <button
+            key={action.id}
+            type="button"
+            onClick={() => onGridClick(action.id)}
+            className={cn(
+              "flex h-[38px] items-center gap-2 rounded-[10px] border bg-surface px-[11px] text-[13px] text-text-soft transition-colors hover:border-accent hover:bg-accent-muted hover:text-accent-text",
+              index === 0
+                ? "border-accent bg-accent-muted text-accent-text"
+                : "border-border",
+            )}
+          >
+            <Icon icon={action.icon} size={14} />
+            {action.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Custom instruction. */}
+      <Textarea
+        rows={3}
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        aria-label={hu.inspector.customInstructionAria}
+        placeholder={hu.inspector.customInstructionPlaceholder}
+        className="resize-none"
+      />
+
+      {/* Model selector (config-driven). */}
+      {models.isLoading ? (
+        <p className="m-0 text-[12px] text-text-muted">
+          {hu.inspector.modelsLoading}
+        </p>
+      ) : models.isError ? (
+        <p className="m-0 text-[12px] text-danger-text" role="alert">
+          {hu.inspector.modelsError}: {models.error?.message}
+        </p>
+      ) : (
+        <ModelSelector
+          groups={models.groups}
+          value={models.value}
+          onChange={models.setValue}
+        />
+      )}
+
+      {/* Generálás CTA. */}
+      <button
+        type="button"
+        onClick={() => gen.trigger("rewrite", instruction)}
+        disabled={gen.isGenerating || !hasSelection}
+        className="woa-cta flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border-none bg-accent-strong text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Icon icon={Sparkles} size={15} className="fill-current" />
+        {hu.inspector.generate}
+      </button>
+
+      {/* Generating → result flow. */}
+      {gen.isGenerating ? <GeneratingCard /> : null}
+
+      {gen.error && !gen.isGenerating ? (
+        <p className="m-0 text-[12px] text-danger-text" role="alert">
+          {hu.inspector.generationError}: {gen.error.message}
+        </p>
+      ) : null}
+
+      {gen.pending && !gen.isGenerating ? (
+        <AIResultCard
+          label={hu.inspector.resultLabel[gen.pending.action] ?? hu.inspector.tabAi}
+          version={gen.pending.version || undefined}
+          model={gen.pending.model}
+          contextEntities={gen.pending.contextEntities}
+          body={gen.pending.content}
+          busy={gen.isAccepting}
+          onAccept={gen.accept}
+          onReject={gen.reject}
+          onCopy={gen.copy}
+          onStar={gen.star}
+        />
+      ) : null}
+
+      {!gen.pending && !gen.isGenerating ? (
+        <p className="m-0 text-center text-[11px] text-text-muted">
+          {hu.inspector.disclaimer}
+        </p>
+      ) : null}
+    </div>
+  );
+}

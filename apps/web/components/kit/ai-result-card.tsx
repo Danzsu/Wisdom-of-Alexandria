@@ -30,6 +30,11 @@ export interface AIResultCardProps {
   onCopy?: () => void;
   /** Save-as-Snippet (star) handler. */
   onStar?: () => void;
+  /**
+   * Disable the Accept (Elfogad) + Star actions — used while an approve POST is
+   * in flight so a double-click can't fire two approves / two inserts.
+   */
+  busy?: boolean;
   /** Disclaimer line override. */
   disclaimer?: string;
   className?: string;
@@ -53,6 +58,7 @@ export function AIResultCard({
   onReject,
   onCopy,
   onStar,
+  busy = false,
   disclaimer = "Az AI sosem ír a kéziratba jóváhagyás nélkül.",
   className,
 }: AIResultCardProps) {
@@ -106,6 +112,7 @@ export function AIResultCard({
               size={32}
               leadingIcon={<Icon icon={Check} size={13} />}
               onClick={onAccept}
+              disabled={busy}
             >
               Elfogad
             </Button>
@@ -126,6 +133,7 @@ export function AIResultCard({
               variant="ai"
               aria-label={hu.kit.saveAsSnippet}
               onClick={onStar}
+              disabled={busy}
             >
               <Icon icon={Star} size={14} />
             </IconButton>

@@ -8,13 +8,11 @@ import { toast } from "@/components/kit/toast";
 import { Tooltip } from "@/components/kit/tooltip";
 import { useNavTo } from "@/lib/use-nav-to";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { useInspectorModels } from "@/components/inspector/use-inspector-models";
 import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { UserMenu } from "./user-menu";
 import { ProjectSwitcher } from "./project-switcher";
-
-/** Static model pill placeholder (the real value comes from ModelRouter later). */
-const PLACEHOLDER_MODEL = "ollama/llama3.2";
 
 export interface TopBarProps {
   /** Whether the current route is inside a book (shows switcher + share). */
@@ -28,13 +26,17 @@ export interface TopBarProps {
 /**
  * Persistent 52px top bar. Brand mark routes to the projects picker. Inside a
  * book it adds the "/" separator + project switcher; on the Write route it
- * centres the scene breadcrumb. The right cluster holds the static model pill,
- * a Share pill (in-book stub → toast), the search trigger (opens the command
- * palette), the theme toggle, a settings button and the user menu.
+ * centres the scene breadcrumb. The right cluster holds the config-driven model
+ * pill, a Share pill (in-book stub → toast), the search trigger (opens the
+ * command palette), the theme toggle, a settings button and the user menu.
  */
 export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
   const navTo = useNavTo();
   const openCommand = useUIStore((s) => s.openCommand);
+  // The active model is config-driven (same /ai/models source the StatusBar +
+  // inspector use); never a hardcoded model name.
+  const models = useInspectorModels();
+  const activeModel = models.value || hu.inspector.metaUnknown;
 
   return (
     <header className="relative z-10 flex h-topbar flex-none items-center gap-3 border-b border-border bg-surface px-3.5">
@@ -80,7 +82,7 @@ export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
       {/* Right cluster */}
       <div className="flex items-center gap-1.5">
         <span className="flex h-5 items-center rounded-full bg-ai-muted px-2 text-[10px] font-semibold text-ai-text">
-          {PLACEHOLDER_MODEL}
+          {activeModel}
         </span>
 
         {inBook ? (

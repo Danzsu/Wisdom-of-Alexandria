@@ -29,8 +29,11 @@ import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks } from "./books";
 import { listChapters } from "./chapters";
 import { listScenes, updateScene } from "./scenes";
+import { createBeat, listBeats } from "./beats";
 import { listCodexEntries } from "./codex";
 import type {
+  BeatCreate,
+  BeatRead,
   BookCreate,
   BookRead,
   ChapterRead,
@@ -54,6 +57,7 @@ export const queryKeys = {
     ["chapters", chapterId, "scenes"] as const,
   scene: (chapterId: string, sceneId: string) =>
     ["chapters", chapterId, "scenes", sceneId] as const,
+  sceneBeats: (sceneId: string) => ["scenes", sceneId, "beats"] as const,
 };
 
 /** List every project. */
@@ -279,6 +283,44 @@ export function useUpdateScene(): UseMutationResult<
             : prev,
       );
     },
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Beats (scene-scoped — M5 inspector Beatek tab)
+ * ------------------------------------------------------------------------- */
+
+/** List a scene's beats. Disabled until a scene id is supplied. */
+export function useSceneBeats(
+  sceneId: string | undefined,
+): UseQueryResult<BeatRead[], Error> {
+  return useQuery({
+    queryKey: queryKeys.sceneBeats(sceneId ?? "__none__"),
+    queryFn: () => listBeats(sceneId as string),
+    enabled: Boolean(sceneId),
+  });
+}
+
+/** Input for the beat-create mutation (scene id + body). */
+export interface CreateBeatInput {
+  sceneId: string;
+  data: BeatCreate;
+}
+
+/** Create a beat under a scene; invalidates the scene's beat list on success. */
+export function useCreateBeat(): UseMutationResult<
+  BeatRead,
+  Error,
+  CreateBeatInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, data }: CreateBeatInput) =>
+      createBeat(sceneId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.sceneBeats(created.scene_id),
+      }),
   });
 }
 

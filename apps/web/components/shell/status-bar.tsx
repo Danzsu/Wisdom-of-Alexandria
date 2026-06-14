@@ -9,16 +9,17 @@ import {
   findSceneLocation,
 } from "@/lib/api/hooks";
 import { useEditorStore } from "@/lib/stores/editor-store";
-import { STATIC_MODEL_NAME } from "@/components/editor/manuscript-editor";
+import { useInspectorModels } from "@/components/inspector/use-inspector-models";
 import { formatHu } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 
 /**
  * 32px footer status bar (Write route only). Shows the LIVE word count
  * (tabular-nums), the chapter/scene location resolved from the book tree, the
- * autosave state ("Mentés…" / "Mentve ✓" / error) and a static model badge. Word
- * count + save state come from the editor store (written by the editor); the
- * model badge is a placeholder until the real ModelRouter model lands (M5+).
+ * autosave state ("Mentés…" / "Mentve ✓" / error) and the ACTIVE model badge.
+ * Word count + save state come from the editor store (written by the editor);
+ * the model badge is the config-driven active model (ModelSelector / config),
+ * never a hardcoded name.
  */
 export function StatusBar() {
   const params = useParams<{ bookId: string; sceneId?: string }>();
@@ -28,6 +29,8 @@ export function StatusBar() {
   const tree = useBookTree(bookId);
   const wordCount = useEditorStore((s) => s.wordCount);
   const saveState = useEditorStore((s) => s.saveState);
+  const models = useInspectorModels();
+  const activeModel = models.value || hu.inspector.metaUnknown;
 
   const location =
     sceneId && tree.chapters.length > 0
@@ -54,7 +57,7 @@ export function StatusBar() {
       <div className="flex-1" />
       <span className="flex h-5 items-center gap-1.5 rounded-full bg-ai-muted px-2 text-[11px] font-semibold text-ai-text">
         <Icon icon={Cpu} size={11} />
-        {STATIC_MODEL_NAME} {hu.statusbar.modelLocalSuffix}
+        {activeModel} {hu.statusbar.modelLocalSuffix}
       </span>
     </footer>
   );

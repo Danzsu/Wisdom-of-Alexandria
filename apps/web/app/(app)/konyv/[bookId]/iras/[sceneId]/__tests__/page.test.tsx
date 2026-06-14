@@ -26,11 +26,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 import IrasPage from "../page";
+import { AiGenerationProvider } from "@/components/inspector/ai-generation-context";
 
 function renderPage() {
   return render(
     <Providers>
-      <IrasPage />
+      <AiGenerationProvider>
+        <IrasPage />
+      </AiGenerationProvider>
     </Providers>,
   );
 }

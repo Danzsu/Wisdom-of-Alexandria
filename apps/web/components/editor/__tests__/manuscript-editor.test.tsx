@@ -21,6 +21,7 @@ function renderEditor(content: string | null) {
         kicker="II. FEJEZET"
         title="A könyvtár árnyai"
         subtitle="3. jelenet — Rejtett jelek"
+        modelName="ollama/llama3.2"
         onChange={noop}
         onOpenCodex={noop}
         onBubbleAction={noop}
@@ -96,6 +97,7 @@ describe("ManuscriptEditor", () => {
           initialContent="egy kettő"
           kicker="II. FEJEZET"
           title="A könyvtár árnyai"
+          modelName="ollama/llama3.2"
           onChange={onChange}
           onEditorReady={(e) => (editor = e)}
           onOpenCodex={noop}
@@ -145,6 +147,7 @@ describe("ManuscriptEditor", () => {
       sceneId: "scene-1",
       kicker: "II. FEJEZET",
       title: "A könyvtár árnyai",
+      modelName: "ollama/llama3.2",
       onChange: noop,
       onEditorReady: (e: Editor | null) => {
         ref.editor = e;

@@ -12,6 +12,8 @@ import { StatusBar } from "./status-bar";
 import { Sparkfield } from "./sparkfield";
 import { CommandPalette } from "./command-palette";
 import { CommandPaletteHotkey } from "./command-palette-hotkey";
+import { InspectorPanel } from "@/components/inspector/inspector-panel";
+import { AiGenerationProvider } from "@/components/inspector/ai-generation-context";
 
 /**
  * Persistent application shell rendered once by the `(app)` layout. Lays out:
@@ -51,6 +53,33 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusMode, toggleFocus]);
 
+  const body = (
+    <div className="flex min-h-0 flex-1">
+      {chrome.showRail && !focusMode ? (
+        chrome.leftSidebar === "tree" ? (
+          <ChapterTree />
+        ) : chrome.leftSidebar === "codex" ? (
+          <CodexSidebar />
+        ) : (
+          // The rail only renders inside a book, so bookId is always present
+          // here; the `?? ""` keeps the prop type strict without a non-null !.
+          <IconRail bookId={chrome.bookId ?? ""} activeSegment={chrome.segment} />
+        )
+      ) : null}
+
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+
+      {chrome.isWrite && !focusMode ? (
+        <aside
+          aria-label={hu.shell.aiInspectorAria}
+          className="flex w-inspector flex-none flex-col border-l border-border bg-surface"
+        >
+          <InspectorPanel />
+        </aside>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg text-text">
       {focusMode ? null : (
@@ -61,36 +90,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className="flex min-h-0 flex-1">
-        {chrome.showRail && !focusMode ? (
-          chrome.leftSidebar === "tree" ? (
-            <ChapterTree />
-          ) : chrome.leftSidebar === "codex" ? (
-            <CodexSidebar />
-          ) : (
-            // The rail only renders inside a book, so bookId is always present
-            // here; the `?? ""` keeps the prop type strict without a non-null !.
-            <IconRail
-              bookId={chrome.bookId ?? ""}
-              activeSegment={chrome.segment}
-            />
-          )
-        ) : null}
-
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
-
-        {chrome.isWrite && !focusMode ? (
-          <aside
-            aria-label={hu.shell.aiInspectorAria}
-            className="flex w-inspector flex-none flex-col border-l border-border bg-surface"
-          >
-            {/* Placeholder — the AI inspector is filled in M5. */}
-            <div className="p-4 text-[13px] text-text-muted">
-              {hu.shell.aiInspectorComingSoon}
-            </div>
-          </aside>
-        ) : null}
-      </div>
+      {/* The AI generation provider spans the manuscript `<main>` and the
+          inspector `<aside>` on the Write route so the editor seams and the AI
+          tab share one generation → accept → insert flow. Off the Write route
+          there is no editor, so the provider is unnecessary. */}
+      {chrome.isWrite ? (
+        <AiGenerationProvider>{body}</AiGenerationProvider>
+      ) : (
+        body
+      )}
 
       {chrome.isWrite && !focusMode ? <StatusBar /> : null}
 

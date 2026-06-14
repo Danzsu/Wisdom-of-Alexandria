@@ -15,3 +15,4 @@ export {
 export { SlashMenu, buildSlashItems, type SlashMenuCallbacks } from "./slash-menu";
 export { useAutosave, AUTOSAVE_DELAY_MS } from "./use-autosave";
 export { textToDoc } from "./manuscript-content";
+export { captureSelection } from "./capture-selection";

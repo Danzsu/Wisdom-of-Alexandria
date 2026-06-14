@@ -10,6 +10,7 @@ import {
   CleanWriteBar,
   ManuscriptEditor,
   StoryTimelineRail,
+  captureSelection,
   scenesToTimeline,
   type ToolbarAction,
   type BubbleAction,
@@ -26,6 +27,11 @@ import { useNavTo } from "@/lib/use-nav-to";
 import { routes } from "@/lib/routes";
 import { countWords } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
+import {
+  useAiGeneration,
+  type AiActionKind,
+} from "@/components/inspector/ai-generation-context";
+import { useInspectorModels } from "@/components/inspector/use-inspector-models";
 
 /**
  * Write View (the hero screen). Loads the book's chapter/scene tree, resolves the
@@ -47,7 +53,13 @@ export default function IrasPage() {
   const aiFreeOn = useEditorStore((s) => s.aiFreeOn);
   const setWordCount = useEditorStore((s) => s.setWordCount);
   const setBeatState = useEditorStore((s) => s.setBeatState);
+  const setInspectorTab = useEditorStore((s) => s.setInspectorTab);
   const resetForScene = useEditorStore((s) => s.resetForScene);
+
+  // Real AI generation flow + the active (config-driven) model.
+  const gen = useAiGeneration();
+  const inspectorModels = useInspectorModels();
+  const activeModelName = inspectorModels.value || hu.inspector.metaUnknown;
 
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -75,8 +87,21 @@ export default function IrasPage() {
     [setWordCount, scheduleSave],
   );
 
-  /* ---- Stub action handlers (M5 = AI generation; M6 = codex) ---- */
-  const stubM5 = useCallback(() => toast(hu.write.toastM5), []);
+  /* ---- Action handlers (M5 = real AI generation; M6 = codex) ---- */
+
+  /**
+   * Capture the current selection, open the AI inspector tab, and trigger a real
+   * generation. This is the single funnel the bubble menu, action grid and
+   * toolbar AI actions share. Continue does not need a selection (whole scene).
+   */
+  const triggerAi = useCallback(
+    (action: AiActionKind) => {
+      captureSelection(editor);
+      setInspectorTab("ai");
+      gen.trigger(action);
+    },
+    [editor, setInspectorTab, gen],
+  );
 
   const handleToolbarAction = useCallback(
     (action: ToolbarAction) => {
@@ -86,9 +111,15 @@ export default function IrasPage() {
           editor?.chain().focus().insertBeatCard().run();
           break;
         case "continue":
+          triggerAi("continue");
+          break;
         case "rewrite":
+          triggerAi("rewrite");
+          break;
         case "describe":
-          stubM5();
+          // Open the inspector AI tab; the Describe sub-panel is selected there.
+          captureSelection(editor);
+          setInspectorTab("ai");
           break;
         case "brainstorm":
           if (bookId) navTo(routes.book(bookId, "chat"));
@@ -137,21 +168,39 @@ export default function IrasPage() {
           break;
       }
     },
-    [editor, bookId, navTo, stubM5, setBeatState],
+    [editor, bookId, navTo, triggerAi, setInspectorTab, setBeatState],
   );
 
   const handleBubbleAction = useCallback(
     (action: BubbleAction) => {
-      if (action === "codex") {
-        toast(hu.write.toastCodexAdd);
-      } else if (action === "audio") {
-        toast(hu.write.toastAudioPrototype);
-      } else {
-        // rewrite / describe / expand / visualize / ai → M5
-        stubM5();
+      switch (action) {
+        case "codex":
+          toast(hu.write.toastCodexAdd);
+          break;
+        case "audio":
+          toast(hu.write.toastAudioPrototype);
+          break;
+        case "visualize":
+          // Image / Vizualizáció is a V2 stub (no generation backend).
+          toast(hu.write.toastVisualization);
+          break;
+        case "describe":
+          // Open the inspector AI tab so the Describe sub-panel can be chosen.
+          captureSelection(editor);
+          setInspectorTab("ai");
+          break;
+        case "rewrite":
+        case "ai":
+          triggerAi("rewrite");
+          break;
+        case "expand":
+          triggerAi("expand");
+          break;
+        default:
+          break;
       }
     },
-    [stubM5],
+    [editor, triggerAi, setInspectorTab],
   );
 
   const handleOpenCodex = useCallback(() => {
@@ -164,12 +213,12 @@ export default function IrasPage() {
         setBeatState("config");
         ed.chain().focus().insertBeatCard().run();
       },
-      onContinue: () => stubM5(),
+      onContinue: () => triggerAi("continue"),
       onCodexProgression: () => {
         if (bookId) navTo(routes.book(bookId, "codex"));
       },
     }),
-    [bookId, navTo, stubM5, setBeatState],
+    [bookId, navTo, triggerAi, setBeatState],
   );
 
   /* ---- Loading / error / not-found states (never swallow the error) ---- */
@@ -211,6 +260,7 @@ export default function IrasPage() {
       activeSceneId={sceneId}
       aiFreeOn={aiFreeOn}
       editor={editor}
+      modelName={activeModelName}
       onEditorReady={setEditor}
       onChange={handleChange}
       onToolbarAction={handleToolbarAction}
@@ -218,7 +268,6 @@ export default function IrasPage() {
       onOpenCodex={handleOpenCodex}
       slashCallbacks={slashCallbacks}
       onTimelineSelect={(id) => bookId && navTo(routes.scene(bookId, id))}
-      onBeatGenerate={stubM5}
     />
   );
 }
@@ -230,6 +279,8 @@ interface WriteViewBodyProps {
   activeSceneId: string | undefined;
   aiFreeOn: boolean;
   editor: Editor | null;
+  /** Active (config-driven) model name shown on the inline beat card. */
+  modelName: string;
   onEditorReady: (editor: Editor | null) => void;
   onChange: (content: string, wordCount: number) => void;
   onToolbarAction: (action: ToolbarAction) => void;
@@ -237,7 +288,6 @@ interface WriteViewBodyProps {
   onOpenCodex: (codexId: string) => void;
   slashCallbacks: SlashMenuCallbacks;
   onTimelineSelect: (sceneId: string) => void;
-  onBeatGenerate: () => void;
 }
 
 /** The mounted Write View once the active scene is resolved. */
@@ -248,6 +298,7 @@ function WriteViewBody({
   activeSceneId,
   aiFreeOn,
   editor,
+  modelName,
   onEditorReady,
   onChange,
   onToolbarAction,
@@ -255,8 +306,7 @@ function WriteViewBody({
   onOpenCodex,
   slashCallbacks,
   onTimelineSelect,
-  onBeatGenerate,
-}: WriteViewBodyProps) {
+}: Readonly<WriteViewBodyProps>) {
   const flatScenes = useMemo(
     () => allScenes.flatMap((c) => c.scenes),
     [allScenes],
@@ -294,11 +344,14 @@ function WriteViewBody({
           kicker={kicker}
           title={chapter.title}
           subtitle={scene.title}
+          modelName={modelName}
           onChange={onChange}
           onEditorReady={onEditorReady}
           onOpenCodex={onOpenCodex}
           onBubbleAction={onBubbleAction}
-          onBeatGenerate={onBeatGenerate}
+          // The inline beat card runs its OWN real generation + approve→insert;
+          // these callbacks only surface the matching toasts.
+          onBeatGenerate={() => undefined}
           onBeatApply={() => toast(hu.write.toastBeatApplied)}
           onBeatDiscard={() => toast(hu.write.toastBeatDiscarded)}
           onImageUpload={() => toast(hu.write.toastImagePlaceholder)}

@@ -17,6 +17,20 @@ vi.mock("next-themes", () => ({
   useTheme: () => ({ resolvedTheme: "light", setTheme: setThemeMock }),
 }));
 
+// The model pill is config-driven (the /ai/models source the StatusBar +
+// inspector use). Mock the hook so the test asserts the config value without a
+// live QueryClient, and to prove no hardcoded model literal remains.
+vi.mock("@/components/inspector/use-inspector-models", () => ({
+  useInspectorModels: () => ({
+    groups: [],
+    value: "ollama/qwen2.5",
+    setValue: vi.fn(),
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 import { TopBar } from "../top-bar";
 
 function renderTopBar(props: Partial<Parameters<typeof TopBar>[0]> = {}) {
@@ -52,8 +66,9 @@ describe("TopBar", () => {
     expect(
       screen.getByRole("button", { name: "Felhasználói menü" }),
     ).toBeInTheDocument();
-    // Static model pill.
-    expect(screen.getByText("ollama/llama3.2")).toBeInTheDocument();
+    // Config-driven model pill (from the mocked useInspectorModels), not a
+    // hardcoded literal.
+    expect(screen.getByText("ollama/qwen2.5")).toBeInTheDocument();
   });
 
   it("shows the project switcher + share only in a book", () => {

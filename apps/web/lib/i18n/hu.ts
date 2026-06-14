@@ -189,6 +189,11 @@ export const hu = {
     beatDiscard: "Elvet",
     beatDiscardAria: "Beat elvetése",
     beatReadyMeta: (words: number, model: string) => `${words} szó · ${model}`,
+    beatInputAria: "Jelenet beat leírása",
+    beatInputPlaceholder: "Mi történjen ebben a beatben?",
+    beatDefaultBeat: "A jelenet következő pillanata.",
+    beatError: "A beat generálása sikertelen",
+    beatApplyError: "A beat alkalmazása sikertelen",
     // Codex mention popover.
     mentionOpenInCodex: "Megnyitás a Codexben →",
     // Image placeholder (stub).
@@ -236,6 +241,95 @@ export const hu = {
     toastSeparator: "Jelenetelválasztó módosítása (V2)",
     toastBeatApplied: "Beat alkalmazva — új revízióként mentve",
     toastBeatDiscarded: "Beat elvetve",
+    // AI flow toasts (M5).
+    toastRevisionSaved: "Új revízióként mentve",
+    toastResultRejected: "Javaslat elvetve",
+    toastCopied: "Vágólapra másolva",
+    toastSnippetSaved: "Snippetként mentve",
+    toastNoSelection: "Jelölj ki szöveget az AI-művelethez",
+  },
+  /**
+   * AI Inspector panel (`Alexandria App.dc.html` right aside, lines ~2466–2890).
+   * Tabs, the AI action grid, the Describe accordion, the Beatek / Warnings /
+   * Meta tabs. Copy is verbatim from the prototype.
+   */
+  inspector: {
+    /** The five vertical tabs (icon + label). */
+    tabAi: "AI",
+    tabCodex: "Codex",
+    tabBeats: "Beatek",
+    tabWarnings: "Figyelm.",
+    tabMeta: "Meta",
+    tabBarAria: "AI segéd panelek",
+    panelAria: "AI segéd",
+    // AI tab.
+    selectedTextLabel: "Kijelölt szöveg",
+    noSelectionHint: "Jelölj ki szöveget a kéziratban egy AI-művelethez.",
+    actRewrite: "Átírás",
+    actDescribe: "Leírás",
+    actExpand: "Bővítés",
+    actCompress: "Tömörítés",
+    actDialog: "Párbeszéd",
+    actFix: "Javítás",
+    customInstructionPlaceholder:
+      "Egyéni utasítás… (pl. legyen feszültebb a ritmus)",
+    customInstructionAria: "Egyéni utasítás",
+    generate: "Generálás",
+    generating: "Generálás folyamatban…",
+    modelSelectorAria: "Modell kiválasztása",
+    modelLocalGroup: "Lokális",
+    modelCloudGroup: "Felhő",
+    modelsLoading: "Modellek betöltése…",
+    modelsError: "Nem sikerült betölteni a modelleket",
+    disclaimer: "Az AI sosem ír a kéziratba jóváhagyás nélkül.",
+    generationError: "A generálás sikertelen",
+    /** Result-card label per action (rendered "{label} eredménye"). */
+    resultLabel: {
+      rewrite: "Átírás",
+      describe: "Leírás",
+      expand: "Bővítés",
+      compress: "Tömörítés",
+      dialog: "Párbeszéd",
+      fix: "Javítás",
+      continue: "Folytatás",
+      generate: "Jelenet",
+    } as Record<string, string>,
+    // Describe sub-panel (6-channel accordion).
+    describeTitle: "Érzéki leírás",
+    describeBackAria: "Vissza az AI panelre",
+    describeFootnote: "Minden javaslat Snippetként menthető — sosem íródik be magától.",
+    channelSight: "LÁTÁS",
+    channelSound: "HANG",
+    channelTouch: "TAPINTÁS",
+    channelSmell: "SZAG",
+    channelTaste: "ÍZ",
+    channelMetaphor: "METAFORA",
+    channelGenerating: "Generálás…",
+    channelError: "A csatorna generálása sikertelen",
+    saveSnippet: "Snippet mentése",
+    // Codex tab.
+    codexInSceneLabel: "Ebben a jelenetben",
+    codexOpenInCodex: "Megnyitás a Codexben →",
+    codexEmpty: "Ehhez a jelenethez még nincs Codex-bejegyzés.",
+    // Beatek tab.
+    beatsLabel: "Jelenet beatek",
+    beatsApplied: (words: number) => `alkalmazva · ${words} szó`,
+    beatsDraft: "vázlat",
+    beatsNew: "Új beat",
+    beatsEmpty: "Ehhez a jelenethez még nincs beat.",
+    // Warnings tab (continuity is M10 — render an honest empty state).
+    warningsLabel: "Folytonosság",
+    warningsEmptyTitle: "Nincs folytonossági figyelmeztetés",
+    warningsEmptyHint:
+      "A folytonosság-ellenőrzés (RAG) az M10-ben érkezik. Itt jelennek majd meg a figyelmeztetések.",
+    // Meta tab.
+    metaLabel: "Jelenet metaadatok",
+    metaStatus: "Státusz",
+    metaPov: "Nézőpont",
+    metaLocation: "Helyszín",
+    metaWordCount: "Szószám",
+    metaLastSaved: "Utolsó mentés",
+    metaUnknown: "—",
   },
   command: {
     placeholder: "Keresés a projektben… jelenetek, Codex, műveletek",

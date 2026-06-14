@@ -1,0 +1,34 @@
+"use client";
+
+import { useEditorStore } from "@/lib/stores/editor-store";
+import { hu } from "@/lib/i18n/hu";
+import { InspectorTabBar } from "./inspector-tab-bar";
+import { AiTab } from "./ai-tab";
+import { CodexTab } from "./codex-tab";
+import { BeatsTab } from "./beats-tab";
+import { WarningsTab } from "./warnings-tab";
+import { MetaTab } from "./meta-tab";
+
+/**
+ * The AI Inspector panel mounted in the AppShell's reserved 360px slot on the
+ * Write route. A 48px vertical tab bar (AI / Codex / Beatek / Figyelmeztetések /
+ * Meta) over a scrolling body that swaps the active tab. The panel is wrapped in
+ * the AI generation provider by the shell so the editor + the AI tab share one
+ * generation/accept flow.
+ */
+export function InspectorPanel() {
+  const inspectorTab = useEditorStore((s) => s.inspectorTab);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" aria-label={hu.inspector.panelAria}>
+      <InspectorTabBar />
+      <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4">
+        {inspectorTab === "ai" ? <AiTab /> : null}
+        {inspectorTab === "codex" ? <CodexTab /> : null}
+        {inspectorTab === "beats" ? <BeatsTab /> : null}
+        {inspectorTab === "warnings" ? <WarningsTab /> : null}
+        {inspectorTab === "meta" ? <MetaTab /> : null}
+      </div>
+    </div>
+  );
+}

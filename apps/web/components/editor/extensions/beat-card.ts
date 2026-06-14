@@ -1,12 +1,14 @@
 import { Node, mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
-import { BeatCardView } from "./beat-card-view";
+import { BeatCardView, type BeatWordChoice } from "./beat-card-view";
 
 export interface BeatCardOptions {
-  /** Static model name shown on the card (real ModelRouter model is M5). */
+  /** Active model name (config-driven, threaded from `useModels`). */
   modelName?: string;
-  /** Fired when the user triggers generation (the page shows the M5 stub toast). */
-  onGenerate?: () => void;
-  /** Fired after the (stub) prose is applied into the manuscript. */
+  /** Active scene id — sent as `scene_id` on the generate-scene request. */
+  sceneId?: string;
+  /** Fired when the user triggers generation (with the chosen word count). */
+  onGenerate?: (words: BeatWordChoice) => void;
+  /** Fired after the approved prose is applied into the manuscript. */
   onApply?: () => void;
   /** Fired when the card is discarded. */
   onDiscard?: () => void;
@@ -35,7 +37,8 @@ export const BeatCard = Node.create<BeatCardOptions>({
 
   addOptions() {
     return {
-      modelName: "ollama/llama3.2",
+      modelName: "—",
+      sceneId: undefined,
       onGenerate: undefined,
       onApply: undefined,
       onDiscard: undefined,
