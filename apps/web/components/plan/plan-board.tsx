@@ -37,15 +37,21 @@ export function PlanBoard() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PlanHeader
-        bookId={bookId}
-        view={view}
-        onViewChange={setView}
-        density={density}
-        onDensityChange={setDensity}
-        search={search}
-        onSearchChange={setSearch}
-      />
+      {/* The header gets its OWN boundary so a header crash (view/density/search
+          controls) degrades to a compact in-pane fallback instead of bubbling to
+          the route boundary and white-screening the whole view — the body below
+          keeps its independent boundary and stays usable. */}
+      <ErrorBoundary>
+        <PlanHeader
+          bookId={bookId}
+          view={view}
+          onViewChange={setView}
+          density={density}
+          onDensityChange={setDensity}
+          search={search}
+          onSearchChange={setSearch}
+        />
+      </ErrorBoundary>
 
       <div className="min-h-0 flex-1 overflow-auto p-5">
         {/* A render failure inside a view (grid/matrix/outline) degrades to a

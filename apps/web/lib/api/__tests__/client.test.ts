@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import {
@@ -7,6 +7,7 @@ import {
   API_BASE_URL,
   TOKEN_STORAGE_KEY,
   apiFetch,
+  getAuthToken,
 } from "@/lib/api/client";
 
 const base = `${API_BASE_URL}/api/v1`;
@@ -104,5 +105,44 @@ describe("apiFetch", () => {
       ),
     );
     await expect(apiFetch("/broken")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("getAuthToken — localStorage fallback (A10.2)", () => {
+  it("warns (without logging the token) and falls back when localStorage throws", () => {
+    // Force a localStorage failure (private mode / disabled storage). Spying on
+    // the instance's getItem does NOT intercept under this jsdom setup (getItem
+    // lives on Storage.prototype), so replace the whole `localStorage` accessor
+    // on `window` with one whose getItem throws, then restore it.
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get: () => ({
+        getItem() {
+          throw new Error("storage disabled");
+        },
+      }),
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      // Behaviour is preserved: the env dev-token fallback is still returned.
+      const token = getAuthToken();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "localStorage unavailable; falling back to NEXT_PUBLIC_DEV_TOKEN",
+      );
+      // The warning must NEVER carry the token value — only the fixed message.
+      for (const call of warnSpy.mock.calls) {
+        for (const arg of call) {
+          if (typeof arg === "string" && token) {
+            expect(arg).not.toContain(token);
+          }
+        }
+      }
+    } finally {
+      warnSpy.mockRestore();
+      if (original) Object.defineProperty(window, "localStorage", original);
+    }
   });
 });

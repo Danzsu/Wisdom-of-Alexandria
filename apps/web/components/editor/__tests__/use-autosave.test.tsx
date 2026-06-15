@@ -116,6 +116,30 @@ describe("useAutosave", () => {
     expect(useEditorStore.getState().saveState).toBe("error");
   });
 
+  it("logs the failure to the console (visible in dev, not only the StatusBar)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.patch(`${base}/chapters/:chapterId/scenes/:sceneId`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+      ),
+    );
+    const { result } = renderHook(
+      () => useAutosave({ chapterId: CHAPTER_TWO.id, sceneId: SCENE_ACTIVE.id }),
+      { wrapper: wrapper() },
+    );
+
+    act(() => result.current.scheduleSave("hello"));
+    await settleSave();
+
+    // The catch logs "Autosave failed" with the scene id — but NEVER a token.
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Autosave failed",
+      expect.objectContaining({ sceneId: SCENE_ACTIVE.id }),
+    );
+    expect(useEditorStore.getState().saveState).toBe("error");
+    errorSpy.mockRestore();
+  });
+
   it("flush() saves the pending content immediately", async () => {
     let patchCount = 0;
     server.use(

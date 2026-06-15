@@ -68,7 +68,11 @@ export function getAuthToken(): string | null {
       if (stored) return stored;
     } catch {
       // localStorage can throw (private mode / disabled storage). Fall through
-      // to the env fallback rather than failing the whole request here.
+      // to the env fallback rather than failing the whole request here, but warn
+      // so the fallback is visible (never log the token value itself).
+      console.warn(
+        "localStorage unavailable; falling back to NEXT_PUBLIC_DEV_TOKEN",
+      );
     }
   }
   return process.env.NEXT_PUBLIC_DEV_TOKEN ?? null;

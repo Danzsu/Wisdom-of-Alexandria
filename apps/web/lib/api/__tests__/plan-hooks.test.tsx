@@ -343,6 +343,59 @@ describe("useMoveScene — cross-chapter optimistic + rollback (P1.5)", () => {
     });
   });
 
+  // Regression for the same-chapter clarity work (A10.4): when
+  // fromChapterId === toChapterId the two snapshots (previousFrom/previousTo)
+  // are the SAME cached list and the two restore-writes target the one key. This
+  // pins that a same-chapter move still rolls back to the original order on a
+  // server error (idempotent double-restore is correct, not a regression).
+  it("rolls a SAME-chapter move back to the original order when the server errors", async () => {
+    const client = createTestQueryClient();
+    // One chapter (ch2) holds [a, b, c]; move "c" to the front (index 0) within
+    // the same chapter — fromChapterId === toChapterId.
+    const seed: SceneRead[] = [
+      { ...SCENE_ACTIVE, id: "a", chapter_id: CHAPTER_TWO.id, order_index: 0 },
+      { ...SCENE_ACTIVE, id: "b", chapter_id: CHAPTER_TWO.id, order_index: 1 },
+      { ...SCENE_ACTIVE, id: "c", chapter_id: CHAPTER_TWO.id, order_index: 2 },
+    ];
+    client.setQueryData(queryKeys.chapterScenes(CHAPTER_TWO.id), seed);
+
+    server.use(
+      http.post(`${base}/scenes/:sceneId/move`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 400 }),
+      ),
+      // onSettled invalidates the (single) list; return the ORIGINAL order so the
+      // post-rollback cache is the original sequence.
+      http.get(`${base}/chapters/:chapterId/scenes`, () =>
+        HttpResponse.json(seed),
+      ),
+    );
+
+    const { result } = renderHook(() => useMoveScene(), {
+      wrapper: wrapperWith(client),
+    });
+
+    result.current.mutate({
+      sceneId: "c",
+      fromChapterId: CHAPTER_TWO.id,
+      toChapterId: CHAPTER_TWO.id,
+      targetIndex: 0,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe("boom");
+
+    // After the idempotent same-key rollback (+ the settled refetch) the order is
+    // the original again, with no duplicate or dropped scene — proving the
+    // same-chapter path (where previousFrom/previousTo are the SAME snapshot and
+    // restore the one key twice) rolls back correctly.
+    await waitFor(() => {
+      const cached = client.getQueryData<SceneRead[]>(
+        queryKeys.chapterScenes(CHAPTER_TWO.id),
+      );
+      expect(cached?.map((s) => s.id)).toEqual(["a", "b", "c"]);
+    });
+  });
+
   it("fires the move mutation with the right body (chapter_id + order_index)", async () => {
     let captured: { chapter_id: string; order_index: number } | null = null;
     server.use(

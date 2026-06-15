@@ -76,9 +76,12 @@ export function useAutosave({
         patch: { content },
       });
       setSaveState("saved");
-    } catch {
+    } catch (error) {
       // Surface the failure in the StatusBar rather than swallowing it; the
       // thrown ApiError is also available on the mutation's `error` for callers.
+      // Also log it so a real failure (401/network) is visible in the dev
+      // console, not only as a StatusBar state (no token/secret is logged).
+      console.error("Autosave failed", { sceneId: sid, error });
       setSaveState("error");
     }
   }, [setSaveState]);

@@ -710,6 +710,13 @@ export function useMoveScene(): UseMutationResult<
       await queryClient.cancelQueries({ queryKey: fromKey });
       await queryClient.cancelQueries({ queryKey: toKey });
 
+      // SAME-CHAPTER case (fromChapterId === toChapterId): fromKey === toKey, so
+      // `previousFrom` and `previousTo` are snapshots of the SAME cached list and
+      // the two `setQueryData` writes below target the one key — the second
+      // (target splice) wins, giving a single-list reorder (remove the scene,
+      // re-insert at `targetIndex`). The `onError` restore is therefore an
+      // idempotent double-write of that same snapshot back to the one key (no
+      // guard needed — restoring the same list twice is a no-op the second time).
       const previousFrom = queryClient.getQueryData<SceneRead[]>(fromKey);
       const previousTo = queryClient.getQueryData<SceneRead[]>(toKey);
 
@@ -734,7 +741,10 @@ export function useMoveScene(): UseMutationResult<
       return { previousFrom, previousTo };
     },
     onError: (_err, { fromChapterId, toChapterId }, context) => {
-      // Restore BOTH snapshots (only if they were captured).
+      // Restore BOTH snapshots (only if they were captured). For a same-chapter
+      // move (fromKey === toKey) these two restores write the same snapshot to
+      // the one key twice — idempotent, so the original order is restored
+      // correctly either way (see the onMutate note above).
       if (context?.previousFrom !== undefined) {
         queryClient.setQueryData(
           queryKeys.chapterScenes(fromChapterId),
