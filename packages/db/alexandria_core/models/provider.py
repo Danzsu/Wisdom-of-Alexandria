@@ -20,4 +20,8 @@ class Provider(UUIDPrimaryKey, Timestamps, Base):
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     default_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Optional embedding model for this provider (used by RAG). Recommended
+    # cloud default: OpenAI ``text-embedding-3-small`` (1536-dim). Nullable:
+    # providers that do not serve embeddings (or local Ollama) may leave it unset.
+    embedding_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

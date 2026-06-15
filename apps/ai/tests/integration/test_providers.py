@@ -74,10 +74,40 @@ async def test_read_never_contains_plaintext_or_ciphertext(client: AsyncClient, 
         "has_key",
         "base_url",
         "default_model",
+        "embedding_model",
         "enabled",
         "created_at",
         "updated_at",
     }
+
+
+async def test_embedding_model_create_read_update_round_trip(
+    client: AsyncClient, auth_headers: dict
+):
+    """B2a: embedding_model is set on create, surfaced on read, and updatable."""
+    created = await _create_cloud(
+        client, auth_headers, embedding_model="openai/text-embedding-3-small"
+    )
+    assert created["embedding_model"] == "openai/text-embedding-3-small"
+
+    pid = created["id"]
+    got = (await client.get(f"{BASE}/{pid}", headers=auth_headers)).json()
+    assert got["embedding_model"] == "openai/text-embedding-3-small"
+
+    # Update to a different embedding model.
+    patched = await client.patch(
+        f"{BASE}/{pid}",
+        json={"embedding_model": "openai/text-embedding-3-large"},
+        headers=auth_headers,
+    )
+    assert patched.status_code == 200
+    assert patched.json()["embedding_model"] == "openai/text-embedding-3-large"
+
+
+async def test_embedding_model_defaults_to_none(client: AsyncClient, auth_headers: dict):
+    """Omitting embedding_model leaves it null (providers may not serve embeds)."""
+    created = await _create_cloud(client, auth_headers)
+    assert created["embedding_model"] is None
 
 
 async def test_ollama_provider_has_no_key(client: AsyncClient, auth_headers: dict):

@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # This key is never logged or returned by the API.
     provider_encryption_key: str | None = None
+    # Width of stored embedding vectors. Matches the default cloud embedding
+    # model OpenAI ``text-embedding-3-small`` (1536-dim). The Embedding model's
+    # ``Vector`` column and the Alembic DDL both source this width; because the
+    # DDL must be static at migration time, the column uses the module constant
+    # ``EMBEDDING_DIM`` below (kept in sync with this default) rather than a
+    # runtime-mutable setting.
+    embedding_dim: int = 1536
 
 
 settings = Settings()
+
+# Static embedding width for DDL/model declaration. Alembic generates a fixed
+# ``vector(EMBEDDING_DIM)`` column at migration time, so the width must be a
+# module-level constant (not a runtime-overridable setting). Kept equal to the
+# ``embedding_dim`` default above; changing the stored width is a migration, not
+# a config tweak.
+EMBEDDING_DIM = 1536

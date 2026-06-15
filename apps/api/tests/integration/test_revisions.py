@@ -1,17 +1,30 @@
 """Integration tests for Revision endpoints."""
 import uuid
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _setup_scene(client: AsyncClient, auth_headers: dict) -> tuple[str, str]:
     """Create project → book → chapter → scene, return (chapter_id, scene_id)."""
-    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
-    book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers)).json()
-    ch = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers)).json()
-    scene = (await client.post(f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "S"}, headers=auth_headers)).json()
+    proj = (
+        await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)
+    ).json()
+    book = (
+        await client.post(
+            f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers
+        )
+    ).json()
+    ch = (
+        await client.post(
+            f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers
+        )
+    ).json()
+    scene = (
+        await client.post(
+            f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()
     return ch["id"], scene["id"]
 
 
@@ -175,6 +188,107 @@ async def test_approve_revision_without_scene_id(
     resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["approved"] is True
+
+
+async def test_approve_summarize_revision_sets_scene_summary_not_content(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """B2a fix: approving a ``summarize`` revision writes scene.summary and must
+    NOT overwrite scene.content."""
+    from alexandria_core.models.revision import Revision
+    from alexandria_core.models.scene import Scene
+
+    _chapter_id, scene_id = await _setup_scene(client, auth_headers)
+
+    # Give the scene real manuscript content first.
+    scene = await db_session.get(Scene, uuid.UUID(scene_id))
+    scene.content = "Az eredeti jelenet teljes szövege marad."
+    await db_session.commit()
+
+    rev = Revision(
+        scene_id=uuid.UUID(scene_id),
+        content="Ez a jelenet rövid összefoglalója.",
+        approved=False,
+        revision_type="summarize",
+    )
+    db_session.add(rev)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
+    assert resp.status_code == 200
+
+    refreshed = await db_session.get(Scene, uuid.UUID(scene_id))
+    await db_session.refresh(refreshed)
+    # Summary written; content untouched.
+    assert refreshed.summary == "Ez a jelenet rövid összefoglalója."
+    assert refreshed.content == "Az eredeti jelenet teljes szövege marad."
+
+
+async def test_approve_summarize_revision_sets_chapter_summary(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """A chapter summarize leaves scene_id None and links the target chapter via
+    the job's chapter_id; approving it writes chapter.summary."""
+    from alexandria_core.models.chapter import Chapter
+    from alexandria_core.models.generation_job import GenerationJob
+    from alexandria_core.models.revision import Revision
+
+    chapter_id, _scene_id = await _setup_scene(client, auth_headers)
+
+    job = GenerationJob(
+        scene_id=None,
+        chapter_id=uuid.UUID(chapter_id),
+        job_type="summarize",
+        status="done",
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    rev = Revision(
+        scene_id=None,
+        job_id=job.id,
+        content="A fejezet összefoglalója.",
+        approved=False,
+        revision_type="summarize",
+    )
+    db_session.add(rev)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
+    assert resp.status_code == 200
+
+    chapter = await db_session.get(Chapter, uuid.UUID(chapter_id))
+    await db_session.refresh(chapter)
+    assert chapter.summary == "A fejezet összefoglalója."
+
+
+async def test_approve_non_summarize_still_sets_scene_content(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """Regression guard: a normal (non-summarize) revision still overwrites
+    scene.content and does NOT touch scene.summary."""
+    from alexandria_core.models.revision import Revision
+    from alexandria_core.models.scene import Scene
+
+    _chapter_id, scene_id = await _setup_scene(client, auth_headers)
+
+    rev = Revision(
+        scene_id=uuid.UUID(scene_id),
+        content="Ez az átírt jelenet tartalma.",
+        approved=False,
+        revision_type="rewrite",
+    )
+    db_session.add(rev)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
+    assert resp.status_code == 200
+
+    scene = await db_session.get(Scene, uuid.UUID(scene_id))
+    await db_session.refresh(scene)
+    assert scene.content == "Ez az átírt jelenet tartalma."
+    # summary remains unset for a content revision.
+    assert scene.summary is None
 
 
 async def test_reject_revision(

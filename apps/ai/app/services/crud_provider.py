@@ -16,6 +16,7 @@ async def create_provider(db: AsyncSession, data: ProviderCreate) -> Provider:
         api_key_encrypted=api_key_encrypted,
         base_url=data.base_url,
         default_model=data.default_model,
+        embedding_model=data.embedding_model,
         enabled=data.enabled,
     )
     db.add(provider)
@@ -77,6 +78,7 @@ def to_read(provider: Provider) -> ProviderRead:
         has_key=provider.api_key_encrypted is not None,
         base_url=provider.base_url,
         default_model=provider.default_model,
+        embedding_model=provider.embedding_model,
         enabled=provider.enabled,
         created_at=provider.created_at,
         updated_at=provider.updated_at,

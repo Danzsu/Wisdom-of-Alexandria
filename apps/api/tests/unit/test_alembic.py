@@ -2,7 +2,6 @@
 
 # Import all models to ensure they are registered with metadata
 import alexandria_core.models  # noqa: F401
-import pytest
 from alexandria_core.models.base import Base
 
 EXPECTED_TABLES = {
@@ -23,6 +22,7 @@ EXPECTED_TABLES = {
     "revisions",
     "ai_comments",
     "providers",
+    "embeddings",
 }
 
 
@@ -35,11 +35,11 @@ def test_all_tables_in_metadata():
     )
 
 
-def test_metadata_has_17_tables():
-    """Verify that exactly 17 tables are registered."""
-    import alexandria_core.models  # noqa: F401
-    assert len(Base.metadata.tables) == 17, (
-        f"Expected 17 tables, got {len(Base.metadata.tables)}"
+def test_metadata_has_18_tables():
+    """Verify that exactly 18 tables are registered."""
+    # Models are already registered via the module-level import above.
+    assert len(Base.metadata.tables) == 18, (
+        f"Expected 18 tables, got {len(Base.metadata.tables)}"
     )
 
 

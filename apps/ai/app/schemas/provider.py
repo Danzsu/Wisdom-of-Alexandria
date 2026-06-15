@@ -15,6 +15,8 @@ class ProviderCreate(BaseModel):
     api_key: str | None = Field(default=None, min_length=1)
     base_url: str | None = Field(default=None, max_length=512)
     default_model: str | None = Field(default=None, max_length=255)
+    # Optional embedding model (RAG). Cloud default: OpenAI text-embedding-3-small.
+    embedding_model: str | None = Field(default=None, max_length=255)
     enabled: bool = True
 
 
@@ -25,6 +27,7 @@ class ProviderUpdate(BaseModel):
     api_key: str | None = Field(default=None, min_length=1)
     base_url: str | None = Field(default=None, max_length=512)
     default_model: str | None = Field(default=None, max_length=255)
+    embedding_model: str | None = Field(default=None, max_length=255)
     enabled: bool | None = None
 
 
@@ -42,6 +45,7 @@ class ProviderRead(BaseModel):
     has_key: bool
     base_url: str | None
     default_model: str | None
+    embedding_model: str | None
     enabled: bool
     created_at: datetime
     updated_at: datetime

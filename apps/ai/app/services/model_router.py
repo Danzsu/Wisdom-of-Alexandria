@@ -4,7 +4,7 @@ from typing import Any
 
 from alexandria_core.core.config import settings
 from alexandria_core.models.provider import Provider
-from litellm import acompletion
+from litellm import acompletion, aembedding
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import DecryptionError, decrypt_secret
@@ -149,6 +149,59 @@ class ModelRouter:
             "total_tokens": getattr(response.usage, "total_tokens", 0) or 0,
         }
         return ModelResponse(content=content, model=resolved_model, usage=usage)
+
+    async def embed(
+        self,
+        texts: list[str],
+        model: str,
+        db: AsyncSession | None = None,
+        **kwargs: Any,
+    ) -> list[list[float]]:
+        """Embed a batch of texts via LiteLLM ``aembedding``.
+
+        Mirrors ``complete()``: resolves the configured provider (api_key /
+        base_url) through ``resolve_provider`` when a ``db`` is given, applies the
+        same hard timeout, and surfaces failures loudly. An undecryptable stored
+        key raises (propagated from ``resolve_provider``) rather than silently
+        sending an unauthenticated request. Returns one vector per input text,
+        in input order.
+        """
+        api_key: str | None = None
+        if db is not None:
+            resolved = await self.resolve_provider(db, model)
+            api_base = resolved.base_url
+            api_key = resolved.api_key
+        else:
+            # No DB context: keep the same Ollama-by-prefix fallback as complete().
+            api_base = self.base_url if model.startswith(_OLLAMA_PREFIX) else None
+
+        # Same hard timeout as complete() so a stalled embedding provider cannot
+        # hang the request/worker forever; LiteLLM raises on expiry and the
+        # exception flows up to the caller's sanitized failure handling.
+        kwargs.setdefault("timeout", settings.ai_request_timeout)
+        response = await aembedding(
+            model=model,
+            input=texts,
+            api_base=api_base,
+            api_key=api_key,
+            **kwargs,
+        )
+        # OpenAI-compatible shape: response.data is an ordered list of items each
+        # carrying an ``embedding`` list. Support both attribute and mapping
+        # access (LiteLLM objects support both) without leaking anything else.
+        vectors: list[list[float]] = []
+        for item in response.data:
+            emb = item["embedding"] if isinstance(item, dict) else item.embedding
+            vectors.append([float(x) for x in emb])
+        # Fail loudly on a partial batch: the caller maps vectors back to entities
+        # BY POSITION, so a short response would silently misalign embeddings to the
+        # wrong entity ids (corrupting the index). Never return fewer than asked.
+        if len(vectors) != len(texts):
+            raise ValueError(
+                f"Embedding provider returned {len(vectors)} vectors for "
+                f"{len(texts)} input(s)"
+            )
+        return vectors
 
     def build_messages(self, system: str, user: str) -> list[dict[str, str]]:
         return [

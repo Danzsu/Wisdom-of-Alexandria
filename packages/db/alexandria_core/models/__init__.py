@@ -7,6 +7,7 @@ from alexandria_core.models.character import Character  # noqa: F401
 from alexandria_core.models.codex_entry import CodexEntry  # noqa: F401
 from alexandria_core.models.codex_progression import CodexProgression  # noqa: F401
 from alexandria_core.models.codex_relation import CodexRelation  # noqa: F401
+from alexandria_core.models.embedding import Embedding  # noqa: F401
 from alexandria_core.models.generation_job import GenerationJob, JobStatus  # noqa: F401
 from alexandria_core.models.location import Location  # noqa: F401
 from alexandria_core.models.project import Project  # noqa: F401
