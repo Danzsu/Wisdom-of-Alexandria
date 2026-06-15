@@ -90,9 +90,10 @@ describe("Describe panel — 6-channel sensory accordion", () => {
   it("surfaces a channel generation error (not swallowed)", async () => {
     const user = userEvent.setup();
     const { http, HttpResponse } = await import("msw");
-    const { API_BASE_URL } = await import("@/lib/api/client");
+    const { AI_BASE_URL } = await import("@/lib/api/client");
     server.use(
-      http.post(`${API_BASE_URL}/api/v1/ai/describe`, () =>
+      // `/ai/*` lives on the AI service after the Alexandria split.
+      http.post(`${AI_BASE_URL}/api/v1/ai/describe`, () =>
         HttpResponse.json({ detail: "AI error: down" }, { status: 502 }),
       ),
     );

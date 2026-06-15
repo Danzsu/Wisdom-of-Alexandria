@@ -44,14 +44,16 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    # DOMAIN service only (Alexandria split): projects/books/chapters/scenes/
+    # beats/codex/snippets/style-guide/relations/progressions/auth/exports +
+    # revisions. AI/provider/job routes + their env (OLLAMA_BASE_URL,
+    # DEFAULT_LOCAL_MODEL, PROVIDER_ENCRYPTION_KEY) live on the ``ai`` service.
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
-      OLLAMA_BASE_URL: http://ollama:11434
-      DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
       - "8000:8000"
@@ -60,8 +62,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./packages/prompts:/app/prompts:ro
 
   ai:
     build:
@@ -112,6 +112,28 @@ services:
         condition: service_healthy
     volumes:
       - ./packages/prompts:/app/prompts:ro
+
+  web:
+    # Next.js frontend (App Router). Runs the dev server from the mounted
+    # monorepo via pnpm — there is no apps/web/Dockerfile (the frontend is built
+    # on Vercel for deploys; this service is for local Docker Compose dev).
+    image: node:22-alpine
+    restart: unless-stopped
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm --filter web dev"
+    environment:
+      # Browser-exposed base URLs (Alexandria split): domain backend vs AI service.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_AI_URL: ${NEXT_PUBLIC_AI_URL:-http://localhost:8001}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - ai
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+      - /workspace/apps/web/node_modules
 
 volumes:
   postgres_data:

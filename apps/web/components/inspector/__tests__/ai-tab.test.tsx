@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
 import {
   useEditorStore,
@@ -13,7 +13,10 @@ import { AiGenerationProvider } from "../ai-generation-context";
 import { AiTab } from "../ai-tab";
 import { FAROSZ_BOOK, SCENE_ACTIVE, AI_GENERATED_TEXT } from "@/test/msw/fixtures";
 
+/** Domain base — `/revisions/*` (the human-in-the-loop approve) stays here. */
 const base = `${API_BASE_URL}/api/v1`;
+/** AI service base — `/ai/*` generation calls live here after the split. */
+const aiBase = `${AI_BASE_URL}/api/v1`;
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ bookId: FAROSZ_BOOK.id, sceneId: SCENE_ACTIVE.id }),
@@ -214,7 +217,7 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
       release = resolve;
     });
     server.use(
-      http.post(`${base}/ai/rewrite`, async () => {
+      http.post(`${aiBase}/ai/rewrite`, async () => {
         await gate;
         return HttpResponse.json({
           revision: {
@@ -262,7 +265,7 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
   it("surfaces a generation error (not swallowed)", async () => {
     const user = userEvent.setup();
     server.use(
-      http.post(`${base}/ai/rewrite`, () =>
+      http.post(`${aiBase}/ai/rewrite`, () =>
         HttpResponse.json({ detail: "AI error: model down" }, { status: 502 }),
       ),
     );

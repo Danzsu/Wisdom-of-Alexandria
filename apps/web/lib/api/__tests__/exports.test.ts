@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL, ApiError } from "@/lib/api/client";
+import { AI_BASE_URL, API_BASE_URL, ApiError } from "@/lib/api/client";
 import { exportBookMarkdown } from "@/lib/api/exports";
 import { downloadTextFile } from "@/lib/api/export-hooks";
 import { rewrite } from "@/lib/api/ai";
@@ -12,7 +12,10 @@ import {
 } from "@/lib/stores/generation-settings-store";
 import { FAROSZ_BOOK } from "@/test/msw/fixtures";
 
+/** Domain base — the export endpoint stays here after the Alexandria split. */
 const base = `${API_BASE_URL}/api/v1`;
+/** AI service base — the `/ai/rewrite` generation-params probe lives here. */
+const aiBase = `${AI_BASE_URL}/api/v1`;
 
 describe("lib/api/exports", () => {
   afterEach(() => server.resetHandlers());
@@ -185,7 +188,7 @@ describe("AI calls carry the persisted generation params", () => {
 
     let body: Record<string, unknown> = {};
     server.use(
-      http.post(`${base}/ai/rewrite`, async ({ request }) => {
+      http.post(`${aiBase}/ai/rewrite`, async ({ request }) => {
         body = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({
           revision: {

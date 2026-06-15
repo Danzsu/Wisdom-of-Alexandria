@@ -4,6 +4,10 @@
  *
  * Design rules (M3):
  * - Base URL from `NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:8000`.
+ * - AI/provider/job calls target the split-out AI service (`NEXT_PUBLIC_AI_URL`,
+ *   defaulting to `http://localhost:8001`) via a per-call `baseUrl` override —
+ *   see {@link AI_BASE_URL}. The same JWT works on both services, so auth is
+ *   identical regardless of base.
  * - JSON request/response by default; a `Bearer` token is attached when one is
  *   available (single-user local app — a real login screen is out of M3 scope).
  * - Errors are NEVER swallowed: a non-2xx response throws a typed `ApiError`
@@ -12,12 +16,23 @@
  *   `undefined` silently.
  */
 
-/** Backend base origin (no trailing slash). */
+/** Domain backend base origin (no trailing slash). Projects/books/chapters/
+ * scenes/beats/codex/snippets/style-guide/relations/progressions/auth/exports +
+ * revisions all live here. */
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * AI service base origin (no trailing slash). The Alexandria split moved the
+ * `/ai/*`, `/providers/*` and `/jobs` routes onto a separate service. AI/provider
+ * modules pass this as the {@link ApiFetchOptions.baseUrl} override; everything
+ * else keeps hitting {@link API_BASE_URL}. The same JWT is accepted by both.
+ */
+export const AI_BASE_URL =
+  process.env.NEXT_PUBLIC_AI_URL ?? "http://localhost:8001";
+
 /** All v1 routes live under this prefix (see `apps/api/app/main.py`). */
-const API_PREFIX = "/api/v1";
+export const API_PREFIX = "/api/v1";
 
 /** localStorage key holding the dev bearer token (single-user local app). */
 export const TOKEN_STORAGE_KEY = "woa-token";
@@ -68,12 +83,18 @@ export interface ApiFetchOptions {
   headers?: Record<string, string>;
   /** Abort signal forwarded to `fetch`. */
   signal?: AbortSignal;
+  /**
+   * Base origin to target instead of {@link API_BASE_URL}. AI/provider/job
+   * modules pass {@link AI_BASE_URL} here so their calls reach the split-out AI
+   * service; domain modules omit it and stay on the domain backend.
+   */
+  baseUrl?: string;
 }
 
 /** Build the absolute URL for an API path (path must start with `/`). */
-function buildUrl(path: string): string {
+function buildUrl(path: string, baseUrl: string = API_BASE_URL): string {
   const normalised = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${API_PREFIX}${normalised}`;
+  return `${baseUrl}${API_PREFIX}${normalised}`;
 }
 
 /**
@@ -118,7 +139,7 @@ export async function apiFetch<T>(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, headers = {}, signal } = options;
+  const { method = "GET", body, headers = {}, signal, baseUrl } = options;
 
   const finalHeaders: Record<string, string> = {
     Accept: "application/json",
@@ -138,7 +159,7 @@ export async function apiFetch<T>(
 
   let res: Response;
   try {
-    res = await fetch(buildUrl(path), {
+    res = await fetch(buildUrl(path, baseUrl), {
       method,
       headers: finalHeaders,
       body: serialisedBody,

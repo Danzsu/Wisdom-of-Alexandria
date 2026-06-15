@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AI_BASE_URL } from "@/lib/api/client";
 import {
   useCreateProvider,
   useDeleteProvider,
@@ -14,7 +14,8 @@ import { resetProviderStore } from "@/test/msw/handlers";
 import { PROVIDER_GEMINI, PROVIDERS_FIXTURE } from "@/test/msw/fixtures";
 import { Providers, createTestQueryClient } from "@/test/test-utils";
 
-const base = `${API_BASE_URL}/api/v1`;
+// Providers live on the AI service after the Alexandria split.
+const base = `${AI_BASE_URL}/api/v1`;
 
 function wrapper() {
   const client = createTestQueryClient();

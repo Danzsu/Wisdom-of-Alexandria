@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AI_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
 import {
   createProviderInStore,
@@ -12,7 +12,8 @@ import {
 import { PROVIDER_GEMINI, PROVIDER_OLLAMA } from "@/test/msw/fixtures";
 import { CloudSubpage } from "../cloud-subpage";
 
-const base = `${API_BASE_URL}/api/v1`;
+// Providers live on the AI service after the Alexandria split.
+const base = `${AI_BASE_URL}/api/v1`;
 
 function renderCloud() {
   return render(

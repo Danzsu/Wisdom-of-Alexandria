@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AI_BASE_URL, ApiError } from "@/lib/api/client";
 import {
   approveRevision,
   createSnippet,
@@ -11,13 +11,36 @@ import {
   resolveProjectIdForBook,
   rewrite,
 } from "@/lib/api/ai";
-import { ApiError } from "@/lib/api/client";
 import { FAROSZ_BOOK, FAROSZ_PROJECT } from "@/test/msw/fixtures";
 
-const base = `${API_BASE_URL}/api/v1`;
+/** AI service base — `/ai/*` handlers live here after the Alexandria split. */
+const aiBase = `${AI_BASE_URL}/api/v1`;
 
 describe("lib/api/ai", () => {
   afterEach(() => server.resetHandlers());
+
+  it("AI calls target the AI service base URL (NEXT_PUBLIC_AI_URL), not the domain base", async () => {
+    // The default AI base is :8001; the domain base is :8000. Assert the actual
+    // request URL the client builds for an `/ai/*` call resolves to the AI base
+    // (this is what makes the Alexandria split routing correct).
+    // Absent an override, the AI base MUST resolve to the :8001 default (not the
+    // domain :8000, and not some other host that would silently break every call).
+    expect(AI_BASE_URL).not.toBe("http://localhost:8000");
+    expect(AI_BASE_URL).toMatch(/:8001(\/|$)/);
+    let seenUrl: string | null = null;
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, ({ request }) => {
+        seenUrl = request.url;
+        return HttpResponse.json({ detail: "stub" }, { status: 502 });
+      }),
+    );
+    // The call rejects (502) but the handler still captured the URL it hit. If
+    // the call had gone to the domain base, this handler would not match and
+    // MSW's `onUnhandledRequest: "error"` would fail the test instead.
+    await rewrite({ selected_text: "x", instruction: "y" }).catch(() => {});
+    expect(seenUrl).toBe(`${aiBase}/ai/rewrite`);
+    expect(seenUrl).toContain(AI_BASE_URL);
+  });
 
   it("listModels returns the config-driven model list", async () => {
     const res = await listModels();
@@ -77,7 +100,7 @@ describe("lib/api/ai", () => {
 
   it("propagates AI errors (never swallowed)", async () => {
     server.use(
-      http.post(`${base}/ai/rewrite`, () =>
+      http.post(`${aiBase}/ai/rewrite`, () =>
         HttpResponse.json({ detail: "AI error: boom" }, { status: 502 }),
       ),
     );

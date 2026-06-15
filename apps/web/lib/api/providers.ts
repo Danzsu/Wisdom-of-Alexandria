@@ -1,7 +1,7 @@
 /**
  * Typed endpoint functions + Zod schemas for the Provider resource (P1.1 —
- * provider/API-key configuration). Mirrors the backend contract
- * (`apps/api/app/api/v1/providers.py`, prefix `/providers` under `/api/v1`):
+ * provider/API-key configuration). Mirrors the contract
+ * (`apps/ai/app/api/v1/providers.py`, prefix `/providers` under `/api/v1`):
  *
  *   GET    /providers           (?enabled_only=true) → ProviderRead[]
  *   GET    /providers/{id}                            → ProviderRead
@@ -21,9 +21,13 @@
  * drift surfaces as a thrown error rather than a silent shape mismatch (same
  * discipline as `lib/api/types.ts` / `ai-types.ts`). Errors are never swallowed
  * — `apiFetch` throws a typed `ApiError`.
+ *
+ * ROUTING (Alexandria split): the `/providers/*` routes live on the SEPARATE AI
+ * service (`NEXT_PUBLIC_AI_URL`, default :8001), so every call passes the
+ * `baseUrl: AI_BASE_URL` override. The same JWT is accepted by both services.
  */
 import { z } from "zod";
-import { apiFetch } from "./client";
+import { AI_BASE_URL, apiFetch } from "./client";
 
 /* ---------------------------------------------------------------------------
  * Provider types — the slugs the backend accepts. Ollama needs no api_key
@@ -155,13 +159,17 @@ export async function listProviders(
   enabledOnly = false,
 ): Promise<ProviderRead[]> {
   const query = enabledOnly ? "?enabled_only=true" : "";
-  const data = await apiFetch<unknown>(`/providers${query}`);
+  const data = await apiFetch<unknown>(`/providers${query}`, {
+    baseUrl: AI_BASE_URL,
+  });
   return providerListSchema.parse(data);
 }
 
 /** Fetch a single provider by id. */
 export async function getProvider(providerId: string): Promise<ProviderRead> {
-  const data = await apiFetch<unknown>(`/providers/${providerId}`);
+  const data = await apiFetch<unknown>(`/providers/${providerId}`, {
+    baseUrl: AI_BASE_URL,
+  });
   return providerReadSchema.parse(data);
 }
 
@@ -170,7 +178,11 @@ export async function createProvider(
   input: ProviderCreate,
 ): Promise<ProviderRead> {
   const body = providerCreateSchema.parse(input);
-  const data = await apiFetch<unknown>("/providers", { method: "POST", body });
+  const data = await apiFetch<unknown>("/providers", {
+    method: "POST",
+    body,
+    baseUrl: AI_BASE_URL,
+  });
   return providerReadSchema.parse(data);
 }
 
@@ -186,13 +198,17 @@ export async function updateProvider(
   const data = await apiFetch<unknown>(`/providers/${providerId}`, {
     method: "PATCH",
     body,
+    baseUrl: AI_BASE_URL,
   });
   return providerReadSchema.parse(data);
 }
 
 /** Delete a provider (the backend answers 204; apiFetch returns null). */
 export async function deleteProvider(providerId: string): Promise<void> {
-  await apiFetch<unknown>(`/providers/${providerId}`, { method: "DELETE" });
+  await apiFetch<unknown>(`/providers/${providerId}`, {
+    method: "DELETE",
+    baseUrl: AI_BASE_URL,
+  });
 }
 
 /** Test the provider's credentials/connection (`POST /providers/{id}/test`). */
@@ -201,6 +217,7 @@ export async function testProvider(
 ): Promise<ProviderTestResult> {
   const data = await apiFetch<unknown>(`/providers/${providerId}/test`, {
     method: "POST",
+    baseUrl: AI_BASE_URL,
   });
   return providerTestResultSchema.parse(data);
 }
@@ -209,6 +226,8 @@ export async function testProvider(
 export async function listProviderModels(
   providerId: string,
 ): Promise<ProviderModelsResponse> {
-  const data = await apiFetch<unknown>(`/providers/${providerId}/models`);
+  const data = await apiFetch<unknown>(`/providers/${providerId}/models`, {
+    baseUrl: AI_BASE_URL,
+  });
   return providerModelsResponseSchema.parse(data);
 }

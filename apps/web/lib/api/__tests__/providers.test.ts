@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { API_BASE_URL, ApiError } from "@/lib/api/client";
+import { AI_BASE_URL, ApiError } from "@/lib/api/client";
 import {
   asProviderType,
   createProvider,
@@ -16,7 +16,8 @@ import {
 import { resetProviderStore } from "@/test/msw/handlers";
 import { PROVIDER_GEMINI, PROVIDER_OLLAMA } from "@/test/msw/fixtures";
 
-const base = `${API_BASE_URL}/api/v1`;
+// Providers moved to the AI service (Alexandria split); overrides target it.
+const base = `${AI_BASE_URL}/api/v1`;
 
 describe("lib/api/providers", () => {
   beforeEach(() => resetProviderStore());

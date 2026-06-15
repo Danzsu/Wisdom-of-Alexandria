@@ -4,7 +4,7 @@
  * path as production.
  */
 import { http, HttpResponse } from "msw";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
 import {
   AI_GENERATED_TEXT,
   CHAPTERS_FIXTURE,
@@ -81,7 +81,15 @@ function markdownDownload(body: string, title: string) {
   });
 }
 
+/** Domain backend base — projects/books/chapters/scenes/codex/exports/revisions/
+ * snippets. */
 const base = `${API_BASE_URL}/api/v1`;
+/**
+ * AI service base — `/ai/*` + `/providers/*` (+ `/jobs`). After the Alexandria
+ * split the frontend points these at `NEXT_PUBLIC_AI_URL`, so the matching MSW
+ * handlers must register on this base too (revisions/snippets stay on `base`).
+ */
+const aiBase = `${AI_BASE_URL}/api/v1`;
 
 /* ---------------------------------------------------------------------------
  * In-memory Codex store — gives the CRUD handlers realistic, stateful behaviour
@@ -756,14 +764,15 @@ export const handlers = [
     },
   ),
 
-  /* ---- Providers (P1.1 — full CRUD + test + models, masked reads) ---- */
-  http.get(`${base}/providers`, ({ request }) => {
+  /* ---- Providers (P1.1 — full CRUD + test + models, masked reads).
+   * On the AI service base (`aiBase`) after the Alexandria split. ---- */
+  http.get(`${aiBase}/providers`, ({ request }) => {
     const enabledOnly =
       new URL(request.url).searchParams.get("enabled_only") === "true";
     return HttpResponse.json(providerStore.list(enabledOnly));
   }),
 
-  http.get(`${base}/providers/:providerId`, ({ params }) => {
+  http.get(`${aiBase}/providers/:providerId`, ({ params }) => {
     const provider = providerStore.get(String(params.providerId));
     if (!provider) {
       return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
@@ -771,12 +780,12 @@ export const handlers = [
     return HttpResponse.json(provider);
   }),
 
-  http.post(`${base}/providers`, async ({ request }) => {
+  http.post(`${aiBase}/providers`, async ({ request }) => {
     const body = (await request.json()) as ProviderCreate;
     return HttpResponse.json(providerStore.create(body), { status: 201 });
   }),
 
-  http.patch(`${base}/providers/:providerId`, async ({ params, request }) => {
+  http.patch(`${aiBase}/providers/:providerId`, async ({ params, request }) => {
     const body = (await request.json()) as ProviderUpdate;
     const updated = providerStore.update(String(params.providerId), body);
     if (!updated) {
@@ -785,7 +794,7 @@ export const handlers = [
     return HttpResponse.json(updated);
   }),
 
-  http.delete(`${base}/providers/:providerId`, ({ params }) => {
+  http.delete(`${aiBase}/providers/:providerId`, ({ params }) => {
     const ok = providerStore.remove(String(params.providerId));
     if (!ok) {
       return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
@@ -793,7 +802,7 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.post(`${base}/providers/:providerId/test`, ({ params }) => {
+  http.post(`${aiBase}/providers/:providerId/test`, ({ params }) => {
     const provider = providerStore.get(String(params.providerId));
     if (!provider) {
       return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
@@ -808,7 +817,7 @@ export const handlers = [
     });
   }),
 
-  http.get(`${base}/providers/:providerId/models`, ({ params }) => {
+  http.get(`${aiBase}/providers/:providerId/models`, ({ params }) => {
     const provider = providerStore.get(String(params.providerId));
     if (!provider) {
       return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
@@ -895,16 +904,17 @@ export const handlers = [
     );
   }),
 
-  /* ---- AI (config-driven models + generation) ---- */
-  http.get(`${base}/ai/models`, () => HttpResponse.json(MODELS_FIXTURE)),
+  /* ---- AI (config-driven models + generation). On the AI service base
+   * (`aiBase`) after the Alexandria split. ---- */
+  http.get(`${aiBase}/ai/models`, () => HttpResponse.json(MODELS_FIXTURE)),
 
-  http.post(`${base}/ai/rewrite`, async ({ request }) => {
+  http.post(`${aiBase}/ai/rewrite`, async ({ request }) => {
     const body = (await request.json()) as { model?: string | null };
     const model = body.model ?? MODELS_FIXTURE.default;
     return HttpResponse.json(makeAiResult("rewrite", AI_GENERATED_TEXT, model));
   }),
 
-  http.post(`${base}/ai/write-continue`, async ({ request }) => {
+  http.post(`${aiBase}/ai/write-continue`, async ({ request }) => {
     const body = (await request.json()) as { model?: string | null };
     const model = body.model ?? MODELS_FIXTURE.default;
     return HttpResponse.json(
@@ -912,7 +922,7 @@ export const handlers = [
     );
   }),
 
-  http.post(`${base}/ai/generate-scene`, async ({ request }) => {
+  http.post(`${aiBase}/ai/generate-scene`, async ({ request }) => {
     const body = (await request.json()) as { model?: string | null };
     const model = body.model ?? MODELS_FIXTURE.default;
     return HttpResponse.json(
@@ -920,7 +930,7 @@ export const handlers = [
     );
   }),
 
-  http.post(`${base}/ai/describe`, async ({ request }) => {
+  http.post(`${aiBase}/ai/describe`, async ({ request }) => {
     const body = (await request.json()) as DescribeRequest;
     const model = body.model ?? MODELS_FIXTURE.default;
     const channels = body.channels ?? [

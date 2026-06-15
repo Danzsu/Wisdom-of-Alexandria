@@ -4,21 +4,28 @@
  * backend ModelRouter/LiteLLM path; responses are validated with Zod before
  * reaching the UI, so a contract drift throws rather than slips through.
  *
- * Backend routes (`apps/api/app/api/v1/`, prefix `/api/v1`):
- *   GET  /ai/models                          → ModelsResponse
- *   POST /ai/rewrite                         → AIResult
- *   POST /ai/describe                        → AIDescribeResult
- *   POST /ai/generate-scene                  → AIResult
- *   POST /ai/write-continue                  → AIResult
- *   POST /ai/scenes/{scene_id}/summarize     → AIResult
- *   POST /revisions/{revision_id}/approve    → RevisionRead
- *   POST /projects/{project_id}/snippets     → SnippetRead (201)
+ * Routing (Alexandria split): the `/ai/*` routes live on the SEPARATE AI service
+ * (`NEXT_PUBLIC_AI_URL`, default :8001) and are targeted via the `baseUrl`
+ * override. The Revision-approval and Snippet-create calls are DOMAIN endpoints
+ * (human-in-the-loop approve + project-scoped snippets) and stay on the domain
+ * backend (`NEXT_PUBLIC_API_URL`, default :8000) — they omit `baseUrl`.
+ *
+ *   AI service (:8001):
+ *     GET  /ai/models                          → ModelsResponse
+ *     POST /ai/rewrite                         → AIResult
+ *     POST /ai/describe                        → AIDescribeResult
+ *     POST /ai/generate-scene                  → AIResult
+ *     POST /ai/write-continue                  → AIResult
+ *     POST /ai/scenes/{scene_id}/summarize     → AIResult
+ *   Domain service (:8000):
+ *     POST /revisions/{revision_id}/approve    → RevisionRead
+ *     POST /projects/{project_id}/snippets     → SnippetRead (201)
  *
  * Human-in-the-loop: the AI endpoints persist the generation as a Revision
  * (`approved: false`). Acceptance is a SEPARATE explicit `approveRevision` call;
  * only then does the editor insert the text. The AI never writes unprompted.
  */
-import { apiFetch } from "./client";
+import { AI_BASE_URL, apiFetch } from "./client";
 import { listBooks } from "./books";
 import { listProjects } from "./projects";
 import { currentGenerationParams } from "@/lib/stores/generation-settings-store";
@@ -47,7 +54,7 @@ import {
 
 /** List the AI models the backend is configured to use (config-driven). */
 export async function listModels(): Promise<ModelsResponse> {
-  const data = await apiFetch<unknown>("/ai/models");
+  const data = await apiFetch<unknown>("/ai/models", { baseUrl: AI_BASE_URL });
   return modelsResponseSchema.parse(data);
 }
 
@@ -74,6 +81,7 @@ export async function rewrite(input: RewriteRequest): Promise<AIResult> {
   const data = await apiFetch<unknown>("/ai/rewrite", {
     method: "POST",
     body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
   });
   return aiResultSchema.parse(data);
 }
@@ -85,6 +93,7 @@ export async function describe(
   const data = await apiFetch<unknown>("/ai/describe", {
     method: "POST",
     body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
   });
   return aiDescribeResultSchema.parse(data);
 }
@@ -96,6 +105,7 @@ export async function generateScene(
   const data = await apiFetch<unknown>("/ai/generate-scene", {
     method: "POST",
     body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
   });
   return aiResultSchema.parse(data);
 }
@@ -107,6 +117,7 @@ export async function writeContinue(
   const data = await apiFetch<unknown>("/ai/write-continue", {
     method: "POST",
     body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
   });
   return aiResultSchema.parse(data);
 }

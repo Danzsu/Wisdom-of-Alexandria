@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import {
+  AI_BASE_URL,
   ApiError,
   API_BASE_URL,
   TOKEN_STORAGE_KEY,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/api/client";
 
 const base = `${API_BASE_URL}/api/v1`;
+const aiBase = `${AI_BASE_URL}/api/v1`;
 
 afterEach(() => {
   try {
@@ -65,6 +67,26 @@ describe("apiFetch", () => {
     );
     await apiFetch("/whoami");
     expect(seenAuth).toBe("Bearer secret-token");
+  });
+
+  it("routes a call to the AI base when `baseUrl` is given, still attaching the JWT", async () => {
+    // After the Alexandria split, AI/provider/job modules pass `AI_BASE_URL` as
+    // the per-call `baseUrl` override. The request must hit the AI base (:8001),
+    // NOT the domain base (:8000), and the same Bearer token must still be sent.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, "ai-token");
+    let seenUrl: string | null = null;
+    let seenAuth: string | null = null;
+    server.use(
+      http.get(`${aiBase}/ai/models`, ({ request }) => {
+        seenUrl = request.url;
+        seenAuth = request.headers.get("Authorization");
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await apiFetch("/ai/models", { baseUrl: AI_BASE_URL });
+    expect(seenUrl).toBe(`${aiBase}/ai/models`);
+    expect(seenUrl).toContain(AI_BASE_URL);
+    expect(seenAuth).toBe("Bearer ai-token");
   });
 
   it("returns null for an empty body (204 No Content)", async () => {
