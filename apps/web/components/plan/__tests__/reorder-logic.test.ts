@@ -85,12 +85,51 @@ describe("computeReorder", () => {
     });
   });
 
-  it("does NOT produce a cross-chapter scene move (returns null)", () => {
-    // s1 (ch1) dropped onto s4 (ch2) — the backend has no cross-chapter move,
-    // so this must be a no-op rather than a bad persist.
-    expect(
-      computeReorder(board(), { active: { id: "s1" }, over: { id: "s4" } }),
-    ).toBeNull();
+  it("produces a cross-chapter MOVE descriptor when a scene is dropped on another chapter's card (P1.5)", () => {
+    // s1 (ch1) dropped onto s5 (ch2, index 1) → move s1 into ch2 at index 1.
+    // (Pre-P1.5 this returned null; the move endpoint now makes it a real persist.)
+    const result = computeReorder(board(), {
+      active: { id: "s1" },
+      over: { id: "s5" },
+    });
+    expect(result).not.toBeNull();
+    expect(result).toEqual({
+      kind: "move",
+      sceneId: "s1",
+      fromChapterId: "ch1",
+      toChapterId: "ch2",
+      targetIndex: 1,
+    });
+  });
+
+  it("produces a MOVE descriptor inserting at the target card's index (s1 onto s4 → index 0)", () => {
+    const result = computeReorder(board(), {
+      active: { id: "s1" },
+      over: { id: "s4" },
+    });
+    expect(result).toEqual({
+      kind: "move",
+      sceneId: "s1",
+      fromChapterId: "ch1",
+      toChapterId: "ch2",
+      targetIndex: 0,
+    });
+  });
+
+  it("produces a MOVE descriptor appending to the end when dropped on a chapter column (P1.5)", () => {
+    // s1 (ch1) dropped onto the ch2 COLUMN (over.id === chapter id) → append at
+    // ch2's end (index 2, since ch2 has [s4, s5]).
+    const result = computeReorder(board(), {
+      active: { id: "s1" },
+      over: { id: "ch2" },
+    });
+    expect(result).toEqual({
+      kind: "move",
+      sceneId: "s1",
+      fromChapterId: "ch1",
+      toChapterId: "ch2",
+      targetIndex: 2,
+    });
   });
 
   it("reorders chapters (moving ch1 onto ch2)", () => {

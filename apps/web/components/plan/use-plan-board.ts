@@ -32,6 +32,7 @@ import {
   useCreateChapter,
   useCreateScene,
   useDeleteScene,
+  useMoveScene,
   useReorderChapters,
   useReorderScenes,
   type BookTreeResult,
@@ -106,6 +107,13 @@ export interface PlanBoardController {
   reorderChapters: (order: string[]) => void;
   /** Persist a new scene order within a chapter (full id list). */
   reorderScenes: (chapterId: string, order: string[]) => void;
+  /** Move a scene to another chapter at a target position (cross-chapter). */
+  moveScene: (
+    sceneId: string,
+    fromChapterId: string,
+    toChapterId: string,
+    targetIndex: number,
+  ) => void;
   /** Delete a scene. */
   deleteScene: (chapterId: string, sceneId: string) => void;
   /** Archive a scene (soft-delete). */
@@ -141,6 +149,7 @@ export function usePlanBoard({
   const createSceneMutation = useCreateScene();
   const reorderChaptersMutation = useReorderChapters();
   const reorderScenesMutation = useReorderScenes();
+  const moveSceneMutation = useMoveScene();
   const deleteSceneMutation = useDeleteScene();
   const archiveSceneMutation = useArchiveScene();
 
@@ -343,6 +352,24 @@ export function usePlanBoard({
     [reorderScenesMutation],
   );
 
+  const moveScene = useCallback(
+    (
+      sceneId: string,
+      fromChapterId: string,
+      toChapterId: string,
+      targetIndex: number,
+    ) => {
+      moveSceneMutation.mutate(
+        { sceneId, fromChapterId, toChapterId, targetIndex },
+        {
+          onSuccess: () => toast.success(hu.plan.toastSceneMoved),
+          onError: () => toast.error(hu.plan.errorReorder),
+        },
+      );
+    },
+    [moveSceneMutation],
+  );
+
   const deleteScene = useCallback(
     (chapterId: string, sceneId: string) => {
       deleteSceneMutation.mutate(
@@ -416,6 +443,7 @@ export function usePlanBoard({
     createScene,
     reorderChapters,
     reorderScenes,
+    moveScene,
     deleteScene,
     archiveScene,
     duplicateScene,

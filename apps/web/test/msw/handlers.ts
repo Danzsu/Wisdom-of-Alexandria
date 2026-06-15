@@ -309,6 +309,74 @@ const planStore = {
     });
     return this.listScenes(chapterId);
   },
+
+  /** Find the chapter id that currently owns a scene (any chapter). */
+  findSceneChapter(sceneId: string): string | undefined {
+    for (const [chapterId, scenes] of this.scenesByChapter.entries()) {
+      if (scenes.some((s) => s.id === sceneId)) return chapterId;
+    }
+    return undefined;
+  },
+
+  /** Find the book id that owns a chapter (for the same-book move check). */
+  findChapterBook(chapterId: string): string | undefined {
+    for (const [bookId, chapters] of this.chaptersByBook.entries()) {
+      if (chapters.some((c) => c.id === chapterId)) return bookId;
+    }
+    return undefined;
+  },
+
+  /**
+   * Move a scene to another chapter at `targetIndex`, densely renumbering BOTH
+   * chapters (mirrors the backend). Returns a result discriminating the failure
+   * modes the real endpoint enforces: scene/target-chapter not found, or a
+   * cross-book move. On success returns the moved scene.
+   */
+  moveScene(
+    sceneId: string,
+    targetChapterId: string,
+    targetIndex: number,
+  ):
+    | { ok: true; scene: SceneRead }
+    | { ok: false; status: 404 | 400 } {
+    const sourceChapterId = this.findSceneChapter(sceneId);
+    if (sourceChapterId === undefined) return { ok: false, status: 404 };
+    const targetBook = this.findChapterBook(targetChapterId);
+    if (targetBook === undefined) return { ok: false, status: 404 };
+    const sourceBook = this.findChapterBook(sourceChapterId);
+    if (sourceBook !== targetBook) return { ok: false, status: 400 };
+
+    const sourceList = this.scenesByChapter.get(sourceChapterId) ?? [];
+    const scene = sourceList.find((s) => s.id === sceneId)!;
+
+    const denselyRenumber = (scenes: SceneRead[]): void => {
+      scenes.forEach((s, i) => {
+        s.order_index = i;
+      });
+    };
+
+    if (sourceChapterId === targetChapterId) {
+      const remaining = sourceList.filter((s) => s.id !== sceneId);
+      const idx = Math.max(0, Math.min(targetIndex, remaining.length));
+      remaining.splice(idx, 0, scene);
+      denselyRenumber(remaining);
+      this.scenesByChapter.set(sourceChapterId, remaining);
+      return { ok: true, scene };
+    }
+
+    const newSource = sourceList.filter((s) => s.id !== sceneId);
+    denselyRenumber(newSource);
+    this.scenesByChapter.set(sourceChapterId, newSource);
+
+    const targetList = this.scenesByChapter.get(targetChapterId) ?? [];
+    scene.chapter_id = targetChapterId;
+    const idx = Math.max(0, Math.min(targetIndex, targetList.length));
+    targetList.splice(idx, 0, scene);
+    denselyRenumber(targetList);
+    this.scenesByChapter.set(targetChapterId, targetList);
+
+    return { ok: true, scene };
+  },
 };
 planStore.seed();
 
@@ -550,6 +618,27 @@ export const handlers = [
       );
     },
   ),
+
+  /* ---- Scene move (cross-chapter — P1.5, top-level action) ---- */
+  http.post(`${base}/scenes/:sceneId/move`, async ({ params, request }) => {
+    const body = (await request.json()) as {
+      chapter_id: string;
+      order_index: number;
+    };
+    const result = planStore.moveScene(
+      String(params.sceneId),
+      body.chapter_id,
+      body.order_index,
+    );
+    if (!result.ok) {
+      const detail =
+        result.status === 400
+          ? "Target chapter belongs to a different book"
+          : "Scene not found";
+      return HttpResponse.json({ detail }, { status: result.status });
+    }
+    return HttpResponse.json(result.scene);
+  }),
 
   http.get(`${base}/chapters/:chapterId/scenes/:sceneId`, ({ params }) => {
     const scene = planStore.getScene(

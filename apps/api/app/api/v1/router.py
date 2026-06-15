@@ -16,6 +16,7 @@ from app.api.v1.projects import router as projects_router
 from app.api.v1.providers import router as providers_router
 from app.api.v1.revisions import router as revisions_router
 from app.api.v1.scenes import router as scenes_router
+from app.api.v1.scenes import scene_actions_router
 from app.api.v1.snippets import router as snippets_router
 from app.api.v1.style_guide import router as style_guide_router
 from app.api.v1.worldbuilding import router as worldbuilding_router
@@ -26,6 +27,7 @@ api_router.include_router(projects_router)
 api_router.include_router(books_router)
 api_router.include_router(chapters_router)
 api_router.include_router(scenes_router)
+api_router.include_router(scene_actions_router)
 api_router.include_router(beats_router)
 api_router.include_router(characters_router)
 api_router.include_router(locations_router)

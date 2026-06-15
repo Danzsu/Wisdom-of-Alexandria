@@ -40,6 +40,7 @@ import {
   createScene,
   deleteScene,
   listScenes,
+  moveScene,
   reorderScenes,
   updateScene,
 } from "./scenes";
@@ -654,6 +655,110 @@ export function useReorderScenes(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: queryKeys.chapterScenes(chapterId),
       }),
+  });
+}
+
+/** Input for the scene-move mutation (cross-chapter — P1.5). */
+export interface MoveSceneInput {
+  sceneId: string;
+  fromChapterId: string;
+  toChapterId: string;
+  /** 0-based insertion slot within the target chapter. */
+  targetIndex: number;
+}
+
+/** Snapshot of BOTH chapters' scene lists kept across the optimistic move. */
+interface MoveSceneContext {
+  previousFrom: SceneRead[] | undefined;
+  previousTo: SceneRead[] | undefined;
+}
+
+/** Dense-renumber a scene list: `order_index = position` (0..n-1). */
+function renumber(scenes: SceneRead[]): SceneRead[] {
+  return scenes.map((scene, index) => ({ ...scene, order_index: index }));
+}
+
+/**
+ * Move a scene to another chapter with an optimistic cache update + rollback
+ * across BOTH chapters' scene lists (P1.5). On `onMutate` the scene is removed
+ * from the source chapter's cached list (closing the gap, densely renumbered)
+ * and spliced into the target chapter's cached list at `targetIndex` (also
+ * densely renumbered) with its `chapter_id` rewritten — mirroring the server's
+ * two-sided renumber. Both pre-move snapshots are kept so a server error rolls
+ * BOTH lists back. `onSettled` invalidates BOTH chapters' lists so the cache
+ * re-syncs with the canonical server order (the final state converges).
+ *
+ * The moved scene is never lost or duplicated: it is dropped from the source by
+ * id BEFORE being inserted into the target, and the source/target keys differ.
+ * Errors propagate via the mutation's `error` (never swallowed).
+ */
+export function useMoveScene(): UseMutationResult<
+  SceneRead,
+  Error,
+  MoveSceneInput,
+  MoveSceneContext
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, toChapterId, targetIndex }: MoveSceneInput) =>
+      moveScene(sceneId, toChapterId, targetIndex),
+    onMutate: async ({ sceneId, fromChapterId, toChapterId, targetIndex }) => {
+      const fromKey = queryKeys.chapterScenes(fromChapterId);
+      const toKey = queryKeys.chapterScenes(toChapterId);
+      // Cancel in-flight refetches on BOTH lists so they cannot clobber the
+      // optimistic write between onMutate and the mutation resolving.
+      await queryClient.cancelQueries({ queryKey: fromKey });
+      await queryClient.cancelQueries({ queryKey: toKey });
+
+      const previousFrom = queryClient.getQueryData<SceneRead[]>(fromKey);
+      const previousTo = queryClient.getQueryData<SceneRead[]>(toKey);
+
+      // The moving scene comes from the source snapshot; bail the optimistic
+      // step if it is not cached (the onSettled invalidation still re-syncs).
+      const moving = previousFrom?.find((s) => s.id === sceneId);
+      if (previousFrom && moving) {
+        queryClient.setQueryData<SceneRead[]>(
+          fromKey,
+          renumber(previousFrom.filter((s) => s.id !== sceneId)),
+        );
+        // Insert into the target at the clamped slot; rewrite chapter_id so the
+        // board attributes the card to its new column. Defensively drop any
+        // stale copy of the scene from the target list first (no duplicates).
+        const targetBase = (previousTo ?? []).filter((s) => s.id !== sceneId);
+        const index = Math.max(0, Math.min(targetIndex, targetBase.length));
+        const next = targetBase.slice();
+        next.splice(index, 0, { ...moving, chapter_id: toChapterId });
+        queryClient.setQueryData<SceneRead[]>(toKey, renumber(next));
+      }
+
+      return { previousFrom, previousTo };
+    },
+    onError: (_err, { fromChapterId, toChapterId }, context) => {
+      // Restore BOTH snapshots (only if they were captured).
+      if (context?.previousFrom !== undefined) {
+        queryClient.setQueryData(
+          queryKeys.chapterScenes(fromChapterId),
+          context.previousFrom,
+        );
+      }
+      if (context?.previousTo !== undefined) {
+        queryClient.setQueryData(
+          queryKeys.chapterScenes(toChapterId),
+          context.previousTo,
+        );
+      }
+    },
+    onSettled: (_data, _err, { fromChapterId, toChapterId }) => {
+      // Re-sync BOTH chapters with the canonical server order.
+      return Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.chapterScenes(fromChapterId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.chapterScenes(toChapterId),
+        }),
+      ]);
+    },
   });
 }
 

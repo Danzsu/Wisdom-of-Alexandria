@@ -11,6 +11,10 @@
  *   POST   /chapters/{cid}/scenes/reorder      → SceneRead[] (body: { order })
  *   POST   /chapters/{cid}/scenes/{sid}/archive → SceneRead
  *
+ * Cross-chapter move (P1.5) is a TOP-LEVEL action (not chapter-nested, since it
+ * needs both the scene's current chapter and a target chapter):
+ *   POST   /scenes/{sid}/move                  → SceneRead (body: { chapter_id, order_index })
+ *
  * `word_count` is computed server-side from `content` on every create/update, so
  * the client never sends it — `SceneCreate`/`SceneUpdate` deliberately omit it.
  *
@@ -21,10 +25,12 @@ import { apiFetch } from "./client";
 import {
   sceneCreateSchema,
   sceneListSchema,
+  sceneMoveSchema,
   sceneReadSchema,
   sceneReorderSchema,
   sceneUpdateSchema,
   type SceneCreate,
+  type SceneMove,
   type SceneRead,
   type SceneReorder,
   type SceneUpdate,
@@ -99,8 +105,8 @@ export async function archiveScene(
 /**
  * Reorder the scenes of a chapter. `order` is the full list of scene ids within
  * THIS chapter in their new sequence; the backend assigns `order_index` by
- * position and returns the re-sorted (non-archived) list. Cross-chapter moves
- * are not supported by the backend.
+ * position and returns the re-sorted (non-archived) list. For moving a scene to
+ * a DIFFERENT chapter use {@link moveScene}.
  */
 export async function reorderScenes(
   chapterId: string,
@@ -112,4 +118,27 @@ export async function reorderScenes(
     body,
   });
   return sceneListSchema.parse(data);
+}
+
+/**
+ * Move a scene to another chapter at a given position (P1.5). The target chapter
+ * must belong to the SAME book as the scene's current chapter (enforced
+ * server-side — a cross-book move is rejected). `targetIndex` is the 0-based
+ * insertion slot in the target chapter; the backend clamps it and renumbers
+ * `order_index` densely in BOTH chapters, returning the moved scene.
+ */
+export async function moveScene(
+  sceneId: string,
+  targetChapterId: string,
+  targetIndex: number,
+): Promise<SceneRead> {
+  const body: SceneMove = sceneMoveSchema.parse({
+    chapter_id: targetChapterId,
+    order_index: targetIndex,
+  });
+  const data = await apiFetch<unknown>(`/scenes/${sceneId}/move`, {
+    method: "POST",
+    body,
+  });
+  return sceneReadSchema.parse(data);
 }

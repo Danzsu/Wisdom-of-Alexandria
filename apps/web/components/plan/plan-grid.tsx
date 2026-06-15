@@ -46,7 +46,7 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
     }),
   );
 
-  const { chapters, reorderChapters, reorderScenes } = controller;
+  const { chapters, reorderChapters, reorderScenes, moveScene } = controller;
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -57,11 +57,19 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
       if (!result) return;
       if (result.kind === "chapter") {
         reorderChapters(result.order);
-      } else {
+      } else if (result.kind === "scene") {
         reorderScenes(result.chapterId, result.order);
+      } else {
+        // kind === "move": a cross-chapter scene drop (P1.5).
+        moveScene(
+          result.sceneId,
+          result.fromChapterId,
+          result.toChapterId,
+          result.targetIndex,
+        );
       }
     },
-    [chapters, reorderChapters, reorderScenes],
+    [chapters, reorderChapters, reorderScenes, moveScene],
   );
 
   return (

@@ -5,13 +5,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
 from app.models.chapter import Chapter
-from app.schemas.scene import SceneCreate, SceneRead, SceneReorder, SceneUpdate
+from app.models.scene import Scene
+from app.schemas.scene import (
+    SceneCreate, SceneMove, SceneRead, SceneReorder, SceneUpdate,
+)
 from app.services.crud_scene import (
     archive_scene, create_scene, delete_scene, get_scene,
-    list_scenes, reorder_scenes, unarchive_scene, update_scene,
+    list_scenes, move_scene, reorder_scenes, unarchive_scene, update_scene,
 )
 
 router = APIRouter(prefix="/chapters/{chapter_id}/scenes", tags=["scenes"])
+
+# Top-level scene actions that are NOT naturally chapter-nested. Cross-chapter
+# move needs both the scene's CURRENT chapter (derivable from the scene) and a
+# TARGET chapter (in the body), so a `/scenes/{id}/move` route (mirroring the
+# `/revisions/{id}/...` action pattern) is cleaner than nesting it under one of
+# the two chapters — and it never collides with the `/chapters/{cid}/scenes/...`
+# routes above. Registered separately in app/api/v1/router.py.
+scene_actions_router = APIRouter(prefix="/scenes", tags=["scenes"])
 
 
 async def _get_chapter_or_404(chapter_id: uuid.UUID, db: AsyncSession):
@@ -124,3 +135,42 @@ async def unarchive(
     if scene is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
     return await unarchive_scene(db, scene)
+
+
+@scene_actions_router.post("/{scene_id}/move", response_model=SceneRead)
+async def move(
+    scene_id: uuid.UUID,
+    data: SceneMove,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> SceneRead:
+    """Move a scene to another chapter at a given position.
+
+    Ownership: the TARGET chapter must belong to the SAME book as the scene's
+    current chapter (a cross-book move is rejected). Renumbers `order_index`
+    densely in both the source and target chapters. Returns the moved scene.
+    """
+    scene_result = await db.execute(select(Scene).where(Scene.id == scene_id))
+    scene = scene_result.scalar_one_or_none()
+    if scene is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found"
+        )
+
+    source_chapter = await _get_chapter_or_404(scene.chapter_id, db)
+
+    target_result = await db.execute(
+        select(Chapter).where(Chapter.id == data.chapter_id)
+    )
+    target_chapter = target_result.scalar_one_or_none()
+    if target_chapter is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target chapter not found"
+        )
+    if target_chapter.book_id != source_chapter.book_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Target chapter belongs to a different book",
+        )
+
+    return await move_scene(db, scene, data.chapter_id, data.order_index)

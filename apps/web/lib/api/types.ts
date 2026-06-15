@@ -171,6 +171,20 @@ export const sceneReorderSchema = z.object({
 export type SceneReorder = z.infer<typeof sceneReorderSchema>;
 
 /**
+ * Cross-chapter move body for a scene (`SceneMove`, P1.5). Mirrors
+ * `apps/api/app/schemas/scene.py`: `chapter_id` is the DESTINATION chapter (must
+ * belong to the same book as the scene's current chapter — enforced server-side)
+ * and `order_index` is the 0-based insertion slot in the target chapter (clamped
+ * to its bounds server-side). The backend renumbers `order_index` densely in
+ * BOTH the source and target chapters and returns the moved scene.
+ */
+export const sceneMoveSchema = z.object({
+  chapter_id: idString,
+  order_index: z.number().int().min(0),
+});
+export type SceneMove = z.infer<typeof sceneMoveSchema>;
+
+/**
  * Request body for patching a scene (`SceneUpdate`). All fields optional; the
  * backend recomputes `word_count` server-side whenever `content` is present, so
  * the frontend never sends it.

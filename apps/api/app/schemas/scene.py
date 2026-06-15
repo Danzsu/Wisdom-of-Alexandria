@@ -25,6 +25,19 @@ class SceneReorder(BaseModel):
     order: list[uuid.UUID]
 
 
+class SceneMove(BaseModel):
+    """Cross-chapter scene move: target chapter + insertion position.
+
+    `chapter_id` is the DESTINATION chapter (must belong to the same book as the
+    scene's current chapter). `order_index` is the 0-based slot to insert the
+    scene at within the target chapter; it is clamped to the target's bounds
+    server-side, so an out-of-range index appends rather than erroring.
+    """
+
+    chapter_id: uuid.UUID
+    order_index: int = Field(default=0, ge=0)
+
+
 class SceneRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

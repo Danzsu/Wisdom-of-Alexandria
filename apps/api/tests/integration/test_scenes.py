@@ -171,3 +171,137 @@ async def test_scenes_require_auth(client: AsyncClient):
     ]:
         resp = await client.request(method, url, json={"title": "x"})
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Scene move (cross-chapter) — POST /scenes/{scene_id}/move (P1.5)
+# ---------------------------------------------------------------------------
+
+
+async def _setup_two_chapters(client, auth_headers):
+    """Create project → book → two chapters; return (book_id, ch1_id, ch2_id)."""
+    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
+    book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers)).json()
+    ch1 = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch1"}, headers=auth_headers)).json()
+    ch2 = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch2"}, headers=auth_headers)).json()
+    return book["id"], ch1["id"], ch2["id"]
+
+
+async def _scene(client, auth_headers, chapter_id, title, order_index):
+    resp = await client.post(
+        f"/api/v1/chapters/{chapter_id}/scenes",
+        json={"title": title, "order_index": order_index},
+        headers=auth_headers,
+    )
+    return resp.json()["id"]
+
+
+async def _order(client, auth_headers, chapter_id):
+    """Return [(id, order_index), ...] for a chapter, sorted by order_index."""
+    scenes = (await client.get(f"/api/v1/chapters/{chapter_id}/scenes", headers=auth_headers)).json()
+    return [(s["id"], s["order_index"]) for s in scenes]
+
+
+async def test_move_scene_cross_chapter_renumbers_both(client: AsyncClient, auth_headers: dict):
+    _book, ch1, ch2 = await _setup_two_chapters(client, auth_headers)
+    a = await _scene(client, auth_headers, ch1, "A", 0)
+    b = await _scene(client, auth_headers, ch1, "B", 1)
+    c = await _scene(client, auth_headers, ch1, "C", 2)
+    x = await _scene(client, auth_headers, ch2, "X", 0)
+    y = await _scene(client, auth_headers, ch2, "Y", 1)
+
+    # Move B (middle of ch1) into ch2 at index 1 (between X and Y).
+    resp = await client.post(
+        f"/api/v1/scenes/{b}/move",
+        json={"chapter_id": ch2, "order_index": 1},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    moved = resp.json()
+    assert moved["chapter_id"] == ch2
+    assert moved["id"] == b
+
+    # Source chapter closed the gap densely: A=0, C=1.
+    assert await _order(client, auth_headers, ch1) == [(a, 0), (c, 1)]
+    # Target chapter made room densely: X=0, B=1, Y=2.
+    assert await _order(client, auth_headers, ch2) == [(x, 0), (b, 1), (y, 2)]
+
+
+async def test_move_scene_target_index_clamped_appends(client: AsyncClient, auth_headers: dict):
+    _book, ch1, ch2 = await _setup_two_chapters(client, auth_headers)
+    a = await _scene(client, auth_headers, ch1, "A", 0)
+    x = await _scene(client, auth_headers, ch2, "X", 0)
+
+    # An out-of-range target index appends at the end of the target chapter.
+    resp = await client.post(
+        f"/api/v1/scenes/{a}/move",
+        json={"chapter_id": ch2, "order_index": 99},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert await _order(client, auth_headers, ch1) == []
+    assert await _order(client, auth_headers, ch2) == [(x, 0), (a, 1)]
+
+
+async def test_move_scene_within_same_chapter_reinserts(client: AsyncClient, auth_headers: dict):
+    _book, ch1, _ch2 = await _setup_two_chapters(client, auth_headers)
+    a = await _scene(client, auth_headers, ch1, "A", 0)
+    b = await _scene(client, auth_headers, ch1, "B", 1)
+    c = await _scene(client, auth_headers, ch1, "C", 2)
+
+    # Move A (index 0) to index 2 within the same chapter → B, C, A.
+    resp = await client.post(
+        f"/api/v1/scenes/{a}/move",
+        json={"chapter_id": ch1, "order_index": 2},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["chapter_id"] == ch1
+    assert await _order(client, auth_headers, ch1) == [(b, 0), (c, 1), (a, 2)]
+
+
+async def test_move_scene_to_chapter_in_another_book_rejected(client: AsyncClient, auth_headers: dict):
+    _book1, ch1, _ch2 = await _setup_two_chapters(client, auth_headers)
+    # A separate book with its own chapter.
+    proj2 = (await client.post("/api/v1/projects", json={"title": "P2"}, headers=auth_headers)).json()
+    book2 = (await client.post(f"/api/v1/projects/{proj2['id']}/books", json={"title": "B2"}, headers=auth_headers)).json()
+    other = (await client.post(f"/api/v1/books/{book2['id']}/chapters", json={"title": "Other"}, headers=auth_headers)).json()
+    a = await _scene(client, auth_headers, ch1, "A", 0)
+
+    resp = await client.post(
+        f"/api/v1/scenes/{a}/move",
+        json={"chapter_id": other["id"], "order_index": 0},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    # The scene did not move: it is still in ch1.
+    assert await _order(client, auth_headers, ch1) == [(a, 0)]
+
+
+async def test_move_scene_not_found(client: AsyncClient, auth_headers: dict):
+    _book, _ch1, ch2 = await _setup_two_chapters(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/scenes/{uuid.uuid4()}/move",
+        json={"chapter_id": ch2, "order_index": 0},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_move_scene_target_chapter_not_found(client: AsyncClient, auth_headers: dict):
+    _book, ch1, _ch2 = await _setup_two_chapters(client, auth_headers)
+    a = await _scene(client, auth_headers, ch1, "A", 0)
+    resp = await client.post(
+        f"/api/v1/scenes/{a}/move",
+        json={"chapter_id": str(uuid.uuid4()), "order_index": 0},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_move_scene_requires_auth(client: AsyncClient):
+    resp = await client.post(
+        f"/api/v1/scenes/{uuid.uuid4()}/move",
+        json={"chapter_id": str(uuid.uuid4()), "order_index": 0},
+    )
+    assert resp.status_code == 401

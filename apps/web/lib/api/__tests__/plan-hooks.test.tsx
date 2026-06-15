@@ -11,6 +11,7 @@ import {
   useCreateChapter,
   useCreateScene,
   useDeleteScene,
+  useMoveScene,
   useReorderChapters,
   useReorderScenes,
 } from "@/lib/api/hooks";
@@ -212,6 +213,162 @@ describe("useReorderScenes — optimistic + rollback", () => {
       );
       expect(cached?.map((s) => s.id)).toEqual(["sa", "sb"]);
     });
+  });
+});
+
+describe("useMoveScene — cross-chapter optimistic + rollback (P1.5)", () => {
+  it("optimistically removes from the source + inserts into the target, then persists", async () => {
+    const client = createTestQueryClient();
+    // Source chapter (ch1) has [a, b]; target chapter (ch2) has [x].
+    const sourceSeed: SceneRead[] = [
+      { ...SCENE_FIRST, id: "a", chapter_id: CHAPTER_ONE.id, order_index: 0 },
+      { ...SCENE_FIRST, id: "b", chapter_id: CHAPTER_ONE.id, order_index: 1 },
+    ];
+    const targetSeed: SceneRead[] = [
+      { ...SCENE_ACTIVE, id: "x", chapter_id: CHAPTER_TWO.id, order_index: 0 },
+    ];
+    client.setQueryData(queryKeys.chapterScenes(CHAPTER_ONE.id), sourceSeed);
+    client.setQueryData(queryKeys.chapterScenes(CHAPTER_TWO.id), targetSeed);
+
+    // The move endpoint echoes the moved scene (now in the target chapter).
+    server.use(
+      http.post(`${base}/scenes/:sceneId/move`, async ({ request }) => {
+        const body = (await request.json()) as {
+          chapter_id: string;
+          order_index: number;
+        };
+        return HttpResponse.json({
+          ...sourceSeed[0],
+          id: "a",
+          chapter_id: body.chapter_id,
+          order_index: body.order_index,
+        });
+      }),
+      // onSettled invalidates BOTH lists; return the post-move server state.
+      http.get(`${base}/chapters/:chapterId/scenes`, ({ params }) => {
+        if (params.chapterId === CHAPTER_ONE.id) {
+          return HttpResponse.json([{ ...sourceSeed[1], order_index: 0 }]);
+        }
+        return HttpResponse.json([
+          { ...targetSeed[0], order_index: 0 },
+          { ...sourceSeed[0], chapter_id: CHAPTER_TWO.id, order_index: 1 },
+        ]);
+      }),
+    );
+
+    const { result } = renderHook(() => useMoveScene(), {
+      wrapper: wrapperWith(client),
+    });
+
+    // Move "a" into ch2 at index 1 (after "x").
+    result.current.mutate({
+      sceneId: "a",
+      fromChapterId: CHAPTER_ONE.id,
+      toChapterId: CHAPTER_TWO.id,
+      targetIndex: 1,
+    });
+
+    // Optimistic write (synchronous in onMutate): source loses "a" + renumbers,
+    // target gains "a" at index 1 with its chapter_id rewritten + renumbers.
+    await waitFor(() => {
+      const source = client.getQueryData<SceneRead[]>(
+        queryKeys.chapterScenes(CHAPTER_ONE.id),
+      );
+      const target = client.getQueryData<SceneRead[]>(
+        queryKeys.chapterScenes(CHAPTER_TWO.id),
+      );
+      expect(source?.map((s) => s.id)).toEqual(["b"]);
+      expect(source?.[0].order_index).toBe(0); // gap closed densely
+      expect(target?.map((s) => s.id)).toEqual(["x", "a"]);
+      // The moved scene is attributed to the target chapter + densely renumbered.
+      const moved = target?.find((s) => s.id === "a");
+      expect(moved?.chapter_id).toBe(CHAPTER_TWO.id);
+      expect(moved?.order_index).toBe(1);
+      // No duplication: "a" appears in exactly one list.
+      expect(source?.some((s) => s.id === "a")).toBe(false);
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  it("rolls BOTH chapter lists back when the server errors", async () => {
+    const client = createTestQueryClient();
+    const sourceSeed: SceneRead[] = [
+      { ...SCENE_FIRST, id: "a", chapter_id: CHAPTER_ONE.id, order_index: 0 },
+      { ...SCENE_FIRST, id: "b", chapter_id: CHAPTER_ONE.id, order_index: 1 },
+    ];
+    const targetSeed: SceneRead[] = [
+      { ...SCENE_ACTIVE, id: "x", chapter_id: CHAPTER_TWO.id, order_index: 0 },
+    ];
+    client.setQueryData(queryKeys.chapterScenes(CHAPTER_ONE.id), sourceSeed);
+    client.setQueryData(queryKeys.chapterScenes(CHAPTER_TWO.id), targetSeed);
+
+    server.use(
+      http.post(`${base}/scenes/:sceneId/move`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 400 }),
+      ),
+      // onSettled refetch returns the ORIGINAL (unmoved) lists.
+      http.get(`${base}/chapters/:chapterId/scenes`, ({ params }) =>
+        HttpResponse.json(
+          params.chapterId === CHAPTER_ONE.id ? sourceSeed : targetSeed,
+        ),
+      ),
+    );
+
+    const { result } = renderHook(() => useMoveScene(), {
+      wrapper: wrapperWith(client),
+    });
+
+    result.current.mutate({
+      sceneId: "a",
+      fromChapterId: CHAPTER_ONE.id,
+      toChapterId: CHAPTER_TWO.id,
+      targetIndex: 1,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe("boom");
+
+    // After rollback (+ settled refetch) BOTH lists are the originals again —
+    // the scene is back in ch1 and not duplicated in ch2.
+    await waitFor(() => {
+      const source = client.getQueryData<SceneRead[]>(
+        queryKeys.chapterScenes(CHAPTER_ONE.id),
+      );
+      const target = client.getQueryData<SceneRead[]>(
+        queryKeys.chapterScenes(CHAPTER_TWO.id),
+      );
+      expect(source?.map((s) => s.id)).toEqual(["a", "b"]);
+      expect(target?.map((s) => s.id)).toEqual(["x"]);
+    });
+  });
+
+  it("fires the move mutation with the right body (chapter_id + order_index)", async () => {
+    let captured: { chapter_id: string; order_index: number } | null = null;
+    server.use(
+      http.post(`${base}/scenes/:sceneId/move`, async ({ request }) => {
+        captured = (await request.json()) as {
+          chapter_id: string;
+          order_index: number;
+        };
+        return HttpResponse.json({
+          ...SCENE_FIRST,
+          chapter_id: CHAPTER_TWO.id,
+          order_index: captured.order_index,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useMoveScene(), {
+      wrapper: wrapperWith(createTestQueryClient()),
+    });
+    result.current.mutate({
+      sceneId: SCENE_FIRST.id,
+      fromChapterId: CHAPTER_ONE.id,
+      toChapterId: CHAPTER_TWO.id,
+      targetIndex: 2,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(captured).toEqual({ chapter_id: CHAPTER_TWO.id, order_index: 2 });
   });
 });
 

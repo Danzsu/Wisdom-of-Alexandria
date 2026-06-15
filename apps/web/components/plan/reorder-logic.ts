@@ -3,15 +3,14 @@
  * from the React component so it can be unit-tested directly (pointer drags are
  * flaky in jsdom — we assert the computed order payloads instead).
  *
- * Two drag kinds are supported:
+ * Three drag kinds are supported:
  * - CHAPTER reorder: a column dragged over another column → new chapter id order.
  * - SCENE reorder WITHIN its chapter: a card dragged over another card in the
  *   same chapter → new scene id order for that chapter.
- *
- * Cross-chapter scene moves are intentionally NOT produced: the backend has no
- * cross-chapter move (SceneUpdate carries no chapter_id), so a scene dropped onto
- * a different chapter's card resolves to "no change" (returns null) rather than
- * persisting a move the API cannot honour.
+ * - SCENE move ACROSS chapters: a card dropped onto another chapter's card (or
+ *   onto an empty chapter column) → a move descriptor naming the source/target
+ *   chapters and the target insertion index. (P1.5 — the backend now has a
+ *   `POST /scenes/{id}/move` endpoint, so this is a real persist, not a no-op.)
  */
 import type { PlanChapter } from "./types";
 
@@ -19,6 +18,14 @@ import type { PlanChapter } from "./types";
 export type ReorderResult =
   | { kind: "chapter"; order: string[] }
   | { kind: "scene"; chapterId: string; order: string[] }
+  | {
+      kind: "move";
+      sceneId: string;
+      fromChapterId: string;
+      toChapterId: string;
+      /** 0-based slot to insert the scene at within the target chapter. */
+      targetIndex: number;
+    }
   | null;
 
 /** The minimal drag event shape we consume (mirrors dnd-kit's DragEndEvent). */
@@ -38,7 +45,8 @@ function arrayMove<T>(items: T[], from: number, to: number): T[] {
 /**
  * Compute the reorder payload for a drag-end against the current board model.
  * Returns null when there is nothing to persist (no drop target, dropped on
- * itself, a cross-chapter scene drop, or an unresolved id).
+ * itself, or an unresolved id). A scene dropped onto another chapter yields a
+ * cross-chapter `move` descriptor (P1.5).
  */
 export function computeReorder(
   chapters: PlanChapter[],
@@ -71,8 +79,7 @@ export function computeReorder(
 
   const fromIdx = sourceChapter.scenes.findIndex((s) => s.id === activeId);
 
-  // Resolve the drop target: either another scene, or a chapter column (when
-  // dropped on the column's droppable rather than a card).
+  // SAME-chapter reorder: dropped onto another card in the source chapter.
   const overSceneIdx = sourceChapter.scenes.findIndex((s) => s.id === overId);
   if (overSceneIdx !== -1) {
     if (fromIdx === overSceneIdx) return null;
@@ -84,7 +91,37 @@ export function computeReorder(
     return { kind: "scene", chapterId: sourceChapter.id, order };
   }
 
-  // Dropped onto something not in this chapter (another chapter / its scene):
-  // unsupported cross-chapter move — no-op rather than a bad persist.
+  // CROSS-chapter move (P1.5). The drop target is either:
+  //  - another chapter's CARD → insert at that card's index in its chapter, or
+  //  - a chapter COLUMN (its droppable id is the chapter id; the case when a
+  //    scene is dropped onto an empty column / its header) → append at the end.
+  const targetChapterByScene = chapters.find((c) =>
+    c.scenes.some((s) => s.id === overId),
+  );
+  if (targetChapterByScene) {
+    const targetIndex = targetChapterByScene.scenes.findIndex(
+      (s) => s.id === overId,
+    );
+    return {
+      kind: "move",
+      sceneId: activeId,
+      fromChapterId: sourceChapter.id,
+      toChapterId: targetChapterByScene.id,
+      targetIndex,
+    };
+  }
+
+  const targetColumn = chapters.find((c) => c.id === overId);
+  if (targetColumn) {
+    return {
+      kind: "move",
+      sceneId: activeId,
+      fromChapterId: sourceChapter.id,
+      toChapterId: targetColumn.id,
+      targetIndex: targetColumn.scenes.length, // append
+    };
+  }
+
+  // Unresolved drop target — no-op rather than a bad persist.
   return null;
 }
