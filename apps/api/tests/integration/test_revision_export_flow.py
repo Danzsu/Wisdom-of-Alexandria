@@ -19,9 +19,19 @@ from httpx import AsyncClient
 
 async def _setup(client, auth_headers):
     """Create project → book → chapter → scene with content."""
-    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
-    book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers)).json()
-    ch = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers)).json()
+    proj = (
+        await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)
+    ).json()
+    book = (
+        await client.post(
+            f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers
+        )
+    ).json()
+    ch = (
+        await client.post(
+            f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers
+        )
+    ).json()
     scene = (await client.post(
         f"/api/v1/chapters/{ch['id']}/scenes",
         json={"title": "S", "content": "Eredeti szöveg."},
@@ -32,7 +42,9 @@ async def _setup(client, auth_headers):
 
 # ── revision lifecycle ────────────────────────────────────────────────────────
 
-async def test_rewrite_then_approve_updates_scene(client: AsyncClient, auth_headers: dict, db_session):
+async def test_rewrite_then_approve_updates_scene(
+    client: AsyncClient, auth_headers: dict, db_session
+):
     """Full flow: revision in DB → approve → scene content updated."""
     _, _, ch_id, scene_id = await _setup(client, auth_headers)
 
@@ -48,16 +60,22 @@ async def test_rewrite_then_approve_updates_scene(client: AsyncClient, auth_head
     db_session.add(rev)
     await db_session.commit()
 
-    approve_resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
+    approve_resp = await client.post(
+        f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers
+    )
     assert approve_resp.status_code == 200
     assert approve_resp.json()["approved"] is True
 
-    scene_resp = await client.get(f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers)
+    scene_resp = await client.get(
+        f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers
+    )
     assert scene_resp.json()["content"] == new_content
     assert scene_resp.json()["word_count"] > 0
 
 
-async def test_reject_revision_does_not_change_scene(client: AsyncClient, auth_headers: dict, db_session):
+async def test_reject_revision_does_not_change_scene(
+    client: AsyncClient, auth_headers: dict, db_session
+):
     """Rejecting a revision leaves scene content unchanged."""
     _, _, ch_id, scene_id = await _setup(client, auth_headers)
 
@@ -73,15 +91,21 @@ async def test_reject_revision_does_not_change_scene(client: AsyncClient, auth_h
     db_session.add(rev)
     await db_session.commit()
 
-    reject_resp = await client.post(f"/api/v1/revisions/{rev.id}/reject", headers=auth_headers)
+    reject_resp = await client.post(
+        f"/api/v1/revisions/{rev.id}/reject", headers=auth_headers
+    )
     assert reject_resp.status_code == 200
     assert reject_resp.json()["approved"] is False
 
-    scene_resp = await client.get(f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers)
+    scene_resp = await client.get(
+        f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers
+    )
     assert scene_resp.json()["content"] == original_content
 
 
-async def test_list_revisions_for_scene(client: AsyncClient, auth_headers: dict, db_session):
+async def test_list_revisions_for_scene(
+    client: AsyncClient, auth_headers: dict, db_session
+):
     """Revisions for a scene are retrievable via the revisions API."""
     _, _, _, scene_id = await _setup(client, auth_headers)
 
@@ -95,12 +119,16 @@ async def test_list_revisions_for_scene(client: AsyncClient, auth_headers: dict,
         db_session.add(rev)
     await db_session.commit()
 
-    resp = await client.get(f"/api/v1/revisions?scene_id={scene_id}", headers=auth_headers)
+    resp = await client.get(
+        f"/api/v1/revisions?scene_id={scene_id}", headers=auth_headers
+    )
     assert resp.status_code == 200
     assert len(resp.json()) >= 3
 
 
-async def test_multiple_revisions_only_one_approved(client: AsyncClient, auth_headers: dict, db_session):
+async def test_multiple_revisions_only_one_approved(
+    client: AsyncClient, auth_headers: dict, db_session
+):
     """Can approve one revision while others remain pending."""
     _, _, ch_id, scene_id = await _setup(client, auth_headers)
 
@@ -120,13 +148,85 @@ async def test_multiple_revisions_only_one_approved(client: AsyncClient, auth_he
     await client.post(f"/api/v1/revisions/{revs[1].id}/approve", headers=auth_headers)
 
     # Scene content should be rev[1]'s content
-    scene_resp = await client.get(f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers)
+    scene_resp = await client.get(
+        f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers
+    )
     assert scene_resp.json()["content"] == "Változat 1 szövege"
+
+
+# ── HITL cross-service contract (domain consume side) ───────────────────────────
+#
+# Cross-service human-in-the-loop contract: the apps/ai service writes a Revision
+# (approved=False) for a scene; THIS domain service reads it and applies it to the
+# Scene on approve. The two sides share ONE schema (alexandria_core.models.Revision),
+# so structural drift is impossible; the SEMANTIC contract is what matters and is
+# pinned here + on the AI side (apps/ai/tests/integration/test_hitl_contract.py).
+#
+# Because BOTH apps ship the same top-level import package name ``app``
+# ([tool.hatch.build.targets.wheel] packages=["app"] in each pyproject.toml), the
+# two FastAPI apps cannot be imported into one Python process — a live two-app,
+# one-Postgres E2E is a CI/Playwright-layer item per CLAUDE.md. This test
+# approximates it in-process: it constructs a Revision with the EXACT field shape
+# the AI side persists, then drives the REAL domain consumer.
+#
+# Fields the AI side WRITES (apps/ai revision_service.save_revision) and the
+# domain side READS here (apps/api crud_revision.approve_revision):
+#   approved=False · scene_id=<real scene> · content=<text> · revision_type
+#   · model_name · prompt_version · job_id
+
+
+async def test_hitl_contract_domain_consumes_ai_revision(
+    client: AsyncClient, auth_headers: dict, db_session
+):
+    """Domain side of the HITL contract: approving the AI-shaped Revision via the
+    REAL ``crud_revision.approve_revision`` updates Scene.content + word_count and
+    flips ``approved`` True. Calls the service function directly (not just HTTP) so
+    the contract is asserted at the consumer boundary the AI write feeds into."""
+    from app.services.crud_revision import approve_revision
+
+    _, _, ch_id, scene_id = await _setup(client, auth_headers)
+
+    # EXACT field shape apps/ai writes: unapproved, scene-linked, content + full
+    # provenance (model_name / prompt_version / job_id). job_id is left None here
+    # because the GenerationJob lives on the AI service's write and the domain
+    # consumer does not require it to apply content (FK is ON DELETE SET NULL,
+    # nullable) — the AI-side test asserts job_id IS populated on write.
+    ai_written = Revision(
+        scene_id=uuid.UUID(scene_id),
+        job_id=None,
+        content="A jóváhagyott AI szöveg hat szóból áll.",
+        approved=False,
+        revision_type="rewrite",
+        model_name="ollama/llama3.2",
+        prompt_version="1.0",
+    )
+    db_session.add(ai_written)
+    await db_session.commit()
+    await db_session.refresh(ai_written)
+
+    # Precondition mirrors the AI-side contract: never auto-approved on arrival.
+    assert ai_written.approved is False
+
+    # Drive the REAL domain consumer (same function the /approve route calls).
+    result = await approve_revision(db_session, ai_written)
+
+    assert result.approved is True  # the domain flips the flag
+
+    # Scene now carries the AI revision's content + a recomputed visible word count.
+    scene_resp = await client.get(
+        f"/api/v1/chapters/{ch_id}/scenes/{scene_id}", headers=auth_headers
+    )
+    assert scene_resp.status_code == 200
+    scene_data = scene_resp.json()
+    assert scene_data["content"] == "A jóváhagyott AI szöveg hat szóból áll."
+    assert scene_data["word_count"] == 7  # "A jóváhagyott AI szöveg hat szóból áll." → 7 words
 
 
 # ── export + revision integration ─────────────────────────────────────────────
 
-async def test_export_reflects_approved_revision_content(client: AsyncClient, auth_headers: dict, db_session):
+async def test_export_reflects_approved_revision_content(
+    client: AsyncClient, auth_headers: dict, db_session
+):
     """After approving a revision, export reflects the new scene content."""
     _, book_id, ch_id, scene_id = await _setup(client, auth_headers)
 
@@ -149,13 +249,21 @@ async def test_export_reflects_approved_revision_content(client: AsyncClient, au
 
 async def test_export_full_markdown_structure(client: AsyncClient, auth_headers: dict):
     """Export produces valid Markdown with H1 for book, H2 for chapters, H3 for scenes."""
-    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
+    proj = (
+        await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)
+    ).json()
     book = (await client.post(
         f"/api/v1/projects/{proj['id']}/books",
         json={"title": "Tűz és víz", "genre": "Fantasy"},
         headers=auth_headers,
     )).json()
-    ch = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Az első nap"}, headers=auth_headers)).json()
+    ch = (
+        await client.post(
+            f"/api/v1/books/{book['id']}/chapters",
+            json={"title": "Az első nap"},
+            headers=auth_headers,
+        )
+    ).json()
     await client.post(
         f"/api/v1/chapters/{ch['id']}/scenes",
         json={"title": "Hajnal", "content": "Felkelt a nap."},

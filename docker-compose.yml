@@ -38,6 +38,19 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    # `ollama list` hits the local API (GET /api/tags) and exits non-zero if the
+    # server isn't up — a self-contained check needing no extra tooling (the
+    # ollama image ships no curl/wget, but the ollama CLI is always present).
+    # NOTE: api/ai do NOT gate on this (no depends_on ollama: service_healthy):
+    # Ollama is used LAZILY (only when an AI action runs), so the AI service can
+    # boot and serve provider/job routes before any model is pulled. This
+    # healthcheck is for visibility + the `web` UX, not a startup barrier.
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   api:
     build:
@@ -125,11 +138,25 @@ services:
       # Browser-exposed base URLs (Alexandria split): domain backend vs AI service.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_AI_URL: ${NEXT_PUBLIC_AI_URL:-http://localhost:8001}
+      # Optional single-user dev bearer-token fallback (read by lib/api/client.ts
+      # when localStorage has no token). Empty by default; opt-in via .env. NOTE:
+      # NEXT_PUBLIC_* is compiled into the browser bundle — never set in production
+      # or shared preview deployments.
+      NEXT_PUBLIC_DEV_TOKEN: ${NEXT_PUBLIC_DEV_TOKEN:-}
     ports:
       - "3000:3000"
     depends_on:
       - api
       - ai
+    # HTTP check on the Next.js dev server. busybox `wget` ships in node:22-alpine
+    # (no extra install). A generous start_period covers the first-run
+    # `pnpm install` + dev-server warmup before failures count.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     volumes:
       - .:/workspace
       - /workspace/node_modules

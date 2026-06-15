@@ -25,6 +25,14 @@ RUN uv sync --frozen --no-dev --package forgewriter-api
 # Copy the API application code last.
 COPY apps/api/ ./apps/api/
 
+# Run as a non-root user (defense in depth: a compromised process is unprivileged).
+# Create the user AFTER all root-owned installs/copies, then hand the whole
+# workspace to it — this includes the uv-managed venv at /workspace/.venv, which
+# `uv run --no-sync` must READ at runtime. Without the chown, appuser could not
+# read the venv and the app would fail to start.
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /workspace
+USER appuser
+
 WORKDIR /workspace/apps/api
 
 # Prompt templates are mounted at /workspace/apps/api/prompts via docker-compose

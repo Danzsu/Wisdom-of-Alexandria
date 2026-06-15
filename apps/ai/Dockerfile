@@ -25,10 +25,20 @@ RUN uv sync --frozen --no-dev --package alexandria-ai
 # Copy the AI application code last.
 COPY apps/ai/ ./apps/ai/
 
+# Run as a non-root user (defense in depth: a compromised process is unprivileged).
+# Create the user AFTER all root-owned installs/copies, then hand the whole
+# workspace to it — this includes the uv-managed venv at /workspace/.venv, which
+# `uv run --no-sync` must READ at runtime (both the API command below and the RQ
+# worker override `python -m app.worker`). Without the chown, appuser could not
+# read the venv and the service / worker would fail to start.
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /workspace
+USER appuser
+
 WORKDIR /workspace/apps/ai
 
-# Prompt templates are mounted at /workspace/apps/ai/prompts via docker-compose
-# (volume ./packages/prompts). Copy is intentionally omitted as a runtime mount.
+# Prompt templates are mounted at /app/prompts via docker-compose (volume
+# ./packages/prompts:/app/prompts:ro) — the absolute path PromptLoader reads.
+# Copy is intentionally omitted as a runtime mount.
 
 EXPOSE 8001
 
