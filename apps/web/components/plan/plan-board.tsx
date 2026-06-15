@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { Spinner } from "@/components/kit/spinner";
 import { Icon } from "@/components/kit/icon";
+import { ErrorBoundary } from "@/components/kit/error-boundary";
 import { hu } from "@/lib/i18n/hu";
 import { usePlanBoard } from "./use-plan-board";
 import { PlanHeader } from "./plan-header";
@@ -47,7 +48,13 @@ export function PlanBoard() {
       />
 
       <div className="min-h-0 flex-1 overflow-auto p-5">
-        <PlanBody controller={controller} view={view} density={density} />
+        {/* A render failure inside a view (grid/matrix/outline) degrades to a
+            compact in-pane fallback instead of bubbling to the route boundary;
+            the header + action bar stay usable. Keyed on the view so switching
+            views re-mounts a clean subtree. */}
+        <ErrorBoundary key={view}>
+          <PlanBody controller={controller} view={view} density={density} />
+        </ErrorBoundary>
       </div>
 
       <PlanActionBar

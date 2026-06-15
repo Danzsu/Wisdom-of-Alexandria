@@ -39,13 +39,20 @@ function Row({
 
 /** Meta tab: the active scene's metadata table, sourced from real scene data. */
 export function MetaTab() {
-  const { scene } = useInspectorScene();
+  const { scene, isError } = useInspectorScene();
 
   return (
     <div className="flex flex-col gap-3.5">
       <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
         {hu.inspector.metaLabel}
       </p>
+      {isError ? (
+        // The book tree failed to load — surface it instead of silently
+        // rendering "—" in every metadata row (mirrors BeatsTab / CodexTab).
+        <p className="m-0 text-[12px] text-danger-text" role="alert">
+          {hu.write.treeError}
+        </p>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-border">
         <Row label={hu.inspector.metaStatus}>
           <Badge variant="accent" size={18}>
@@ -65,6 +72,7 @@ export function MetaTab() {
           {formatLastSaved(scene?.updated_at)}
         </Row>
       </div>
+      )}
     </div>
   );
 }

@@ -147,6 +147,7 @@ export {
   type ModelGroup,
 } from "./model-selector";
 export { AIResultCard, type AIResultCardProps } from "./ai-result-card";
+export { ErrorBoundary, type ErrorBoundaryProps } from "./error-boundary";
 export {
   DiffPane,
   DiffDeletion,

@@ -850,6 +850,30 @@ export const hu = {
   toast: {
     comingSoon: "Hamarosan",
   },
+  /**
+   * Error-boundary microcopy. Covers the last-resort root boundary
+   * (`app/global-error.tsx`), the in-shell route-segment boundary
+   * (`app/(app)/error.tsx`) and the compact per-pane boundary
+   * (`components/kit/error-boundary.tsx`). The boundaries always render a
+   * visible, recoverable fallback — never a white screen, never a silent swallow.
+   */
+  errors: {
+    /** Last-resort root boundary (renders its own <html><body>). */
+    rootTitle: "Váratlan hiba történt",
+    rootHint:
+      "Az alkalmazás váratlan hibába ütközött. Próbáld újra — ha a hiba ismétlődik, töltsd újra az oldalt.",
+    rootRetry: "Próbáld újra",
+    /** In-shell route-segment boundary. */
+    routeTitle: "Ez a nézet hibába ütközött",
+    routeHint:
+      "A nézet betöltése közben hiba történt. Töltsd újra — a munkaterületed megmarad.",
+    routeRetry: "Újratöltés",
+    /** Compact per-pane boundary (editor / inspector / plan board). */
+    paneTitle: "Ez a panel hibába ütközött",
+    paneRetry: "Újratöltés",
+    /** Screen-reader-only label distinguishing a recoverable error region. */
+    regionAria: "Hiba",
+  },
   /** App shell chrome (rail aria, AI inspector slot, codex sidebar placeholder). */
   shell: {
     /** Icon-rail accessible name. */

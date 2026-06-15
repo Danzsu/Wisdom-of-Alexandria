@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import type { Editor } from "@tiptap/react";
 import { Spinner } from "@/components/kit/spinner";
 import { toast } from "@/components/kit/toast";
+import { ErrorBoundary } from "@/components/kit/error-boundary";
 import {
   AiToolbar,
   CleanWriteBar,
@@ -347,28 +348,32 @@ function WriteViewBody({
         {/* Provide the REAL project Codex to the mention popover (M6). The
             editor resolves it through the chapter's owning book id. */}
         <CodexMentionDataProvider bookId={chapter.book_id}>
-          <ManuscriptEditor
-            key={scene.id}
-            sceneId={scene.id}
-            initialContent={scene.content}
-            kicker={kicker}
-            title={chapter.title}
-            subtitle={scene.title}
-            modelName={modelName}
-            onChange={onChange}
-            onEditorReady={onEditorReady}
-            onOpenCodex={onOpenCodex}
-            onBubbleAction={onBubbleAction}
-            // The inline beat card runs its OWN real generation + approve→insert;
-            // these callbacks only surface the matching toasts.
-            onBeatGenerate={() => undefined}
-            onBeatApply={() => toast(hu.write.toastBeatApplied)}
-            onBeatDiscard={() => toast(hu.write.toastBeatDiscarded)}
-            onImageUpload={() => toast(hu.write.toastImagePlaceholder)}
-            onAudioActivate={() => toast(hu.write.toastAudioPrototype)}
-            onTableAction={() => toast(hu.write.toastTableInserted)}
-            slashCallbacks={slashCallbacks}
-          />
+          {/* A Tiptap render-time throw degrades to a compact in-pane fallback
+              (the toolbar + timeline rail stay usable) instead of bubbling to
+              the route boundary. Keyed on the scene so reset re-mounts cleanly. */}
+          <ErrorBoundary key={scene.id}>
+            <ManuscriptEditor
+              sceneId={scene.id}
+              initialContent={scene.content}
+              kicker={kicker}
+              title={chapter.title}
+              subtitle={scene.title}
+              modelName={modelName}
+              onChange={onChange}
+              onEditorReady={onEditorReady}
+              onOpenCodex={onOpenCodex}
+              onBubbleAction={onBubbleAction}
+              // The inline beat card runs its OWN real generation + approve→insert;
+              // these callbacks only surface the matching toasts.
+              onBeatGenerate={() => undefined}
+              onBeatApply={() => toast(hu.write.toastBeatApplied)}
+              onBeatDiscard={() => toast(hu.write.toastBeatDiscarded)}
+              onImageUpload={() => toast(hu.write.toastImagePlaceholder)}
+              onAudioActivate={() => toast(hu.write.toastAudioPrototype)}
+              onTableAction={() => toast(hu.write.toastTableInserted)}
+              slashCallbacks={slashCallbacks}
+            />
+          </ErrorBoundary>
         </CodexMentionDataProvider>
 
         {!aiFreeOn && !focusOn ? (
