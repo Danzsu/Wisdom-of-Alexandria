@@ -6,6 +6,53 @@ Prioritás: **P1** = V1-hez kell · **P2** = V2 · **P3** = később.
 
 ---
 
+## 0. Megvalósított állapot — backend szétválasztás + P1 gapek lezárva (2026-06-15) ✅
+
+A frontend MVP (M0–M9) után két backend-kör zárult le. **A lenti 1–6. pontok backend-scope-ja jórészt MEGVALÓSULT** (a szövegek a tervezési kontextus miatt maradnak, de a tényleges állapotot ez a szekció írja felül).
+
+### Véglegesített architektúra — két szolgáltatás közös shared libbel
+
+A backend **két, külön deployolható szolgáltatásra** vált szét, közös PostgreSQL-lel és egy közös Python-csomaggal:
+
+```text
+packages/db/      → alexandria_core (shared lib): SQLAlchemy modellek (mind a 18) ·
+                    db/session · core/{config,security,deps} · közös schemas (RevisionRead)
+                    Mindkét szolgáltatás CSAK ezt importálja; egymást SOHA.
+
+apps/api  (:8000) → DOMAIN szolgáltatás. Tisztán CRUD: projects/books/chapters/scenes/
+                    beats/codex/characters/locations/worldbuilding/snippets/style_guide/
+                    relations/progressions/auth/exports + revisions (list + approve/reject =
+                    a human-in-the-loop, ami a Scene-t mutálja). Nulla AI-import.
+
+apps/ai   (:8001) → AI/AGENTIC szolgáltatás (FastAPI + RQ worker). model_router ·
+                    ai_service · prompt_loader · revision_service · provider_service ·
+                    crypto. Endpointok: /ai/* (rewrite, describe, generate-scene,
+                    write-continue, summarize, models) · /providers/* · /jobs.
+                    A Revision/GenerationJob sorokat a közös DB-be írja; a domain
+                    szolgáltatás olvassa/approve-olja (DB-szintű HITL-kontraktus).
+```
+
+**Integráció:** közös Postgres (a kontraktus DB-szinten köt) · közös `SECRET_KEY` → ugyanaz a JWT mindkét szolgáltatáson érvényes · függőségi irány egyirányú (`apps/api`→`alexandria_core`, `apps/ai`→`alexandria_core`, a két app sosem hivatkozik egymásra). **Frontend:** az AI/provider/job hívások a `NEXT_PUBLIC_AI_URL`-re (default `:8001`) mennek (`apiFetch` `baseUrl` override-dal), a domain hívások a `NEXT_PUBLIC_API_URL`-en (`:8000`) maradnak. **docker-compose:** új `ai` szolgáltatás + a `worker` az `apps/ai` image-ből (`python -m app.worker`) + a `web` mindkét base URL-t megkapja. **uv workspace:** `[tool.uv.workspace] members = ["apps/api", "apps/ai", "packages/db"]`.
+
+### Lezárt P1 gapek
+
+| # | Tétel | Állapot | Hol |
+|---|---|---|---|
+| 1 | **Provider/API-kulcs config** | ✅ `Provider` entitás + Alembic migráció; Fernet-titkosított kulcs (maszkolt Read, master kulcs `.env`-ből, hardcode-olt default nélkül — `_get_fernet()` hiányzó kulcsnál egyértelmű `RuntimeError`); `providers` CRUD + `/{id}/test`; a `ModelRouter` innen olvas | `apps/ai` |
+| 2 | **Generálási paraméterek** | ✅ `temperature`/`max_tokens` opcionális mező minden AI-request sémán (validált bound-okkal), átadva a `ModelRouter.complete()`-nek; visszafelé kompatibilis | `apps/ai` |
+| 3 | **Codex aliases/role** | ✅ valódi `aliases: list` + `role: str` oszlop (+ Alembic migráció); a frontend tags-kodek workaround **leváltva** közvetlen mezőkre | domain + `alexandria_core` |
+| 4 | **Cross-chapter jelenet-mozgatás** | ✅ `POST /chapters/{cid}/scenes/{id}/move {chapter_id, order_index}`, cél-fejezet 404-validációval + kaszkád-helyes `order_index` | `apps/api` |
+| 5 | **Export-tartomány** | ✅ `scope=book\|chapter\|scene` + `target_id`, **IDOR-biztos** tulajdon-ellenőrzéssel (Scene→Chapter→Book join) | `apps/api` |
+| 6 | **Provider kapcsolat-teszt** | ✅ `POST /providers/{id}/test` (Ollama/cloud elérhetőség+auth). A lokális Ollama health-pont finomítása maradhat | `apps/ai` |
+
+**Záró audit + tesztek:** a teljes-projekt audit lezárva (frontend error boundary-k bevezetve; backend AI-hiba-szivárgás/timeout/rollback/reorder-validáció/szószámlálás/status-enum javítva). Aktuális teszt-állás: **frontend 418 · apps/api 364 · apps/ai 139** (mind zöld). A két szolgáltatás külön indul; az AI-szeparáció `grep`-pel igazoltan egyirányú.
+
+### Ami még HÁTRAVAN (a lenti pontok szerint)
+
+A **P1 maradéka** (más körökben): RAG/pgvector + continuity endpoint (10) · élő RQ job-sor + polling/SSE (10) · import-pipeline DOCX (12) · projekt JSON backup/restore (12) · sorozat-scope Codex (12) · DOCX/EPUB export Pandoc-on (5). Plus a teljes **P2/P3** lista változatlan.
+
+---
+
 ## 1. Provider- és API-kulcs konfiguráció ⭐ (kiemelt, P1)
 
 **Cél:** a felhasználó a UI-ban megadhassa a felhő-providerek (Google AI Studio / Gemini, Anthropic / Claude, OpenAI, OpenRouter, és egyedi OpenAI-kompatibilis végpontok) **API-kulcsait és egyéb beállításait**, ezek **biztonságosan a backendben tárolódjanak**, és a `ModelRouter` ezekből dolgozzon.
