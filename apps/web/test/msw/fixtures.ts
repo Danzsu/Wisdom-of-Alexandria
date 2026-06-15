@@ -19,6 +19,7 @@ import type {
   RevisionRead,
   SnippetRead,
 } from "@/lib/api/ai-types";
+import type { ProviderCreate, ProviderRead } from "@/lib/api/providers";
 
 export const FAROSZ_PROJECT: ProjectRead = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -330,6 +331,77 @@ export function makeSnippet(
     created_at: NOW,
     updated_at: NOW,
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Providers (P1.1) — mirror app/schemas/provider.py (ProviderRead).
+ *
+ * SECURITY: a ProviderRead NEVER carries the real api_key — only the masked
+ * preview (`api_key_masked`) + `has_key`. The fixtures + makeProvider echo only
+ * the mask, exactly like the real backend.
+ * ------------------------------------------------------------------------- */
+
+/** A cloud provider WITH a stored key (mask shown, never the raw key). */
+export const PROVIDER_GEMINI: ProviderRead = {
+  id: "prov-gemini-1",
+  type: "gemini",
+  label: "Gemini (alap)",
+  api_key_masked: "••••3f8a",
+  has_key: true,
+  base_url: null,
+  default_model: "gemini-2.0-flash",
+  enabled: true,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+/** A local (ollama) provider — no key needed, base_url only. */
+export const PROVIDER_OLLAMA: ProviderRead = {
+  id: "prov-ollama-1",
+  type: "ollama",
+  label: "Ollama (helyi)",
+  api_key_masked: null,
+  has_key: false,
+  base_url: "http://localhost:11434",
+  default_model: "llama3.2",
+  enabled: true,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+export const PROVIDERS_FIXTURE: ProviderRead[] = [
+  PROVIDER_GEMINI,
+  PROVIDER_OLLAMA,
+];
+
+let providerSeq = 0;
+
+/**
+ * Build a `ProviderRead` echo for a POST /providers body. Derives the masked
+ * preview from the supplied plaintext key (last 4 chars) — the raw key is
+ * NEVER stored or echoed back, mirroring the real backend.
+ */
+export function makeProvider(body: ProviderCreate): ProviderRead {
+  providerSeq += 1;
+  const hasKey = Boolean(body.api_key);
+  return {
+    id: `prov-new-${providerSeq}`,
+    type: body.type,
+    label: body.label,
+    api_key_masked: hasKey ? maskKey(body.api_key as string) : null,
+    has_key: hasKey,
+    base_url: body.base_url ?? null,
+    default_model: body.default_model ?? null,
+    enabled: body.enabled ?? true,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/** Mask a plaintext key the way the backend does: bullets + last 4 chars. */
+export function maskKey(key: string): string {
+  const tail = key.slice(-4);
+  return `••••${tail}`;
 }
 
 /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */

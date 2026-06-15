@@ -13,15 +13,18 @@ import {
   FAROSZ_PROJECT,
   MODELS_FIXTURE,
   PROJECTS_FIXTURE,
+  PROVIDERS_FIXTURE,
   SCENE_BEATS_FIXTURE,
   SCENES_BY_CHAPTER,
   makeAiResult,
   makeChapter,
   makeCodexEntry,
   makeDescribeResult,
+  makeProvider,
   makeRevision,
   makeScene,
   makeSnippet,
+  maskKey,
 } from "./fixtures";
 import type {
   BookRead,
@@ -37,6 +40,11 @@ import type {
   SceneUpdate,
 } from "@/lib/api/types";
 import type { DescribeRequest } from "@/lib/api/ai-types";
+import type {
+  ProviderCreate,
+  ProviderRead,
+  ProviderUpdate,
+} from "@/lib/api/providers";
 
 /** Recompute word count the way the backend does (whitespace split). */
 function wordCount(text: string | null | undefined): number {
@@ -279,6 +287,96 @@ planStore.seed();
 /** Reset the in-memory chapter/scene store (call in a test's beforeEach). */
 export function resetPlanStore(): void {
   planStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory Provider store (P1.1) — stateful CRUD so the Cloud subpage tests
+ * exercise list → create → edit → delete flows against masked reads.
+ *
+ * SECURITY: the store NEVER returns the raw key. A create/update with a
+ * plaintext `api_key` stores only its mask (`••••<last4>`) + sets `has_key`; an
+ * update that OMITS `api_key` keeps the existing mask/has_key untouched. Tests
+ * assert no raw key is ever rendered. Call `resetProviderStore()` in beforeEach.
+ * ------------------------------------------------------------------------- */
+const providerStore = {
+  items: [] as ProviderRead[],
+
+  seed(): void {
+    this.items = PROVIDERS_FIXTURE.map((p) => ({ ...p }));
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(enabledOnly: boolean): ProviderRead[] {
+    return enabledOnly ? this.items.filter((p) => p.enabled) : [...this.items];
+  },
+
+  get(id: string): ProviderRead | undefined {
+    return this.items.find((p) => p.id === id);
+  },
+
+  create(body: ProviderCreate): ProviderRead {
+    const created = makeProvider(body);
+    this.items.push(created);
+    return created;
+  },
+
+  update(id: string, patch: ProviderUpdate): ProviderRead | undefined {
+    const index = this.items.findIndex((p) => p.id === id);
+    if (index === -1) return undefined;
+    const current = this.items[index];
+    // Only replace the masked key when a NEW plaintext key is sent; an omitted
+    // api_key keeps the stored mask/has_key (the "keep existing" contract).
+    const keyFields =
+      patch.api_key === undefined
+        ? {
+            api_key_masked: current.api_key_masked,
+            has_key: current.has_key,
+          }
+        : {
+            api_key_masked: patch.api_key ? maskKey(patch.api_key) : null,
+            has_key: Boolean(patch.api_key),
+          };
+    const merged: ProviderRead = {
+      ...current,
+      label: patch.label ?? current.label,
+      base_url:
+        patch.base_url !== undefined ? patch.base_url : current.base_url,
+      default_model:
+        patch.default_model !== undefined
+          ? patch.default_model
+          : current.default_model,
+      enabled: patch.enabled ?? current.enabled,
+      ...keyFields,
+      updated_at: "2026-06-15T12:00:00Z",
+    };
+    this.items[index] = merged;
+    return merged;
+  },
+
+  remove(id: string): boolean {
+    const index = this.items.findIndex((p) => p.id === id);
+    if (index === -1) return false;
+    this.items.splice(index, 1);
+    return true;
+  },
+};
+providerStore.seed();
+
+/** Reset the in-memory provider store (call in a test's beforeEach). */
+export function resetProviderStore(): void {
+  providerStore.reset();
+}
+
+/**
+ * Create a provider in the in-memory store (for tests that override the POST
+ * handler to capture the body but still want the new provider to appear in the
+ * subsequent list refetch). Returns the masked `ProviderRead` echo.
+ */
+export function createProviderInStore(body: ProviderCreate): ProviderRead {
+  return providerStore.create(body);
 }
 
 /** Build a `ProjectRead` echo for a POST /projects body. */
@@ -540,6 +638,71 @@ export const handlers = [
       return new HttpResponse(null, { status: 204 });
     },
   ),
+
+  /* ---- Providers (P1.1 — full CRUD + test + models, masked reads) ---- */
+  http.get(`${base}/providers`, ({ request }) => {
+    const enabledOnly =
+      new URL(request.url).searchParams.get("enabled_only") === "true";
+    return HttpResponse.json(providerStore.list(enabledOnly));
+  }),
+
+  http.get(`${base}/providers/:providerId`, ({ params }) => {
+    const provider = providerStore.get(String(params.providerId));
+    if (!provider) {
+      return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
+    }
+    return HttpResponse.json(provider);
+  }),
+
+  http.post(`${base}/providers`, async ({ request }) => {
+    const body = (await request.json()) as ProviderCreate;
+    return HttpResponse.json(providerStore.create(body), { status: 201 });
+  }),
+
+  http.patch(`${base}/providers/:providerId`, async ({ params, request }) => {
+    const body = (await request.json()) as ProviderUpdate;
+    const updated = providerStore.update(String(params.providerId), body);
+    if (!updated) {
+      return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
+    }
+    return HttpResponse.json(updated);
+  }),
+
+  http.delete(`${base}/providers/:providerId`, ({ params }) => {
+    const ok = providerStore.remove(String(params.providerId));
+    if (!ok) {
+      return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${base}/providers/:providerId/test`, ({ params }) => {
+    const provider = providerStore.get(String(params.providerId));
+    if (!provider) {
+      return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
+    }
+    // A keyless cloud provider fails the test; otherwise it passes (the real
+    // backend pings the provider — here we mirror the ok/detail contract).
+    const needsKey = provider.type !== "ollama";
+    const ok = !needsKey || provider.has_key;
+    return HttpResponse.json({
+      ok,
+      detail: ok ? "Kapcsolat rendben." : "Hiányzó API-kulcs.",
+    });
+  }),
+
+  http.get(`${base}/providers/:providerId/models`, ({ params }) => {
+    const provider = providerStore.get(String(params.providerId));
+    if (!provider) {
+      return HttpResponse.json({ detail: "Provider not found" }, { status: 404 });
+    }
+    return HttpResponse.json({
+      models: [
+        { id: `${provider.type}/model-a`, label: "Model A" },
+        { id: `${provider.type}/model-b`, label: "Model B" },
+      ],
+    });
+  }),
 
   /* ---- Beats (scene-scoped) ---- */
   http.get(`${base}/scenes/:sceneId/beats`, () =>

@@ -681,7 +681,9 @@ export const hu = {
     localBadge: "aktív",
     cloudTitle: "Felhő modell-provider",
     cloudHubSub: "Gemini, Claude, OpenAI, OpenRouter",
-    cloudBadge: "1 kulcs",
+    /** Hub Cloud badge — reflects the real configured-provider count. */
+    cloudHubBadge: (n: number) =>
+      n === 0 ? "nincs kulcs" : `${n} provider`,
     mcpTitle: "MCP provider",
     mcpHubSub: "Model Context Protocol — külső eszközök",
     mcpBadge: "2 szerver",
@@ -729,20 +731,84 @@ export const hu = {
     modelRecommended: "ajánlott",
     downloadModel: "Modell letöltése",
     downloadModelToast: "A modell-letöltés a V1-ben érkezik",
-    /** Cloud subpage (V1 — visual stub). */
+    /** Cloud subpage (P1.1 — real provider/API-key configuration). */
     cloudSubtitle:
-      "Add meg az API-kulcsokat a felhőszolgáltatókhoz. A kulcsok titkosítva, lokálisan tárolódnak.",
-    cloudV1Note:
-      "A felhő-providerek a V1-ben érkeznek — a kulcsok itt még nem tárolódnak.",
-    cloudGeminiName: "Google Gemini",
-    cloudGeminiStatus: "Csatlakoztatva · ••••3f8a",
-    cloudGeminiSwap: "Csere",
-    cloudClaudeName: "Anthropic Claude",
-    cloudNotSet: "Nincs beállítva",
-    cloudClaudePlaceholder: "sk-ant-…",
-    cloudOpenRouterName: "OpenRouter",
-    cloudOpenRouterPlaceholder: "sk-or-…",
-    cloudKeyToast: "Az API-kulcsok tárolása a V1-ben érkezik",
+      "Add meg az API-kulcsokat a felhőszolgáltatókhoz. A kulcsok titkosítva, a szerveren tárolódnak.",
+    cloudNote:
+      "A teljes API-kulcsot a rendszer sosem jeleníti meg újra — csak a maszkolt előnézetét. Új kulcs megadásához írd be a teljes kulcsot.",
+    /** List states. */
+    cloudLoading: "Providerek betöltése…",
+    cloudError: "Nem sikerült betölteni a providereket.",
+    cloudEmpty: "Még nincs felhő-provider beállítva.",
+    cloudEmptyHint:
+      "Adj hozzá egy API-kulcsot, hogy a felhő-modellek elérhetővé váljanak a generáláshoz.",
+    /** Provider type display names. */
+    providerTypeNames: {
+      ollama: "Ollama (lokális)",
+      gemini: "Google Gemini",
+      anthropic: "Anthropic Claude",
+      openai: "OpenAI",
+      openrouter: "OpenRouter",
+      custom: "Egyéni (OpenAI-kompatibilis)",
+    } as Record<string, string>,
+    /** Per-type api-key placeholder hint. */
+    providerKeyPlaceholders: {
+      gemini: "AIza…",
+      anthropic: "sk-ant-…",
+      openai: "sk-…",
+      openrouter: "sk-or-…",
+      custom: "API-kulcs…",
+      ollama: "",
+    } as Record<string, string>,
+    /** Per-provider card. */
+    cloudKeyStored: "Kulcs tárolva",
+    cloudKeyMissing: "Nincs kulcs megadva",
+    cloudNoKeyNeeded: "Nem igényel kulcsot",
+    cloudEnabledLabel: "Aktív",
+    cloudEnableAria: (label: string) => `${label} be/ki`,
+    cloudTestButton: "Kapcsolat tesztelése",
+    cloudTesting: "Tesztelés…",
+    cloudTestOk: "Kapcsolat rendben",
+    cloudTestFail: "Kapcsolat sikertelen",
+    cloudTestError: "A teszt nem futott le",
+    cloudModelCount: (n: number) => `${n} modell`,
+    cloudEditButton: "Szerkesztés",
+    cloudEditAria: (label: string) => `${label} szerkesztése`,
+    cloudDeleteButton: "Törlés",
+    cloudDeleteAria: (label: string) => `${label} törlése`,
+    cloudAddProvider: "Provider hozzáadása",
+    /** Add/Edit modal. */
+    cloudModalAddTitle: "Felhő-provider hozzáadása",
+    cloudModalEditTitle: "Provider szerkesztése",
+    cloudModalTypeLabel: "Provider típusa",
+    cloudModalLabelLabel: "Megnevezés",
+    cloudModalLabelPlaceholder: "pl. Gemini (munka)",
+    cloudModalKeyLabel: "API-kulcs",
+    cloudModalKeyKeepHint: "Hagyd üresen a meglévő kulcs megtartásához.",
+    cloudModalKeyNewHint: "A kulcs titkosítva, a szerveren tárolódik.",
+    cloudModalBaseUrlLabel: "Alap URL",
+    cloudModalBaseUrlPlaceholder: "http://localhost:11434",
+    cloudModalDefaultModelLabel: "Alapértelmezett modell",
+    cloudModalDefaultModelPlaceholder: "pl. gemini-2.0-flash",
+    cloudModalEnabledLabel: "Aktív (használható generáláshoz)",
+    cloudModalCancel: "Mégse",
+    cloudModalSave: "Mentés",
+    cloudModalCreate: "Hozzáadás",
+    /** Validation. */
+    cloudLabelRequired: "A megnevezés megadása kötelező.",
+    cloudKeyRequired: "Felhő-providerhez API-kulcs szükséges.",
+    /** Toasts + errors. */
+    cloudCreatedToast: "Provider hozzáadva",
+    cloudUpdatedToast: "Provider frissítve",
+    cloudDeletedToast: "Provider törölve",
+    cloudCreateError: "Nem sikerült hozzáadni a providert",
+    cloudUpdateError: "Nem sikerült frissíteni a providert",
+    cloudDeleteError: "Nem sikerült törölni a providert",
+    cloudTestErrorToast: "Nem sikerült tesztelni a kapcsolatot",
+    /** Delete confirm. */
+    cloudDeleteConfirmTitle: "Provider törlése",
+    cloudDeleteConfirmBody: (label: string) =>
+      `Biztosan törlöd a(z) „${label}" providert? A tárolt API-kulcs is törlődik.`,
     /** MCP subpage (V2 — visual stub). */
     mcpSubtitle:
       "Model Context Protocol szerverek — külső eszközök és adatforrások, amiket az AI használhat (pl. webkeresés, helyesírás, kutatás-adatbázis).",

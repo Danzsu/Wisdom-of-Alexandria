@@ -5,6 +5,7 @@ import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
 import { hu } from "@/lib/i18n/hu";
 import { useModels } from "@/lib/api/ai-hooks";
+import { useProviders } from "@/lib/api/providers-hooks";
 import { GenerationSection } from "./generation-section";
 import type { SettingsSubpage } from "./types";
 
@@ -23,6 +24,12 @@ export function SettingsHub({ onNavigate }: SettingsHubProps) {
   const localCount = modelsQuery.data?.models.filter(
     (m) => m.kind === "local",
   ).length;
+
+  // Real configured cloud-provider count (every non-ollama provider) — drives
+  // the Cloud card badge.
+  const providersQuery = useProviders();
+  const cloudCount =
+    providersQuery.data?.filter((p) => p.type !== "ollama").length ?? 0;
 
   return (
     <div>
@@ -50,8 +57,12 @@ export function SettingsHub({ onNavigate }: SettingsHubProps) {
           iconClass="bg-ai-muted text-ai-text"
           title={hu.settings.cloudTitle}
           sub={hu.settings.cloudHubSub}
-          badge={hu.settings.cloudBadge}
-          badgeClass="bg-warning-muted text-warning-text"
+          badge={hu.settings.cloudHubBadge(cloudCount)}
+          badgeClass={
+            cloudCount > 0
+              ? "bg-ai-muted text-ai-text"
+              : "bg-surface-muted text-text-muted"
+          }
           onClick={() => onNavigate("cloud")}
         />
         <ProviderCard
