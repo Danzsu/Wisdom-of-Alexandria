@@ -2,8 +2,10 @@
 
 import pytest
 
+from app.core import crypto
 from app.core.crypto import (
     DecryptionError,
+    _get_fernet,
     decrypt_secret,
     encrypt_secret,
     mask_secret,
@@ -45,6 +47,57 @@ def test_decrypt_error_does_not_leak_ciphertext():
         assert bogus not in str(exc)
     else:  # pragma: no cover - defensive
         pytest.fail("expected DecryptionError")
+
+
+@pytest.fixture
+def _reset_fernet_cache():
+    """Ensure ``_get_fernet`` rebuilds (and its lru_cache is clean) around a test.
+
+    ``_get_fernet`` is ``lru_cache``-d, so a test that patches the key must clear
+    the cache both before (to drop any cached instance) and after (to avoid
+    leaking a bad/None-key state into other tests).
+    """
+    _get_fernet.cache_clear()
+    yield
+    _get_fernet.cache_clear()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_key", [None, ""])
+def test_get_fernet_raises_clear_error_when_key_unset(
+    monkeypatch, _reset_fernet_cache, bad_key
+):
+    """Unset/empty key must fail loudly with an actionable RuntimeError.
+
+    It must NOT silently fall back to an ephemeral key (that would make stored
+    ciphertext undecryptable) and must NOT echo any key value.
+    """
+    monkeypatch.setattr(crypto.settings, "provider_encryption_key", bad_key)
+    with pytest.raises(RuntimeError) as excinfo:
+        _get_fernet()
+    msg = str(excinfo.value)
+    assert "PROVIDER_ENCRYPTION_KEY" in msg
+    # Actionable: tells the operator how to generate one.
+    assert "Fernet.generate_key" in msg
+    # The (valid, test) key configured by conftest must never leak into errors.
+    assert "vxmdDzJKYCa9wvZok_7P_IRdJUGtJDRCHaFW1eaQ4Vk=" not in msg
+
+
+@pytest.mark.unit
+def test_get_fernet_raises_clear_error_on_malformed_key(
+    monkeypatch, _reset_fernet_cache
+):
+    """A malformed (non-base64 / wrong-length) key raises a clear shape error,
+    not a cryptic low-level exception, and never echoes the key value."""
+    bad_value = "this-is-not-a-valid-fernet-key"
+    monkeypatch.setattr(crypto.settings, "provider_encryption_key", bad_value)
+    with pytest.raises(RuntimeError) as excinfo:
+        _get_fernet()
+    msg = str(excinfo.value)
+    assert "PROVIDER_ENCRYPTION_KEY" in msg
+    assert "malformed" in msg.lower()
+    # The bad key value itself must never be echoed in the error message.
+    assert bad_value not in msg
 
 
 @pytest.mark.unit

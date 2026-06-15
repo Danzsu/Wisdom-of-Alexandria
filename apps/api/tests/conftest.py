@@ -1,11 +1,26 @@
 import os
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# Provider-secret encryption requires PROVIDER_ENCRYPTION_KEY. There is
+# intentionally no committed default in app/core/config.py (the production key
+# is supplied via the environment and never committed). Tests supply their OWN
+# throwaway key here. This MUST run before any `app.*` import, because
+# app.core.config instantiates `settings = Settings()` at module import time and
+# would otherwise capture an unset key. `setdefault` lets a CI/dev key win if
+# one is already exported.
+os.environ.setdefault(
+    "PROVIDER_ENCRYPTION_KEY", "vxmdDzJKYCa9wvZok_7P_IRdJUGtJDRCHaFW1eaQ4Vk="
+)
 
-from app.db.session import AsyncSessionLocal
-from app.main import app
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.db.session import AsyncSessionLocal  # noqa: E402
+from app.main import app  # noqa: E402
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL", "sqlite+aiosqlite:///./test.db"
