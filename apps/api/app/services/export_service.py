@@ -6,15 +6,60 @@ from app.models.chapter import Chapter
 from app.models.scene import Scene, SceneStatus
 
 
-async def export_book_markdown(db: AsyncSession, book: Book) -> str:
-    """Generate full Markdown export for a book."""
-    lines: list[str] = []
+async def _fetch_chapters(db: AsyncSession, book_id) -> list[Chapter]:
+    """Fetch a book's chapters in canonical order (order_index, created_at)."""
+    result = await db.execute(
+        select(Chapter)
+        .where(Chapter.book_id == book_id)
+        .order_by(Chapter.order_index, Chapter.created_at)
+    )
+    return list(result.scalars().all())
 
-    # Title
+
+async def _fetch_scenes(db: AsyncSession, chapter_id) -> list[Scene]:
+    """Fetch a chapter's non-archived scenes in canonical order."""
+    result = await db.execute(
+        select(Scene)
+        .where(Scene.chapter_id == chapter_id, Scene.status != SceneStatus.ARCHIVED)
+        .order_by(Scene.order_index, Scene.created_at)
+    )
+    return list(result.scalars().all())
+
+
+def _render_scene(lines: list[str], scene: Scene, heading: str) -> None:
+    """Append a scene block (H3 heading + content / empty marker) to `lines`."""
+    lines.append(f"### {heading} {scene.title}")
+    lines.append("")
+    if scene.content:
+        lines.append(scene.content)
+    else:
+        lines.append("*[üres jelenet]*")
+    lines.append("")
+
+
+async def _render_chapter(
+    db: AsyncSession, lines: list[str], chapter: Chapter, ch_idx: int
+) -> None:
+    """Append a chapter block (H2 + summary + its non-archived scenes) to `lines`."""
+    lines.append(f"## {ch_idx}. {chapter.title}")
+    lines.append("")
+    if chapter.summary:
+        lines.append(chapter.summary)
+        lines.append("")
+
+    scenes = await _fetch_scenes(db, chapter.id)
+    for sc_idx, scene in enumerate(scenes, start=1):
+        _render_scene(lines, scene, f"{ch_idx}.{sc_idx}")
+
+    lines.append("---")
+    lines.append("")
+
+
+def _render_book_header(lines: list[str], book: Book) -> None:
+    """Append the book title + metadata + description + separator to `lines`."""
     lines.append(f"# {book.title}")
     lines.append("")
 
-    # Metadata line
     meta_parts = []
     if book.genre:
         meta_parts.append(book.genre)
@@ -33,39 +78,36 @@ async def export_book_markdown(db: AsyncSession, book: Book) -> str:
     lines.append("---")
     lines.append("")
 
-    # Chapters
-    chapters_result = await db.execute(
-        select(Chapter)
-        .where(Chapter.book_id == book.id)
-        .order_by(Chapter.order_index, Chapter.created_at)
-    )
-    chapters = list(chapters_result.scalars().all())
 
+async def export_book_markdown(db: AsyncSession, book: Book) -> str:
+    """Generate full Markdown export for a book (H1 → H2 chapters → H3 scenes)."""
+    lines: list[str] = []
+    _render_book_header(lines, book)
+
+    chapters = await _fetch_chapters(db, book.id)
     for ch_idx, chapter in enumerate(chapters, start=1):
-        lines.append(f"## {ch_idx}. {chapter.title}")
-        lines.append("")
-        if chapter.summary:
-            lines.append(chapter.summary)
-            lines.append("")
+        await _render_chapter(db, lines, chapter, ch_idx)
 
-        # Scenes (exclude archived)
-        scenes_result = await db.execute(
-            select(Scene)
-            .where(Scene.chapter_id == chapter.id, Scene.status != SceneStatus.ARCHIVED)
-            .order_by(Scene.order_index, Scene.created_at)
-        )
-        scenes = list(scenes_result.scalars().all())
+    return "\n".join(lines)
 
-        for sc_idx, scene in enumerate(scenes, start=1):
-            lines.append(f"### {ch_idx}.{sc_idx} {scene.title}")
-            lines.append("")
-            if scene.content:
-                lines.append(scene.content)
-            else:
-                lines.append("*[üres jelenet]*")
-            lines.append("")
 
-        lines.append("---")
-        lines.append("")
+async def export_chapter_markdown(db: AsyncSession, chapter: Chapter) -> str:
+    """Generate Markdown export for a single chapter (H2 + summary + its scenes).
 
+    Numbered "1." since the chapter is exported standalone; reuses the same
+    chapter rendering helper as the whole-book path.
+    """
+    lines: list[str] = []
+    await _render_chapter(db, lines, chapter, 1)
+    return "\n".join(lines)
+
+
+def export_scene_markdown(scene: Scene) -> str:
+    """Generate Markdown export for a single scene (H3 + content).
+
+    Needs no DB access (the scene row already carries its content), so this is a
+    plain sync function — the endpoint dispatches it without `await`.
+    """
+    lines: list[str] = []
+    _render_scene(lines, scene, "1.1")
     return "\n".join(lines)

@@ -15,7 +15,11 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { resolveBookById } from "./books";
-import { exportBookMarkdown, type MarkdownExport } from "./exports";
+import {
+  exportBookMarkdown,
+  type ExportScope,
+  type MarkdownExport,
+} from "./exports";
 import type { BookRead } from "./types";
 
 /** Query keys for the export-related resources. */
@@ -71,16 +75,24 @@ export function downloadTextFile(
 /** Input for the Markdown export mutation. */
 export interface ExportMarkdownInput {
   bookId: string;
-  /** Book title — used only for the client-side filename fallback. */
+  /**
+   * Scope-appropriate title (book / chapter / scene) — used only for the
+   * client-side filename fallback when the server omits a Content-Disposition.
+   */
   title: string;
+  /** Export tartomány. Defaults to whole-book. */
+  scope?: ExportScope;
+  /** Chapter / scene id — REQUIRED (and only used) when scope ≠ book. */
+  targetId?: string;
 }
 
 /**
- * Export a book as Markdown and download it. The mutation fetches the document
- * (real backend endpoint), then triggers the browser download with the resolved
- * filename (server `Content-Disposition` honored; otherwise the ASCII-fold
- * fallback). Returns the {@link MarkdownExport} so callers can assert/inspect.
- * Errors propagate via the mutation's `error` (the page shows an error toast).
+ * Export a book / chapter / scene as Markdown and download it. The mutation
+ * fetches the document (real backend endpoint, scope + target_id forwarded),
+ * then triggers the browser download with the resolved filename (server
+ * `Content-Disposition` honored; otherwise the ASCII-fold fallback). Returns the
+ * {@link MarkdownExport} so callers can assert/inspect. Errors propagate via the
+ * mutation's `error` (the page shows an error toast).
  */
 export function useExportMarkdown(): UseMutationResult<
   MarkdownExport,
@@ -88,8 +100,8 @@ export function useExportMarkdown(): UseMutationResult<
   ExportMarkdownInput
 > {
   return useMutation({
-    mutationFn: async ({ bookId, title }: ExportMarkdownInput) => {
-      const result = await exportBookMarkdown(bookId, title);
+    mutationFn: async ({ bookId, title, scope, targetId }: ExportMarkdownInput) => {
+      const result = await exportBookMarkdown(bookId, title, { scope, targetId });
       downloadTextFile(result.content, result.filename);
       return result;
     },

@@ -18,10 +18,14 @@ describe("lib/api/exports", () => {
   afterEach(() => server.resetHandlers());
 
   it("POSTs to /books/{id}/exports and returns content + the server filename", async () => {
-    const seen: string[] = [];
+    const seen: { method: string; bookId: string; scope: string | null }[] = [];
     server.use(
       http.post(`${base}/books/:bookId/exports`, ({ request, params }) => {
-        seen.push(request.method, String(params.bookId));
+        seen.push({
+          method: request.method,
+          bookId: String(params.bookId),
+          scope: new URL(request.url).searchParams.get("scope"),
+        });
         return new HttpResponse("# A Fárosz őrzője\n", {
           status: 200,
           headers: {
@@ -34,10 +38,62 @@ describe("lib/api/exports", () => {
 
     const result = await exportBookMarkdown(FAROSZ_BOOK.id, FAROSZ_BOOK.title);
 
-    expect(seen).toEqual(["POST", FAROSZ_BOOK.id]);
+    // Defaults to whole-book scope (no target_id).
+    expect(seen).toEqual([
+      { method: "POST", bookId: FAROSZ_BOOK.id, scope: "book" },
+    ]);
     expect(result.content).toContain("# A Fárosz őrzője");
     // Honors the server-supplied ASCII filename.
     expect(result.filename).toBe("a_farosz_orzoje.md");
+  });
+
+  it("forwards scope=chapter + target_id for a chapter export", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        url = new URL(request.url);
+        return new HttpResponse("## 1. Prológus\n", {
+          status: 200,
+          headers: {
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Content-Disposition": 'attachment; filename="prologus.md"',
+          },
+        });
+      }),
+    );
+
+    const result = await exportBookMarkdown(FAROSZ_BOOK.id, "Prológus", {
+      scope: "chapter",
+      targetId: "c1111111-1111-1111-1111-111111111111",
+    });
+
+    expect(url).not.toBeNull();
+    expect(url!.searchParams.get("scope")).toBe("chapter");
+    expect(url!.searchParams.get("target_id")).toBe(
+      "c1111111-1111-1111-1111-111111111111",
+    );
+    expect(result.filename).toBe("prologus.md");
+  });
+
+  it("forwards scope=scene + target_id for a scene export", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        url = new URL(request.url);
+        return new HttpResponse("### 1.1 Reggel\n", { status: 200 });
+      }),
+    );
+
+    await exportBookMarkdown(FAROSZ_BOOK.id, "Reggel", {
+      scope: "scene",
+      targetId: "5ce11111-1111-1111-1111-111111111111",
+    });
+
+    expect(url).not.toBeNull();
+    expect(url!.searchParams.get("scope")).toBe("scene");
+    expect(url!.searchParams.get("target_id")).toBe(
+      "5ce11111-1111-1111-1111-111111111111",
+    );
   });
 
   it("falls back to the client ASCII-fold filename when the header is absent", async () => {

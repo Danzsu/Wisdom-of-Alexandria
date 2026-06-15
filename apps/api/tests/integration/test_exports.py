@@ -98,3 +98,99 @@ async def test_export_empty_book(client: AsyncClient, auth_headers: dict):
     resp = await client.post(f"/api/v1/books/{book['id']}/exports", headers=auth_headers)
     assert resp.status_code == 200
     assert "Üres könyv" in resp.text
+
+
+# --- Scope (P1.3): book / chapter / scene --------------------------------- #
+
+
+async def test_export_book_scope_is_default(client: AsyncClient, auth_headers: dict):
+    """scope omitted == whole-book export (unchanged behaviour)."""
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=book", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    # Whole book: both chapters present.
+    assert "Prológus" in resp.text
+    assert "Az indulás" in resp.text
+
+
+async def test_export_chapter_scope_only_that_chapter(client: AsyncClient, auth_headers: dict):
+    book_id, ch1_id, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=chapter&target_id={ch1_id}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert "text/markdown" in resp.headers["content-type"]
+    # Chapter 1 + its scene content present; chapter 2 absent.
+    assert "Prológus" in resp.text
+    assert "A nap felkelt." in resp.text
+    assert "Az indulás" not in resp.text
+    assert "A hős lóra szállt." not in resp.text
+    # Filename slug derives from the chapter title.
+    assert "Prol" in resp.headers.get("content-disposition", "")
+
+
+async def test_export_scene_scope_returns_only_that_scene(client: AsyncClient, auth_headers: dict):
+    book_id, ch1_id, _ = await _build_book(client, auth_headers)
+    scenes = (await client.get(f"/api/v1/chapters/{ch1_id}/scenes", headers=auth_headers)).json()
+    scene = next(s for s in scenes if s["title"] == "Reggel")
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=scene&target_id={scene['id']}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    # The scene title + content; no chapter heading, no other scene.
+    assert "Reggel" in resp.text
+    assert "A nap felkelt." in resp.text
+    assert "Prológus" not in resp.text
+    assert "Utazás" not in resp.text
+
+
+async def test_export_chapter_scope_requires_target_id(client: AsyncClient, auth_headers: dict):
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=chapter", headers=auth_headers
+    )
+    assert resp.status_code == 422
+
+
+async def test_export_scene_scope_requires_target_id(client: AsyncClient, auth_headers: dict):
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=scene", headers=auth_headers
+    )
+    assert resp.status_code == 422
+
+
+async def test_export_chapter_scope_wrong_book_is_404(client: AsyncClient, auth_headers: dict):
+    """A chapter that belongs to a DIFFERENT book must not be exportable here."""
+    _, ch_a, _ = await _build_book(client, auth_headers)
+    book_b, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_b}/exports?scope=chapter&target_id={ch_a}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_export_scene_scope_wrong_book_is_404(client: AsyncClient, auth_headers: dict):
+    _, ch_a, _ = await _build_book(client, auth_headers)
+    book_b, _, _ = await _build_book(client, auth_headers)
+    scenes = (await client.get(f"/api/v1/chapters/{ch_a}/scenes", headers=auth_headers)).json()
+    scene_id = scenes[0]["id"]
+    resp = await client.post(
+        f"/api/v1/books/{book_b}/exports?scope=scene&target_id={scene_id}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_export_chapter_scope_unknown_target_is_404(client: AsyncClient, auth_headers: dict):
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=chapter&target_id={uuid.uuid4()}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404

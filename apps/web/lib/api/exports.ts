@@ -2,15 +2,18 @@
  * Typed endpoint function for the Markdown export (M8 Export).
  *
  * Backend contract (`apps/api/app/api/v1/exports.py`):
- *   POST /books/{book_id}/exports
+ *   POST /books/{book_id}/exports?scope=<book|chapter|scene>&target_id=<uuid>
  *     → 200 text/markdown; charset=utf-8
  *       Content-Disposition: attachment; filename="<ascii>.md"; filename*=UTF-8''<utf8>
- *     → 404 { detail: "Book not found" }
+ *     → 404 { detail: "Book/Chapter/Scene not found" }
+ *     → 422 when scope≠book and target_id is missing
  *
- * The endpoint exports the WHOLE book (no scope param exists server-side). The
- * UI still offers Teljes könyv / fejezet / jelenet radios per the prototype;
- * book scope hits this real endpoint, chapter/scene scope are V1 (the page
- * surfaces an honest "(V1-ben érkezik)" note and keeps the button book-scoped).
+ * The endpoint exports the WHOLE book (scope=book, the default) OR a single
+ * chapter / scene (scope=chapter|scene + the chapter/scene `target_id`). The UI
+ * offers Teljes könyv / fejezet / jelenet radios; for chapter/scene the user
+ * picks WHICH chapter/scene, and the chosen id is sent as `target_id`. Ownership
+ * is validated server-side (the chapter must belong to the book, the scene to a
+ * chapter of the book) — a foreign id yields a 404.
  *
  * This is NOT a JSON endpoint, so it bypasses `apiFetch` (which is JSON-only)
  * and reads the body as text. Errors are never swallowed: a non-OK response
@@ -25,6 +28,9 @@ import { filenameFromContentDisposition, markdownFilename } from "@/lib/slugify"
 
 const API_PREFIX = "/api/v1";
 
+/** Export scope (tartomány) — mirrors the backend `scope` query param. */
+export type ExportScope = "book" | "chapter" | "scene";
+
 /** The result of a Markdown export: the file content + the resolved filename. */
 export interface MarkdownExport {
   /** The raw Markdown document body. */
@@ -36,24 +42,41 @@ export interface MarkdownExport {
   filename: string;
 }
 
+/** Options for {@link exportBookMarkdown}: the export scope + optional target. */
+export interface ExportMarkdownOptions {
+  /** Export tartomány. Defaults to whole-book. */
+  scope?: ExportScope;
+  /** Chapter / scene id — REQUIRED (and only used) when scope ≠ book. */
+  targetId?: string;
+}
+
 /**
- * Export a book as Markdown. Resolves with the content + the download filename.
+ * Export a book / chapter / scene as Markdown. Resolves with the content + the
+ * download filename.
  *
- * @param bookId       the book to export (whole-book scope — see module note).
- * @param titleForName the book title, used only for the client-side filename
- *                     fallback when the server omits a `Content-Disposition`.
+ * @param bookId       the book that owns the export target.
+ * @param titleForName the scope-appropriate title (book / chapter / scene),
+ *                     used only for the client-side filename fallback when the
+ *                     server omits a `Content-Disposition`.
+ * @param options      the export `scope` and (for chapter/scene) the `targetId`.
  */
 export async function exportBookMarkdown(
   bookId: string,
   titleForName: string,
+  options: ExportMarkdownOptions = {},
 ): Promise<MarkdownExport> {
+  const { scope = "book", targetId } = options;
   const headers: Record<string, string> = { Accept: "text/markdown" };
   const token = getAuthToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const query = new URLSearchParams({ scope });
+  if (scope !== "book" && targetId) query.set("target_id", targetId);
+  const url = `${API_BASE_URL}${API_PREFIX}/books/${bookId}/exports?${query.toString()}`;
+
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${API_PREFIX}/books/${bookId}/exports`, {
+    res = await fetch(url, {
       method: "POST",
       headers,
     });

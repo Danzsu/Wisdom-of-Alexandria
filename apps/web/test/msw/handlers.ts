@@ -53,6 +53,34 @@ function wordCount(text: string | null | undefined): number {
   return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
 }
 
+/** ASCII-fold a Hungarian title the way the backend filename logic does. */
+function asciiFilename(title: string): string {
+  const folded = title
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\x20-\x7e]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
+  return `${folded.length > 0 ? folded : "export"}.md`;
+}
+
+/**
+ * Build a text/markdown download Response with a scope-appropriate
+ * Content-Disposition (ASCII filename + RFC 5987 UTF-8 filename*), mirroring the
+ * real backend export endpoint.
+ */
+function markdownDownload(body: string, title: string) {
+  const ascii = asciiFilename(title);
+  const utf8 = encodeURIComponent(`${title}.md`);
+  return new HttpResponse(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`,
+    },
+  });
+}
+
 const base = `${API_BASE_URL}/api/v1`;
 
 /* ---------------------------------------------------------------------------
@@ -728,23 +756,54 @@ export const handlers = [
     );
   }),
 
-  /* ---- Export (Markdown — real endpoint, M8) ---- */
-  http.post(`${base}/books/:bookId/exports`, ({ params }) => {
-    if (params.bookId === FAROSZ_BOOK.id) {
-      // Mirror the backend: text/markdown body + Content-Disposition with both
-      // an ASCII filename and the RFC 5987 UTF-8 filename*.
-      const body = `# ${FAROSZ_BOOK.title}\n\n## II. fejezet\n\nSzelene a tekercsek közé hajolt.\n`;
-      return new HttpResponse(body, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/markdown; charset=utf-8",
-          "Content-Disposition":
-            'attachment; filename="a_farosz_orzoje.md"; ' +
-            "filename*=UTF-8''A%20F%C3%A1rosz%20%C5%91rz%C5%91je.md",
-        },
-      });
+  /* ---- Export (Markdown — real endpoint, scope: book/chapter/scene — P1.3) ---- */
+  http.post(`${base}/books/:bookId/exports`, ({ params, request }) => {
+    if (params.bookId !== FAROSZ_BOOK.id) {
+      return HttpResponse.json({ detail: "Book not found" }, { status: 404 });
     }
-    return HttpResponse.json({ detail: "Book not found" }, { status: 404 });
+    const url = new URL(request.url);
+    const scope = url.searchParams.get("scope") ?? "book";
+    const targetId = url.searchParams.get("target_id");
+
+    // Mirror the backend: text/markdown body + Content-Disposition with both an
+    // ASCII filename and the RFC 5987 UTF-8 filename*, scoped per the request.
+    if (scope === "chapter") {
+      if (!targetId) {
+        return HttpResponse.json(
+          { detail: "target_id is required for chapter/scene scope" },
+          { status: 422 },
+        );
+      }
+      const chapter = CHAPTERS_FIXTURE.find((c) => c.id === targetId);
+      if (!chapter) {
+        return HttpResponse.json({ detail: "Chapter not found" }, { status: 404 });
+      }
+      return markdownDownload(`## 1. ${chapter.title}\n`, chapter.title);
+    }
+
+    if (scope === "scene") {
+      if (!targetId) {
+        return HttpResponse.json(
+          { detail: "target_id is required for chapter/scene scope" },
+          { status: 422 },
+        );
+      }
+      const scene = Object.values(SCENES_BY_CHAPTER)
+        .flat()
+        .find((s) => s.id === targetId);
+      if (!scene) {
+        return HttpResponse.json({ detail: "Scene not found" }, { status: 404 });
+      }
+      return markdownDownload(
+        `### 1.1 ${scene.title}\n\n${scene.content ?? ""}\n`,
+        scene.title,
+      );
+    }
+
+    return markdownDownload(
+      `# ${FAROSZ_BOOK.title}\n\n## II. fejezet\n\nSzelene a tekercsek közé hajolt.\n`,
+      FAROSZ_BOOK.title,
+    );
   }),
 
   /* ---- AI (config-driven models + generation) ---- */

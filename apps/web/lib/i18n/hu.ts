@@ -615,10 +615,18 @@ export const hu = {
     /** Scope (Tartomány) radios. */
     scopeLabel: "Tartomány",
     scopeBook: (title: string) => `Teljes könyv — ${title}`,
-    scopeChapter: "Csak a II. fejezet",
-    scopeScene: "Csak a 3. jelenet",
-    /** Honest note: only book scope hits the real endpoint in the MVP. */
-    scopeV1Note: "A fejezet/jelenet-szintű export a V1-ben érkezik.",
+    scopeChapter: "Egy fejezet",
+    scopeScene: "Egy jelenet",
+    /** Chapter / scene picker (shown for the fejezet / jelenet scope). */
+    pickChapterLabel: "Fejezet kiválasztása",
+    pickSceneLabel: "Jelenet kiválasztása",
+    pickPlaceholder: "Válassz…",
+    pickChapterEmpty: "Nincs még fejezet ebben a könyvben.",
+    pickSceneEmpty: "Nincs még jelenet ebben a könyvben.",
+    pickLoading: "Betöltés…",
+    pickError: "Nem sikerült betölteni a fejezeteket/jeleneteket.",
+    /** Prefix that groups a chapter's scenes under it in the scene picker. */
+    sceneGroupPrefix: (chapterTitle: string) => chapterTitle,
     /** Filename preview row. */
     filenameLabel: "Fájlnév:",
     /** Hanganyagok (audio) accordion — V2 stub. */
