@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,6 +8,8 @@ from litellm import acompletion
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import DecryptionError, decrypt_secret
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,11 +84,25 @@ class ModelRouter:
             return ResolvedProvider(api_key=None, base_url=base)
 
         api_key: str | None = None
+        # Distinguish "no key stored" (legitimate — e.g. local Ollama) from
+        # "key stored but decrypt FAILED" (rotated/corrupted key). The former
+        # keeps api_key = None; the latter must fail loudly here instead of
+        # silently sending an unauthenticated request that surfaces only as an
+        # opaque downstream auth error.
         if provider.api_key_encrypted:
             try:
                 api_key = decrypt_secret(provider.api_key_encrypted)
-            except DecryptionError:
-                api_key = None
+            except DecryptionError as exc:
+                # Never log the key or ciphertext — only the provider id + cause.
+                logger.warning(
+                    "Provider %s has a stored API key that could not be decrypted "
+                    "(key rotated or corrupted?)",
+                    provider.id,
+                )
+                raise RuntimeError(
+                    f"Provider {provider.id} API key could not be decrypted "
+                    "(key rotated or corrupted?)"
+                ) from exc
         base_url = provider.base_url
         if base_url is None and provider.type == "ollama":
             base_url = self.base_url

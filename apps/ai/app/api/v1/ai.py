@@ -1,15 +1,15 @@
 import uuid
 
 from alexandria_core.core.config import settings
+from alexandria_core.core.deps import get_current_user, get_db
+from alexandria_core.schemas.revision import RevisionRead
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_db
 from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead
-from app.schemas.revision import RevisionRead
-from app.services.ai_service import DESCRIBE_CHANNELS, AIService, ai_service
+from app.services.ai_service import AIService, ai_service
 from app.services.crud_provider import list_providers
 from app.services.provider_service import list_provider_models
 
@@ -166,7 +166,10 @@ async def rewrite(
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -181,10 +184,9 @@ async def describe(
     _: str = Depends(get_current_user),
     svc: AIService = Depends(get_ai_service),
 ) -> AIDescribeResult:
-    if data.channels:
-        invalid = [c for c in data.channels if c not in DESCRIBE_CHANNELS]
-        if invalid:
-            raise HTTPException(status_code=422, detail=f"Invalid channels: {invalid}")
+    # Channel validation is owned by AIService.describe (single authoritative
+    # point — any future worker/direct caller gets it too). It raises ValueError
+    # for invalid channels, which we map to a sanitized 422 below.
     try:
         revisions, job = await svc.describe(
             db,
@@ -200,7 +202,9 @@ async def describe(
             job=GenerationJobRead.model_validate(job),
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        # Sanitized + consistent with every other AI error shape. The service's
+        # message already lists the valid channels.
+        raise HTTPException(status_code=422, detail=safe_error(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -226,7 +230,10 @@ async def write_continue(
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -255,7 +262,10 @@ async def generate_scene(
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -281,7 +291,10 @@ async def summarize_scene(
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -307,7 +320,10 @@ async def summarize_chapter(
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

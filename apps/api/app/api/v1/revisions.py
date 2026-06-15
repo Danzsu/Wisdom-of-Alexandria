@@ -1,10 +1,10 @@
 import uuid
 
+from alexandria_core.schemas.revision import RevisionRead
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.schemas.revision import RevisionRead
 from app.services.crud_revision import (
     approve_revision,
     get_revision,

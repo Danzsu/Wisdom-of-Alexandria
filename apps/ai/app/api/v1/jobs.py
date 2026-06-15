@@ -1,9 +1,9 @@
 import uuid
 
+from alexandria_core.core.deps import get_current_user, get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_db
 from app.schemas.generation_job import GenerationJobRead
 from app.services.crud_generation_job import delete_job, get_job, list_jobs
 

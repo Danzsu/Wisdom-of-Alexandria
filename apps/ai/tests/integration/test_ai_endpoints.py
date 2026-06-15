@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,9 +22,9 @@ def _mock_revision(scene_id=None, revision_type="rewrite", content="Generated"):
     )
     import uuid as _uuid
     rev.id = _uuid.uuid4()
-    from datetime import datetime, timezone
-    rev.created_at = datetime.now(timezone.utc)
-    rev.updated_at = datetime.now(timezone.utc)
+    from datetime import datetime
+    rev.created_at = datetime.now(UTC)
+    rev.updated_at = datetime.now(UTC)
     return rev
 
 
@@ -36,9 +37,9 @@ def _mock_job(job_type="rewrite"):
     )
     import uuid as _uuid
     job.id = _uuid.uuid4()
-    from datetime import datetime, timezone
-    job.created_at = datetime.now(timezone.utc)
-    job.updated_at = datetime.now(timezone.utc)
+    from datetime import datetime
+    job.created_at = datetime.now(UTC)
+    job.updated_at = datetime.now(UTC)
     return job
 
 
@@ -147,12 +148,37 @@ async def test_describe_returns_6_revisions_by_default(client: AsyncClient, auth
 
 
 async def test_describe_invalid_channel_returns_422(client: AsyncClient, auth_headers: dict, mock_ai_svc):
+    """FIX 2: invalid channels validated in ONE place (AIService.describe).
+
+    The mock AIService is replaced here with one whose describe raises the same
+    ValueError the real service raises, so we exercise the endpoint's single
+    sanitized 422 path (not a separate endpoint-level pre-check)."""
+    mock_ai_svc.describe.side_effect = ValueError(
+        "Invalid channels: ['NemLétezo']. Valid: ['Látás', 'Hang', 'Tapintás', 'Szag', 'Íz', 'Metaforák']"
+    )
     resp = await client.post(
         "/api/v1/ai/describe",
         json={"selected_text": "x", "channels": ["NemLétezo"]},
         headers=auth_headers,
     )
     assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    # Sanitized (single line) and lists valid channels for the caller.
+    assert "\n" not in detail
+    assert "Invalid channels" in detail
+    assert "Látás" in detail
+
+
+async def test_describe_valid_channels_still_work(client: AsyncClient, auth_headers: dict, mock_ai_svc):
+    """FIX 2: valid channels still pass through to a 200 with revisions."""
+    resp = await client.post(
+        "/api/v1/ai/describe",
+        json={"selected_text": "x", "channels": ["Látás", "Hang"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert "revisions" in resp.json()
+    mock_ai_svc.describe.assert_called_once()
 
 
 async def test_describe_requires_auth(client: AsyncClient, mock_ai_svc):

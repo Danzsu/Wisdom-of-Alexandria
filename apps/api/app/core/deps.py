@@ -6,10 +6,10 @@ here unchanged so existing ``from app.core.deps import ...`` call sites — and
 ``app.dependency_overrides`` keyed on these exact function objects — keep
 working.
 
-``get_model_router`` stays here because it couples to the AI/model-router
-service that remains in ``apps/api`` (it moves to ``apps/ai`` in Step 7).
-``alexandria_core`` must not depend on ``app.services`` — keeping this here
-preserves the one-way ``apps/api`` → ``alexandria_core`` dependency direction.
+The AI/model-router dependency (``get_model_router``) moved to ``apps/ai``
+together with the AI services in Step 7. This service is domain-CRUD-only and
+no longer references the model router; the one-way ``apps/api`` →
+``alexandria_core`` dependency direction is preserved.
 """
 
 from alexandria_core.core.deps import (  # noqa: F401 — re-exported for app.* callers
@@ -17,9 +17,3 @@ from alexandria_core.core.deps import (  # noqa: F401 — re-exported for app.* 
     get_db,
     oauth2_scheme,
 )
-
-from app.services.model_router import ModelRouter, model_router
-
-
-def get_model_router() -> ModelRouter:
-    return model_router

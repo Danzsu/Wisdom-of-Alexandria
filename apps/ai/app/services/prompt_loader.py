@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 
@@ -11,8 +10,10 @@ class PromptLoader:
             # Docker mounts packages/prompts at /app/prompts
             default = Path("/app/prompts/hu")
             if not default.exists():
-                # Fallback for local dev (running from apps/api/)
-                default = Path(__file__).parent.parent.parent.parent.parent / "packages" / "prompts" / "hu"
+                # Fallback for local dev: 5 parents from
+                # apps/ai/app/services/prompt_loader.py lands on the repo root.
+                repo_root = Path(__file__).parent.parent.parent.parent.parent
+                default = repo_root / "packages" / "prompts" / "hu"
             self.prompts_dir = default
         else:
             self.prompts_dir = Path(prompts_dir)
@@ -28,7 +29,15 @@ class PromptLoader:
             raise FileNotFoundError(f"Prompt template not found: {path}")
         template = path.read_text(encoding="utf-8")
         if variables:
-            template = template.format(**variables)
+            try:
+                template = template.format(**variables)
+            except KeyError as e:
+                # A {placeholder} in the template has no matching variable.
+                # Surface the template name + missing key instead of a bare,
+                # context-free KeyError.
+                raise ValueError(
+                    f"Prompt template '{template_name}' missing variable: {e!r}"
+                ) from e
         return template
 
     def load_system(self, template_name: str, **variables: str) -> str:

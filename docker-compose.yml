@@ -63,18 +63,46 @@ services:
     volumes:
       - ./packages/prompts:/app/prompts:ro
 
-  worker:
+  ai:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/ai/Dockerfile
     restart: unless-stopped
-    command: ["uv", "run", "--no-sync", "rq", "worker", "--url", "redis://redis:6379"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/prompts:/app/prompts:ro
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/ai/Dockerfile
+    restart: unless-stopped
+    # AI owns generation jobs, so the RQ worker is built from the AI image and
+    # runs its worker entrypoint (queue name + Redis URL come from app.worker).
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
       DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
     depends_on:

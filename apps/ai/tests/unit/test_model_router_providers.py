@@ -114,3 +114,73 @@ async def test_resolve_provider_disabled_is_ignored(db_session):
     resolved = await router.resolve_provider(db_session, "openai/gpt-4o")
     # Disabled providers are not used for resolution.
     assert resolved.api_key is None
+
+
+# ── FIX 1: undecryptable stored key must fail loudly, not send None silently ──
+
+
+@pytest.mark.integration
+async def test_resolve_provider_no_stored_key_is_ollama_none(db_session):
+    """A provider with NO stored key (e.g. local Ollama) legitimately resolves
+    to api_key=None — this is the path that must KEEP working."""
+    await create_provider(
+        db_session,
+        ProviderCreate(
+            type="ollama",
+            label="Local Ollama",
+            api_key=None,
+            default_model="ollama/llama3.2",
+        ),
+    )
+    router = ModelRouter()
+    resolved = await router.resolve_provider(db_session, "ollama/llama3.2")
+    assert resolved.api_key is None
+
+
+@pytest.mark.integration
+async def test_resolve_provider_undecryptable_key_raises(db_session):
+    """A stored-but-undecryptable key (rotated/corrupted) must raise a clear
+    error instead of silently proceeding with api_key=None."""
+    # Insert a provider whose ciphertext is bogus, bypassing encrypt_secret so it
+    # cannot be decrypted (simulates a key rotation against existing ciphertext).
+    provider = Provider(
+        type="openai",
+        label="Corrupted Key",
+        api_key_encrypted="not-a-valid-fernet-token",
+        enabled=True,
+    )
+    db_session.add(provider)
+    await db_session.commit()
+
+    router = ModelRouter()
+    with pytest.raises(RuntimeError, match="could not be decrypted"):
+        await router.resolve_provider(db_session, "openai/gpt-4o")
+
+
+@pytest.mark.integration
+async def test_complete_undecryptable_key_raises_not_unauthenticated(db_session):
+    """complete() must fail loudly on an undecryptable key — never fall through
+    to an unauthenticated LiteLLM call. acompletion is patched so that if the
+    router DID proceed, the test would fail (mock asserted not called)."""
+    provider = Provider(
+        type="openai",
+        label="Corrupted Key",
+        api_key_encrypted="not-a-valid-fernet-token",
+        enabled=True,
+    )
+    db_session.add(provider)
+    await db_session.commit()
+
+    router = ModelRouter()
+    with patch(
+        "app.services.model_router.acompletion",
+        new=AsyncMock(return_value=_mock_response()),
+    ) as mock_call:
+        with pytest.raises(RuntimeError, match="could not be decrypted"):
+            await router.complete(
+                messages=[{"role": "user", "content": "hi"}],
+                model="openai/gpt-4o",
+                db=db_session,
+            )
+    # The unauthenticated request must never have been attempted.
+    mock_call.assert_not_called()

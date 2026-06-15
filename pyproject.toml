@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["apps/api", "packages/db"]
+members = ["apps/api", "apps/ai", "packages/db"]

@@ -10,6 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "alexandria-ai",
     "alexandria-db",
     "forgewriter-api",
 ]
@@ -157,6 +158,63 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/94/13/8b084e0f2efb0275a1d534838844926f798bd766566b1375174e2448cd31/alembic-1.18.4.tar.gz", hash = "sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc", size = 2056725, upload-time = "2026-02-10T16:00:47.195Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/29/6533c317b74f707ea28f8d633734dbda2119bbadfc61b2f3640ba835d0f7/alembic-1.18.4-py3-none-any.whl", hash = "sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a", size = 263893, upload-time = "2026-02-10T16:00:49.997Z" },
+]
+
+[[package]]
+name = "alexandria-ai"
+version = "0.1.0"
+source = { editable = "apps/ai" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "alexandria-db" },
+    { name = "asyncpg" },
+    { name = "cryptography" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
+    { name = "litellm" },
+    { name = "pydantic", extra = ["email"] },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "rq" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20.0" },
+    { name = "alexandria-db", editable = "packages/db" },
+    { name = "asyncpg", specifier = ">=0.29.0" },
+    { name = "cryptography", specifier = ">=48.0.0" },
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "litellm", specifier = ">=1.40.0" },
+    { name = "pydantic", extras = ["email"], specifier = ">=2.7.0" },
+    { name = "pydantic-settings", specifier = ">=2.3.0" },
+    { name = "redis", specifier = ">=5.0.0" },
+    { name = "rq", specifier = ">=1.16.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.10.0" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "ruff", specifier = ">=0.5.0" },
 ]
 
 [[package]]
@@ -929,17 +987,13 @@ dependencies = [
     { name = "alembic" },
     { name = "alexandria-db" },
     { name = "asyncpg" },
-    { name = "cryptography" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
-    { name = "litellm" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-multipart" },
-    { name = "redis" },
-    { name = "rq" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -960,17 +1014,13 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13.0" },
     { name = "alexandria-db", editable = "packages/db" },
     { name = "asyncpg", specifier = ">=0.29.0" },
-    { name = "cryptography", specifier = ">=48.0.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "litellm", specifier = ">=1.40.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.7.0" },
     { name = "pydantic-settings", specifier = ">=2.3.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "redis", specifier = ">=5.0.0" },
-    { name = "rq", specifier = ">=1.16.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]

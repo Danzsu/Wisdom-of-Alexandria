@@ -94,12 +94,10 @@ async def test_list_jobs_filter_by_scene_id(
 ):
     from alexandria_core.models.generation_job import GenerationJob
 
-    # Create a scene via API to get a valid scene_id
-    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
-    book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers)).json()
-    ch = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers)).json()
-    scene = (await client.post(f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "S"}, headers=auth_headers)).json()
-    scene_id = uuid.UUID(scene["id"])
+    # The AI service has no domain (projects/scenes) endpoints — those live in
+    # apps/api. ``list_jobs`` filters jobs by the ``scene_id`` column with no FK
+    # join, so a synthetic UUID exercises the filter exactly the same way.
+    scene_id = uuid.uuid4()
 
     job_with_scene = GenerationJob(job_type="rewrite", status="done", scene_id=scene_id)
     job_without_scene = GenerationJob(job_type="summarize", status="done")

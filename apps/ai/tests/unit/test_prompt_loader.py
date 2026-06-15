@@ -1,5 +1,3 @@
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -78,6 +76,18 @@ def test_load_missing_template_raises(temp_prompts_dir):
     loader = PromptLoader(temp_prompts_dir)
     with pytest.raises(FileNotFoundError):
         loader.load("nonexistent")
+
+
+def test_load_missing_variable_raises_valueerror_with_template_name(temp_prompts_dir):
+    """FIX 5: a {placeholder} with no matching variable must raise a clear
+    ValueError naming the template + the missing key — not a bare KeyError."""
+    loader = PromptLoader(temp_prompts_dir)
+    with pytest.raises(ValueError) as exc_info:
+        # with_vars.md references {system_var} and {user_var}; omit user_var.
+        loader.load("with_vars", system_var="x")
+    msg = str(exc_info.value)
+    assert "with_vars" in msg
+    assert "user_var" in msg
 
 
 def test_real_rewrite_template_exists():

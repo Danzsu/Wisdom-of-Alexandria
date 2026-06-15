@@ -1,51 +1,16 @@
-"""Unit tests for the shared audit-fix helpers.
+"""Unit tests for the shared domain helpers.
 
-Covers FIX 1/2 (safe_error sanitization), FIX 5 (reorder permutation
-validation), and FIX 6 (markup-aware word counting).
+Covers FIX 5 (reorder permutation validation) and FIX 6 (markup-aware word
+counting). The ``safe_error`` sanitizer moved with the AI service to
+``apps/ai`` (it is only used by AI code) and is tested there.
 """
 
 import uuid
 
 import pytest
 
-from app.core.errors import safe_error
 from app.core.text import count_words
 from app.services.ordering import validate_permutation
-
-# ── safe_error (FIX 1 / FIX 2) ──────────────────────────────────────────────
-
-
-@pytest.mark.unit
-def test_safe_error_strips_newlines():
-    out = safe_error(Exception("line one\nline two\r\nline three"))
-    assert "\n" not in out
-    assert "\r" not in out
-    assert out == "line one line two line three"
-
-
-@pytest.mark.unit
-def test_safe_error_truncates_long_text():
-    out = safe_error(Exception("x" * 5000))
-    assert len(out) <= 300
-
-
-@pytest.mark.unit
-def test_safe_error_falls_back_to_class_name_when_empty():
-    out = safe_error(ValueError(""))
-    assert out == "ValueError"
-
-
-@pytest.mark.unit
-def test_safe_error_accepts_plain_string():
-    out = safe_error("boom\nsecond line")
-    assert out == "boom second line"
-
-
-@pytest.mark.unit
-def test_safe_error_collapses_tabs_and_runs():
-    out = safe_error(Exception("a\t\t b   c"))
-    assert out == "a b c"
-
 
 # ── count_words (FIX 6) ─────────────────────────────────────────────────────
 
