@@ -1,10 +1,10 @@
 import uuid
 
+from alexandria_core.models.provider import Provider
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import DecryptionError, decrypt_secret, encrypt_secret, mask_secret
-from app.models.provider import Provider
 from app.schemas.provider import ProviderCreate, ProviderRead, ProviderUpdate
 
 

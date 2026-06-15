@@ -1,9 +1,8 @@
+from alexandria_core.core.config import settings
+from alexandria_core.core.security import create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-
-from app.core.config import settings
-from app.core.security import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

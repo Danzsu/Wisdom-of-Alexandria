@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.codex_relation import CodexRelation
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.codex_relation import CodexRelation
 from app.schemas.codex_relation import CodexRelationCreate, CodexRelationUpdate
 
 

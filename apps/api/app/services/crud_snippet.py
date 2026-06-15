@@ -1,9 +1,9 @@
 import uuid
 
+from alexandria_core.models.snippet import Snippet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.snippet import Snippet
 from app.schemas.snippet import SnippetCreate, SnippetUpdate
 
 

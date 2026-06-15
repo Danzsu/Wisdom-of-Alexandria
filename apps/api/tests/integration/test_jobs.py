@@ -40,7 +40,7 @@ async def test_delete_job_requires_auth(client: AsyncClient):
 async def test_list_jobs_returns_created_job(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     job = GenerationJob(job_type="rewrite", status="done")
     db_session.add(job)
@@ -55,7 +55,7 @@ async def test_list_jobs_returns_created_job(
 async def test_get_job_by_id(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     job = GenerationJob(job_type="generate_scene", status="pending", model_name="ollama/llama3")
     db_session.add(job)
@@ -73,7 +73,7 @@ async def test_get_job_by_id(
 async def test_list_jobs_filter_by_status(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     job_done = GenerationJob(job_type="rewrite", status="done")
     job_pending = GenerationJob(job_type="summarize", status="pending")
@@ -92,7 +92,7 @@ async def test_list_jobs_filter_by_status(
 async def test_list_jobs_filter_by_scene_id(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     # Create a scene via API to get a valid scene_id
     proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
@@ -117,7 +117,7 @@ async def test_list_jobs_filter_by_scene_id(
 async def test_delete_job(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     job = GenerationJob(job_type="rewrite", status="failed")
     db_session.add(job)
@@ -134,7 +134,7 @@ async def test_delete_job(
 async def test_job_read_schema_fields(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
 
     job = GenerationJob(
         job_type="describe",

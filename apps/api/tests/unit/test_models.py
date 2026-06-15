@@ -1,6 +1,5 @@
 import pytest
-
-from app.models import (
+from alexandria_core.models import (
     AIComment,
     Beat,
     Book,

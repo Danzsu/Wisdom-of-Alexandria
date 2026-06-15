@@ -1,10 +1,11 @@
 import uuid
+
+from alexandria_core.models.book import Book
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.models.book import Book
 from app.schemas.chapter import ChapterCreate, ChapterRead, ChapterReorder, ChapterUpdate
 from app.services.crud_chapter import (
     create_chapter,

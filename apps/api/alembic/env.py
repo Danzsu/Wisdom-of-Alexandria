@@ -1,23 +1,20 @@
 import asyncio
 from logging.config import fileConfig
 
+# Importing alexandria_core registers all ORM models on Base.metadata, so
+# target_metadata reflects the full schema for autogenerate.
+from alexandria_core import target_metadata
+from alexandria_core.core.config import settings
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Load all models so metadata is populated
-import app.models  # noqa: F401
-from app.models.base import Base
-from app.core.config import settings
-
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-target_metadata = Base.metadata
 
 config.set_main_option("sqlalchemy.url", settings.database_url)
 

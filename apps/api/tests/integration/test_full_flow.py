@@ -3,9 +3,9 @@ Cross-resource integration tests for Plan 2.
 These tests exercise the full project hierarchy and verify cascades, scoping, and status flows.
 """
 import uuid
+
 import pytest
 from httpx import AsyncClient
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ async def test_chapter_status_progression(client: AsyncClient, auth_headers: dic
 
 async def test_revision_approve_updates_scene_content(client: AsyncClient, auth_headers: dict, db_session):
     """Approving a revision updates the linked scene's content and word_count."""
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     proj = await _make_project(client, auth_headers)
     book = await _make_book(client, auth_headers, proj["id"])

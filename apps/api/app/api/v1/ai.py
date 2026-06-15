@@ -1,10 +1,10 @@
 import uuid
 
+from alexandria_core.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead

@@ -1,9 +1,9 @@
-import pytest
-from datetime import datetime, timezone, timedelta
-from jose import jwt
+from datetime import datetime, timedelta, timezone
 
-from app.core.security import create_access_token, decode_token
-from app.core.config import settings
+import pytest
+from alexandria_core.core.config import settings
+from alexandria_core.core.security import create_access_token, decode_token
+from jose import jwt
 
 
 def test_create_access_token_returns_string():

@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Any
 
+from alexandria_core.core.config import settings
+from alexandria_core.models.provider import Provider
 from litellm import acompletion
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.crypto import DecryptionError, decrypt_secret
-from app.models.provider import Provider
 
 
 @dataclass

@@ -1,11 +1,11 @@
 import uuid
 from typing import Any
 
+from alexandria_core.models.generation_job import GenerationJob
+from alexandria_core.models.revision import Revision
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import safe_error
-from app.models.generation_job import GenerationJob
-from app.models.revision import Revision
 from app.services.model_router import ModelRouter, model_router
 from app.services.prompt_loader import PromptLoader, prompt_loader
 from app.services.revision_service import RevisionService, revision_service

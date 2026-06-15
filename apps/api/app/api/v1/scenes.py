@@ -1,17 +1,29 @@
 import uuid
+
+from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.scene import Scene
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.models.chapter import Chapter
-from app.models.scene import Scene
 from app.schemas.scene import (
-    SceneCreate, SceneMove, SceneRead, SceneReorder, SceneUpdate,
+    SceneCreate,
+    SceneMove,
+    SceneRead,
+    SceneReorder,
+    SceneUpdate,
 )
 from app.services.crud_scene import (
-    archive_scene, create_scene, delete_scene, get_scene,
-    list_scenes, move_scene, reorder_scenes, unarchive_scene, update_scene,
+    archive_scene,
+    create_scene,
+    delete_scene,
+    get_scene,
+    list_scenes,
+    move_scene,
+    reorder_scenes,
+    unarchive_scene,
+    update_scene,
 )
 
 router = APIRouter(prefix="/chapters/{chapter_id}/scenes", tags=["scenes"])

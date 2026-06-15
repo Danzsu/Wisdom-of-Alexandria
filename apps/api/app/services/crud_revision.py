@@ -1,11 +1,11 @@
 import uuid
 
+from alexandria_core.models.revision import Revision
+from alexandria_core.models.scene import Scene
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.text import count_words
-from app.models.revision import Revision
-from app.models.scene import Scene
 
 
 async def get_revision(db: AsyncSession, revision_id: uuid.UUID) -> Revision | None:

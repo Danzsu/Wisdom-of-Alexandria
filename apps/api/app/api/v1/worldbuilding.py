@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +9,7 @@ from app.schemas.worldbuilding_entry import (
     WorldbuildingEntryRead,
     WorldbuildingEntryUpdate,
 )
+from app.services.crud_project import get_project
 from app.services.crud_worldbuilding_entry import (
     create_worldbuilding_entry,
     delete_worldbuilding_entry,
@@ -15,7 +17,6 @@ from app.services.crud_worldbuilding_entry import (
     list_worldbuilding_entries,
     update_worldbuilding_entry,
 )
-from app.services.crud_project import get_project
 
 router = APIRouter(prefix="/projects/{project_id}/worldbuilding", tags=["worldbuilding"])
 

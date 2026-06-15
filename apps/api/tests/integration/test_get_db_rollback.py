@@ -9,12 +9,14 @@ get_db with a pre-made session, bypassing the generator under test), pointing
 it at the test engine, and verify the session is usable again after a raise.
 """
 
+# get_db and its AsyncSessionLocal reference live in alexandria_core.core.deps
+# (apps/api re-exports get_db via app.core.deps). Patch + drive it there so the
+# AsyncSessionLocal monkeypatch lands in the namespace get_db actually reads.
+import alexandria_core.core.deps as deps
 import pytest
+from alexandria_core.models.project import Project
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
-
-import app.core.deps as deps
-from app.models.project import Project
 
 
 @pytest.mark.unit

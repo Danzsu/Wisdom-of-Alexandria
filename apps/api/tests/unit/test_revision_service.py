@@ -1,8 +1,10 @@
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from alexandria_core.models.generation_job import JobStatus
+
 from app.services.revision_service import RevisionService
-from app.models.generation_job import JobStatus
 
 
 @pytest.fixture
@@ -48,7 +50,7 @@ async def test_create_job_status_is_running(svc, mock_db):
 
 
 async def test_complete_job_sets_done(svc, mock_db):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
     job = GenerationJob(job_type="rewrite", status=JobStatus.RUNNING)
     result = await svc.complete_job(mock_db, job, output_data={"revision_id": "abc"})
     assert result.status == JobStatus.DONE
@@ -56,7 +58,7 @@ async def test_complete_job_sets_done(svc, mock_db):
 
 
 async def test_fail_job_sets_failed(svc, mock_db):
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
     job = GenerationJob(job_type="rewrite", status=JobStatus.RUNNING)
     result = await svc.fail_job(mock_db, job, error_message="LLM timed out")
     assert result.status == JobStatus.FAILED
@@ -65,7 +67,7 @@ async def test_fail_job_sets_failed(svc, mock_db):
 
 async def test_fail_job_sanitizes_error_message(svc, mock_db):
     """FIX 2: GET /jobs/{id} returns error_message — bound + single-line it."""
-    from app.models.generation_job import GenerationJob
+    from alexandria_core.models.generation_job import GenerationJob
     job = GenerationJob(job_type="rewrite", status=JobStatus.RUNNING)
     raw = "stack\ntrace\r\nwith newlines " + ("y" * 5000)
     result = await svc.fail_job(mock_db, job, error_message=raw)

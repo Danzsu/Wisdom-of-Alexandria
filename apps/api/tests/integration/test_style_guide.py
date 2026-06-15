@@ -1,5 +1,6 @@
 """Integration tests for StyleGuide CRUD."""
 import uuid
+
 import pytest
 from httpx import AsyncClient
 

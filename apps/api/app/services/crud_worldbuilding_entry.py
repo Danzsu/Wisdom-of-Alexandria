@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.worldbuilding_entry import WorldbuildingEntry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.worldbuilding_entry import WorldbuildingEntry
 from app.schemas.worldbuilding_entry import WorldbuildingEntryCreate, WorldbuildingEntryUpdate
 
 

@@ -8,10 +8,9 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from alexandria_core.models.provider import Provider
 from httpx import AsyncClient
 from sqlalchemy import delete
-
-from app.models.provider import Provider
 
 BASE = "/api/v1/providers"
 

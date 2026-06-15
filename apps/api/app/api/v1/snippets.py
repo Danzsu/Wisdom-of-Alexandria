@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
 from app.schemas.snippet import SnippetCreate, SnippetRead, SnippetUpdate
+from app.services.crud_project import get_project
 from app.services.crud_snippet import (
     create_snippet,
     delete_snippet,
@@ -12,7 +13,6 @@ from app.services.crud_snippet import (
     list_snippets,
     update_snippet,
 )
-from app.services.crud_project import get_project
 
 router = APIRouter(prefix="/projects/{project_id}/snippets", tags=["snippets"])
 

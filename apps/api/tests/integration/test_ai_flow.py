@@ -8,13 +8,12 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
+from alexandria_core.models.generation_job import GenerationJob, JobStatus
+from alexandria_core.models.revision import Revision
 from httpx import AsyncClient
 
-from app.main import app
 from app.api.v1.ai import get_ai_service
-from app.models.revision import Revision
-from app.models.generation_job import GenerationJob, JobStatus
-
+from app.main import app
 
 # ── mock helpers ──────────────────────────────────────────────────────────────
 

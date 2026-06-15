@@ -1,9 +1,8 @@
+from alexandria_core.models.book import Book
+from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.scene import Scene, SceneStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.book import Book
-from app.models.chapter import Chapter
-from app.models.scene import Scene, SceneStatus
 
 
 async def _fetch_chapters(db: AsyncSession, book_id) -> list[Chapter]:

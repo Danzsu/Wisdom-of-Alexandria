@@ -1,10 +1,10 @@
 import uuid
 
+from alexandria_core.models.provider import Provider
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.models.provider import Provider
 from app.schemas.provider import (
     ProviderCreate,
     ProviderModelsResult,

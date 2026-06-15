@@ -12,6 +12,7 @@ os.environ.setdefault(
 )
 
 import pytest  # noqa: E402
+from alexandria_core.db.session import AsyncSessionLocal  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
@@ -19,7 +20,6 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
     create_async_engine,
 )
 
-from app.db.session import AsyncSessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 
 TEST_DATABASE_URL = os.getenv(
@@ -30,8 +30,8 @@ IS_POSTGRES = TEST_DATABASE_URL.startswith("postgresql")
 
 @pytest.fixture(scope="session")
 async def engine_fixture():
-    from app.models.base import Base  # noqa: F401
-    import app.models  # noqa: F401 — register all models
+    import alexandria_core.models  # noqa: F401 — register all models
+    from alexandria_core.models.base import Base  # noqa: F401
 
     test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with test_engine.begin() as conn:
@@ -68,7 +68,7 @@ async def client(db_session: AsyncSession):
 
 @pytest.fixture
 async def auth_headers(client: AsyncClient) -> dict[str, str]:
-    from app.core.config import settings
+    from alexandria_core.core.config import settings
     resp = await client.post(
         "/api/v1/auth/token",
         data={"username": settings.admin_username, "password": settings.admin_password},

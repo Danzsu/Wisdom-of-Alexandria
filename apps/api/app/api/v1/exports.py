@@ -3,15 +3,15 @@ import uuid
 from typing import Literal
 from urllib.parse import quote
 
+from alexandria_core.models.book import Book
+from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.scene import Scene
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.models.book import Book
-from app.models.chapter import Chapter
-from app.models.scene import Scene
 from app.services.export_service import (
     export_book_markdown,
     export_chapter_markdown,

@@ -41,8 +41,8 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
@@ -65,10 +65,10 @@ services:
 
   worker:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    command: ["uv", "run", "rq", "worker", "--url", "redis://redis:6379"]
+    command: ["uv", "run", "--no-sync", "rq", "worker", "--url", "redis://redis:6379"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forgewriter}:${POSTGRES_PASSWORD:-forgewriter}@postgres:5432/${POSTGRES_DB:-forgewriter}
       REDIS_URL: redis://redis:6379

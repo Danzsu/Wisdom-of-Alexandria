@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import Boolean, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, Timestamps, UUIDPrimaryKey
+from alexandria_core.models.base import Base, Timestamps, UUIDPrimaryKey
 
 
 class WorldbuildingEntry(UUIDPrimaryKey, Timestamps, Base):

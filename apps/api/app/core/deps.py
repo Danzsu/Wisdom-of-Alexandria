@@ -1,37 +1,24 @@
-from collections.abc import AsyncGenerator
+"""apps/api dependency shim.
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+The shared request-scoped dependencies (``get_db``, ``get_current_user``,
+``oauth2_scheme``) live in ``alexandria_core.core.deps`` and are re-exported
+here unchanged so existing ``from app.core.deps import ...`` call sites — and
+``app.dependency_overrides`` keyed on these exact function objects — keep
+working.
 
-from app.core.security import decode_token
-from app.db.session import AsyncSessionLocal
+``get_model_router`` stays here because it couples to the AI/model-router
+service that remains in ``apps/api`` (it moves to ``apps/ai`` in Step 7).
+``alexandria_core`` must not depend on ``app.services`` — keeping this here
+preserves the one-way ``apps/api`` → ``alexandria_core`` dependency direction.
+"""
+
+from alexandria_core.core.deps import (  # noqa: F401 — re-exported for app.* callers
+    get_current_user,
+    get_db,
+    oauth2_scheme,
+)
+
 from app.services.model_router import ModelRouter, model_router
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            # If an endpoint/service raises mid-transaction, roll back so the
-            # session isn't left in a failed state (which would make any later
-            # commit raise PendingRollbackError and mask the original error).
-            await session.rollback()
-            raise
-
-
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
-    subject = decode_token(token)
-    if subject is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return subject
 
 
 def get_model_router() -> ModelRouter:

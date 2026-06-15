@@ -1,5 +1,6 @@
 """Integration tests for Snippet CRUD."""
 import uuid
+
 import pytest
 from httpx import AsyncClient
 

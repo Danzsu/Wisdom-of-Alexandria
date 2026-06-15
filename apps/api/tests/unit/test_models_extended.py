@@ -1,9 +1,24 @@
 import pytest
-from app.models import (
-    Project, Book, Chapter, Scene, Beat, Character, Location,
-    WorldbuildingEntry, CodexEntry, CodexRelation, CodexProgression,
-    Snippet, StyleGuide, GenerationJob, Revision, AIComment,
-    ChapterStatus, SceneStatus, JobStatus,
+from alexandria_core.models import (
+    AIComment,
+    Beat,
+    Book,
+    Chapter,
+    ChapterStatus,
+    Character,
+    CodexEntry,
+    CodexProgression,
+    CodexRelation,
+    GenerationJob,
+    JobStatus,
+    Location,
+    Project,
+    Revision,
+    Scene,
+    SceneStatus,
+    Snippet,
+    StyleGuide,
+    WorldbuildingEntry,
 )
 
 

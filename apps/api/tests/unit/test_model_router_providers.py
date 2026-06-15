@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from alexandria_core.models.provider import Provider
 from sqlalchemy import delete
 
-from app.models.provider import Provider
 from app.schemas.provider import ProviderCreate
 from app.services.crud_provider import create_provider
 from app.services.model_router import ModelRouter

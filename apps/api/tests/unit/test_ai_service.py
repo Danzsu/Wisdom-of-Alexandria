@@ -1,12 +1,14 @@
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.ai_service import AIService, DESCRIBE_CHANNELS
-from app.services.model_router import ModelRouter, ModelResponse
+
+import pytest
+from alexandria_core.models.generation_job import GenerationJob, JobStatus
+from alexandria_core.models.revision import Revision
+
+from app.services.ai_service import DESCRIBE_CHANNELS, AIService
+from app.services.model_router import ModelResponse, ModelRouter
 from app.services.prompt_loader import PromptLoader
 from app.services.revision_service import RevisionService
-from app.models.revision import Revision
-from app.models.generation_job import GenerationJob, JobStatus
 
 
 def _make_mock_router(content="Generated text"):

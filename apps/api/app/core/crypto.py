@@ -7,9 +7,8 @@ key or any plaintext/ciphertext secret.
 
 from functools import lru_cache
 
+from alexandria_core.core.config import settings
 from cryptography.fernet import Fernet, InvalidToken
-
-from app.core.config import settings
 
 
 class DecryptionError(Exception):

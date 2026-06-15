@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.project import Project
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 

@@ -55,7 +55,7 @@ async def test_reject_revision_not_found(client: AsyncClient, auth_headers: dict
 async def test_list_revisions_returns_created_revision(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     _, scene_id = await _setup_scene(client, auth_headers)
 
@@ -77,7 +77,7 @@ async def test_list_revisions_returns_created_revision(
 async def test_get_revision_by_id(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     _, scene_id = await _setup_scene(client, auth_headers)
 
@@ -104,7 +104,7 @@ async def test_get_revision_by_id(
 async def test_approve_revision_updates_scene(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     chapter_id, scene_id = await _setup_scene(client, auth_headers)
 
@@ -134,7 +134,7 @@ async def test_approve_revision_word_count_strips_markup(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
     """FIX 6: approving a rich-text revision counts visible words, not tags."""
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     chapter_id, scene_id = await _setup_scene(client, auth_headers)
 
@@ -161,7 +161,7 @@ async def test_approve_revision_without_scene_id(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
     """Approving a revision with no scene_id should still succeed without errors."""
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     rev = Revision(
         scene_id=None,
@@ -180,7 +180,7 @@ async def test_approve_revision_without_scene_id(
 async def test_reject_revision(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     _, scene_id = await _setup_scene(client, auth_headers)
 
@@ -202,7 +202,7 @@ async def test_reject_revision_already_false(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
     """Rejecting an already-rejected revision is a no-op."""
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     _, scene_id = await _setup_scene(client, auth_headers)
 
@@ -223,7 +223,7 @@ async def test_reject_revision_already_false(
 async def test_revision_schema_fields(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
-    from app.models.revision import Revision
+    from alexandria_core.models.revision import Revision
 
     _, scene_id = await _setup_scene(client, auth_headers)
 

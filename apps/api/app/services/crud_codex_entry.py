@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.codex_entry import CodexEntry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.codex_entry import CodexEntry
 from app.schemas.codex_entry import CodexEntryCreate, CodexEntryUpdate
 
 

@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.character import Character
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.character import Character
 from app.schemas.character import CharacterCreate, CharacterUpdate
 
 

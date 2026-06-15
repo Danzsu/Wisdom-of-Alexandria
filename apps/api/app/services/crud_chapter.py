@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.chapter import Chapter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.chapter import Chapter
 from app.schemas.chapter import ChapterCreate, ChapterUpdate
 from app.services.ordering import validate_permutation
 

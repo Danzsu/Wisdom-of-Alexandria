@@ -1,9 +1,10 @@
 import uuid
+
+from alexandria_core.models.scene import Scene
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.text import count_words
-from app.models.scene import Scene
 from app.schemas.scene import SceneCreate, SceneUpdate
 from app.services.ordering import validate_permutation
 

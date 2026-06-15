@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.location import Location
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.location import Location
 from app.schemas.location import LocationCreate, LocationUpdate
 
 

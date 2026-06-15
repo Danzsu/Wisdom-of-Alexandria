@@ -1,9 +1,9 @@
 import uuid
 
+from alexandria_core.models.style_guide import StyleGuide
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.style_guide import StyleGuide
 from app.schemas.style_guide import StyleGuideCreate, StyleGuideUpdate
 
 

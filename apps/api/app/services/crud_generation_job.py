@@ -1,9 +1,8 @@
 import uuid
 
+from alexandria_core.models.generation_job import GenerationJob
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.generation_job import GenerationJob
 
 
 async def get_job(db: AsyncSession, job_id: uuid.UUID) -> GenerationJob | None:

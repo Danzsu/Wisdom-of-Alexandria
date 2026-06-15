@@ -1,13 +1,19 @@
 import uuid
+
+from alexandria_core.models.scene import Scene
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.models.scene import Scene
 from app.schemas.beat import BeatCreate, BeatRead, BeatReorder, BeatUpdate
 from app.services.crud_beat import (
-    create_beat, delete_beat, get_beat, list_beats, reorder_beats, update_beat
+    create_beat,
+    delete_beat,
+    get_beat,
+    list_beats,
+    reorder_beats,
+    update_beat,
 )
 
 router = APIRouter(prefix="/scenes/{scene_id}/beats", tags=["beats"])

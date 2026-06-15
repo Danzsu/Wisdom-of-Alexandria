@@ -1,4 +1,4 @@
-from app.core.config import settings
+from alexandria_core.core.config import settings
 
 
 def test_settings_has_database_url():

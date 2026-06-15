@@ -42,7 +42,7 @@ async def test_protected_endpoint_without_token(client: AsyncClient):
     token = resp.json()["access_token"]
 
     # Verify token decodes correctly
-    from app.core.security import decode_token
+    from alexandria_core.core.security import decode_token
     subject = decode_token(token)
     assert subject == "admin"
 

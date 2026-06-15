@@ -1,8 +1,9 @@
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.model_router import ModelRouter, ModelResponse
+
+from app.services.model_router import ModelResponse, ModelRouter
 
 
 def _mock_response(content: str, model: str = "ollama/llama3.2"):
@@ -101,7 +102,7 @@ async def test_module_level_singleton_exists():
 
 @pytest.mark.unit
 async def test_complete_passes_timeout_to_acompletion():
-    from app.core.config import settings
+    from alexandria_core.core.config import settings
 
     router = ModelRouter(base_url="http://ollama:11434", default_model="ollama/llama3.2")
     mock_resp = _mock_response("ok")

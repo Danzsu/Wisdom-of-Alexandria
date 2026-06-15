@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.codex_progression import CodexProgression
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.codex_progression import CodexProgression
 from app.schemas.codex_progression import CodexProgressionCreate, CodexProgressionUpdate
 
 

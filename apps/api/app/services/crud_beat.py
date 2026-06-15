@@ -1,8 +1,9 @@
 import uuid
+
+from alexandria_core.models.beat import Beat
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.beat import Beat
 from app.schemas.beat import BeatCreate, BeatUpdate
 from app.services.ordering import validate_permutation
 

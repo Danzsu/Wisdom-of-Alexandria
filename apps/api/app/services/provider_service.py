@@ -6,10 +6,10 @@ Secrets are decrypted only in-memory here and are NEVER logged or returned.
 """
 
 import httpx
+from alexandria_core.models.provider import Provider
 
 from app.core.crypto import DecryptionError, decrypt_secret
 from app.core.errors import safe_error as _safe_error
-from app.models.provider import Provider
 from app.schemas.provider import ProviderModelInfo, ProviderTestResult
 
 # Static, well-known model catalogs per cloud provider type. The UI must not

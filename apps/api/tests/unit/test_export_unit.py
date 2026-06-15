@@ -1,6 +1,7 @@
-import pytest
 import unicodedata
 import uuid as _uuid
+
+import pytest
 
 
 def _safe_filename(title: str) -> str:

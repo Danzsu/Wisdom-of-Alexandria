@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
 from app.schemas.style_guide import StyleGuideCreate, StyleGuideRead, StyleGuideUpdate
+from app.services.crud_project import get_project
 from app.services.crud_style_guide import (
     create_style_guide,
     delete_style_guide,
@@ -12,7 +13,6 @@ from app.services.crud_style_guide import (
     update_style_guide,
     upsert_style_guide,
 )
-from app.services.crud_project import get_project
 
 router = APIRouter(prefix="/projects/{project_id}/style-guide", tags=["style-guide"])
 

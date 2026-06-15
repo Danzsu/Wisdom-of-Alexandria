@@ -1,9 +1,10 @@
 import uuid
+
+from alexandria_core.models.generation_job import GenerationJob, JobStatus
+from alexandria_core.models.revision import Revision
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import safe_error
-from app.models.generation_job import GenerationJob, JobStatus
-from app.models.revision import Revision
 
 
 class RevisionService:
