@@ -12,6 +12,7 @@ import type {
   SceneRead,
 } from "@/lib/api/types";
 import type {
+  AIContextEntity,
   AIDescribeResult,
   AIResult,
   GenerationJobRead,
@@ -257,6 +258,18 @@ export const MODELS_FIXTURE: ModelsResponse = {
 export const AI_GENERATED_TEXT =
   "Szelene meg sem rezzent. Ujjai lassan végigvándoroltak a tekercs peremén, míg el nem érték a rejtett jeleket.";
 
+/**
+ * Sample RAG context entities the rewrite/generate result is grounded on
+ * (mirrors the backend `ContextEntity = {id, label, entity_type}`). One
+ * character + one location so the chip-rendering test has both a known
+ * entity_type→icon mapping to assert. describe returns NONE (RAG is not used
+ * there) — its fixture keeps `context_entities: []`.
+ */
+export const CONTEXT_ENTITIES_FIXTURE: AIContextEntity[] = [
+  { id: "codex-szelene", label: "Szelene", entity_type: "character" },
+  { id: "codex-nagykonyvtar", label: "Nagykönyvtár", entity_type: "location" },
+];
+
 let revisionSeq = 0;
 
 /** Build a `GenerationJobRead` echo. */
@@ -298,19 +311,28 @@ export function makeRevision(
   };
 }
 
-/** Build an `AIResult` (single revision + job). */
+/**
+ * Build an `AIResult` (single revision + job + retrieved RAG context). Carries
+ * the {@link CONTEXT_ENTITIES_FIXTURE} (character + location) by default so the
+ * chip-rendering tests have data; pass `[]` to exercise the no-context path.
+ */
 export function makeAiResult(
   revisionType: string,
   content: string,
   model: string,
+  contextEntities: AIContextEntity[] = CONTEXT_ENTITIES_FIXTURE,
 ): AIResult {
   return {
     revision: makeRevision(revisionType, content, model),
     job: makeJob(revisionType, model),
+    context_entities: contextEntities,
   };
 }
 
-/** Build an `AIDescribeResult` — one revision per requested channel. */
+/**
+ * Build an `AIDescribeResult` — one revision per requested channel. describe
+ * does NOT use RAG, so `context_entities` is always empty (matches the backend).
+ */
 export function makeDescribeResult(
   channels: string[],
   model: string,
@@ -320,6 +342,7 @@ export function makeDescribeResult(
       makeRevision("describe_channel", `${c}: érzéki leírás a jelenethez.`, model),
     ),
     job: makeJob("describe", model),
+    context_entities: [],
   };
 }
 

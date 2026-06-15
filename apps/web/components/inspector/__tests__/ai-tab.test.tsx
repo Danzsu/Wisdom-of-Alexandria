@@ -11,7 +11,13 @@ import {
 } from "@/lib/stores/editor-store";
 import { AiGenerationProvider } from "../ai-generation-context";
 import { AiTab } from "../ai-tab";
-import { FAROSZ_BOOK, SCENE_ACTIVE, AI_GENERATED_TEXT } from "@/test/msw/fixtures";
+import {
+  FAROSZ_BOOK,
+  SCENE_ACTIVE,
+  AI_GENERATED_TEXT,
+  CONTEXT_ENTITIES_FIXTURE,
+  makeAiResult,
+} from "@/test/msw/fixtures";
 
 /** Domain base — `/revisions/*` (the human-in-the-loop approve) stays here. */
 const base = `${API_BASE_URL}/api/v1`;
@@ -84,6 +90,68 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
     // Model chip (config-driven) + prompt version badge from the revision.
     expect(screen.getByText("ollama/llama3.2")).toBeInTheDocument();
     expect(screen.getByText("1.0")).toBeInTheDocument();
+  });
+
+  it("renders the retrieved RAG context as chips on the result card", async () => {
+    const user = userEvent.setup();
+    renderAiTab();
+    await waitFor(() => expect(screen.getByText("llama3.2")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Átírás" }));
+    await screen.findByText("Átírás eredménye");
+
+    // The default rewrite fixture grounds on a character + a location; both
+    // entity labels surface as ContextChips, alongside the "Kontextus:" label.
+    expect(screen.getByText("Kontextus:")).toBeInTheDocument();
+    for (const entity of CONTEXT_ENTITIES_FIXTURE) {
+      expect(screen.getByText(entity.label)).toBeInTheDocument();
+    }
+  });
+
+  it("shows only the model chip (no entity chips) when context_entities is empty", async () => {
+    const user = userEvent.setup();
+    // RAG skipped (the common local case): the backend returns an empty list.
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, () =>
+        HttpResponse.json(
+          makeAiResult("rewrite", AI_GENERATED_TEXT, "ollama/llama3.2", []),
+        ),
+      ),
+    );
+    renderAiTab();
+    await waitFor(() => expect(screen.getByText("llama3.2")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Átírás" }));
+    await screen.findByText("Átírás eredménye");
+
+    // Today's behaviour preserved: the model chip still shows, but no entity
+    // chips render (the result-card row shows because a model is present).
+    expect(screen.getByText("ollama/llama3.2")).toBeInTheDocument();
+    for (const entity of CONTEXT_ENTITIES_FIXTURE) {
+      expect(screen.queryByText(entity.label)).not.toBeInTheDocument();
+    }
+  });
+
+  it("renders a chip for an UNKNOWN entity_type (fallback icon, no crash)", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, () =>
+        HttpResponse.json(
+          makeAiResult("rewrite", AI_GENERATED_TEXT, "ollama/llama3.2", [
+            { id: "x-1", label: "Ismeretlen", entity_type: "totally_unknown" },
+          ]),
+        ),
+      ),
+    );
+    renderAiTab();
+    await waitFor(() => expect(screen.getByText("llama3.2")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Átírás" }));
+    await screen.findByText("Átírás eredménye");
+
+    // The unknown type still maps to a chip (with the fallback icon) — the label
+    // renders and the card does not crash.
+    expect(screen.getByText("Ismeretlen")).toBeInTheDocument();
   });
 
   it("does NOT insert before Accept; Elfogad approves the revision THEN inserts", async () => {

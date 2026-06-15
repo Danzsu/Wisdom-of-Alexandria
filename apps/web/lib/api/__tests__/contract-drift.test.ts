@@ -27,6 +27,7 @@ import type {
   SceneRead,
 } from "@/lib/api/types";
 import type {
+  AIResult,
   GenerationJobRead,
   RevisionRead,
 } from "@/lib/api/ai-types";
@@ -89,6 +90,20 @@ const jobShape = {
   updated_at: "2026-06-14T16:00:00Z",
 } satisfies GenerationJobRead;
 
+/**
+ * AIResult — pins the B2c RAG-context contract: `context_entities` is a list of
+ * `{id, label, entity_type}` (all strings). If the backend renames/drops this
+ * field and the FE type follows, this literal stops satisfying `AIResult` → a
+ * `tsc` error; the runtime assertion below documents the field's JS shape.
+ */
+const aiResultShape = {
+  revision: revisionShape,
+  job: jobShape,
+  context_entities: [
+    { id: "codex-szelene", label: "Szelene", entity_type: "character" },
+  ],
+} satisfies AIResult;
+
 describe("FE↔BE contract drift-guard (interim)", () => {
   it("SceneRead: load-bearing fields exist with the expected JS types", () => {
     expect(typeof sceneShape.id).toBe("string");
@@ -138,5 +153,16 @@ describe("FE↔BE contract drift-guard (interim)", () => {
     expect(typeof jobShape.updated_at).toBe("string");
     expect(typeof jobShape.status).toBe("string");
     expect(typeof jobShape.job_type).toBe("string");
+  });
+
+  it("AIResult: carries a context_entities list of {id,label,entity_type} strings", () => {
+    // The B2c contract slot: RAG entities the AI grounded on. The key must
+    // exist (an empty array is valid — RAG skipped — but the field is present).
+    expect("context_entities" in aiResultShape).toBe(true);
+    expect(Array.isArray(aiResultShape.context_entities)).toBe(true);
+    const [entity] = aiResultShape.context_entities;
+    expect(typeof entity.id).toBe("string");
+    expect(typeof entity.label).toBe("string");
+    expect(typeof entity.entity_type).toBe("string");
   });
 });

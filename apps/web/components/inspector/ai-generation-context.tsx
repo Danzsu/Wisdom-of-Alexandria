@@ -24,7 +24,16 @@ import {
   type ReactNode,
 } from "react";
 import { useParams } from "next/navigation";
+import {
+  Feather,
+  FileText,
+  Globe,
+  MapPin,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "@/components/kit/toast";
+import { Icon } from "@/components/kit/icon";
 import { hu } from "@/lib/i18n/hu";
 import { useEditorStore, type SelectionSnapshot } from "@/lib/stores/editor-store";
 import {
@@ -36,7 +45,49 @@ import {
   useRewrite,
   useWriteContinue,
 } from "@/lib/api/ai-hooks";
+import type { AIContextEntity } from "@/lib/api/ai-types";
 import type { ContextEntity } from "@/components/kit/context-chips";
+
+/**
+ * Backend RAG `entity_type` → leading chip icon. The backend emits codex /
+ * character / location / worldbuilding / scene / chapter / styleguide today
+ * (apps/ai/app/api/v1/ai.py). Reuses the same glyphs as the Codex UI
+ * (character→UserRound, location→MapPin) for visual consistency. Any
+ * UNRECOGNISED type falls back to {@link CONTEXT_FALLBACK_ICON} — never crashes.
+ */
+const CONTEXT_ENTITY_ICON: Record<string, LucideIcon> = {
+  character: UserRound,
+  location: MapPin,
+  worldbuilding: Globe,
+  codex: FileText,
+  scene: FileText,
+  chapter: FileText,
+  styleguide: Feather,
+};
+
+/** Default icon for an unknown/unmapped `entity_type` (graceful fallback). */
+const CONTEXT_FALLBACK_ICON: LucideIcon = FileText;
+
+/**
+ * Map the backend's retrieved RAG entities → the kit `ContextEntity[]` the
+ * result card renders (label + a leading 11px icon). An empty/missing list maps
+ * to `[]`, so the card shows only the model chip (today's behaviour preserved);
+ * an unrecognised `entity_type` resolves to the fallback icon, never a crash.
+ */
+function mapContextEntities(
+  entities: readonly AIContextEntity[] | undefined,
+): ContextEntity[] {
+  if (!entities) return [];
+  return entities.map((entity) => ({
+    label: entity.label,
+    icon: (
+      <Icon
+        icon={CONTEXT_ENTITY_ICON[entity.entity_type] ?? CONTEXT_FALLBACK_ICON}
+        size={11}
+      />
+    ),
+  }));
+}
 
 /** The single-revision AI actions surfaced in the action grid / bubble menu. */
 export type AiActionKind =
@@ -145,11 +196,6 @@ export function AiGenerationProvider({
     continueMutation.isPending ||
     generateMutation.isPending;
 
-  // Retrieved RAG context (Codex entities that fed the generation) is M6/M10.
-  // The backend does not return it yet, so the chip row shows only the model
-  // chip for now; the contract slot (contextEntities) is kept for when RAG lands.
-  const contextEntities: ContextEntity[] = useMemo(() => [], []);
-
   const trigger = useCallback(
     (action: AiActionKind, customInstruction?: string) => {
       setError(null);
@@ -172,6 +218,7 @@ export function AiGenerationProvider({
         revModel: string | null,
         version: string | null,
         range: { from: number; to: number } | null,
+        retrieved: readonly AIContextEntity[] | undefined,
       ) => {
         setPending({
           action,
@@ -179,7 +226,9 @@ export function AiGenerationProvider({
           content,
           model: revModel ?? model ?? hu.inspector.metaUnknown,
           version: version ?? "",
-          contextEntities,
+          // RAG entities the AI service grounded on (`[]` when RAG was skipped —
+          // the common local case — which renders as just the model chip).
+          contextEntities: mapContextEntities(retrieved),
           range,
         });
       };
@@ -201,6 +250,7 @@ export function AiGenerationProvider({
                 res.revision.model_name,
                 res.revision.prompt_version,
                 null,
+                res.context_entities,
               ),
             onError: (e) => setError(e),
           },
@@ -225,6 +275,7 @@ export function AiGenerationProvider({
                 res.revision.model_name,
                 res.revision.prompt_version,
                 null,
+                res.context_entities,
               ),
             onError: (e) => setError(e),
           },
@@ -256,6 +307,7 @@ export function AiGenerationProvider({
               res.revision.model_name,
               res.revision.prompt_version,
               { from: selection.from, to: selection.to },
+              res.context_entities,
             ),
           onError: (e) => setError(e),
         },
@@ -267,7 +319,6 @@ export function AiGenerationProvider({
       rewriteMutation,
       continueMutation,
       generateMutation,
-      contextEntities,
     ],
   );
 

@@ -95,10 +95,34 @@ export type JobType = (typeof JOB_TYPES)[number];
  * AI results — mirror app/api/v1/ai.py (AIResult / AIDescribeResult).
  * ------------------------------------------------------------------------- */
 
+/**
+ * A Codex/manuscript entry RAG retrieved and injected into the generation
+ * context — mirrors the backend `ContextEntity` (app/api/v1/ai.py). The UI
+ * renders these as ContextChips ("grounded on: …"). `entity_type` stays a plain
+ * `z.string()` (codex / character / location / worldbuilding / scene / chapter /
+ * styleguide today): an unrecognised type still parses and falls back to a
+ * default icon rather than throwing — same discipline as the job-status string.
+ */
+export const aiContextEntitySchema = z.object({
+  id: idString,
+  label: z.string(),
+  entity_type: z.string(),
+});
+export type AIContextEntity = z.infer<typeof aiContextEntitySchema>;
+
+/**
+ * Retrieved RAG context attached to every AI result. `.default([])` so a
+ * response WITHOUT the field (an older AI service, or the common local case
+ * where RAG is skipped and the backend sends `[]`) still parses — a missing
+ * field degrades to "no context chips", never a parse error.
+ */
+const contextEntitiesField = z.array(aiContextEntitySchema).default([]);
+
 /** Single-revision result (rewrite / generate-scene / write-continue / summarize). */
 export const aiResultSchema = z.object({
   revision: revisionReadSchema,
   job: generationJobReadSchema,
+  context_entities: contextEntitiesField,
 });
 export type AIResult = z.infer<typeof aiResultSchema>;
 
@@ -106,6 +130,7 @@ export type AIResult = z.infer<typeof aiResultSchema>;
 export const aiDescribeResultSchema = z.object({
   revisions: z.array(revisionReadSchema),
   job: generationJobReadSchema,
+  context_entities: contextEntitiesField,
 });
 export type AIDescribeResult = z.infer<typeof aiDescribeResultSchema>;
 

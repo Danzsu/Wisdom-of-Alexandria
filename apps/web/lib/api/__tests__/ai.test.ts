@@ -65,6 +65,99 @@ describe("lib/api/ai", () => {
     expect(res.revision.revision_type).toBe("generate_scene");
   });
 
+  it("rewrite parses the retrieved context_entities ({id,label,entity_type})", async () => {
+    const res = await rewrite({ selected_text: "x", instruction: "y" });
+    // The default fixture grounds on a character + a location.
+    expect(res.context_entities.length).toBeGreaterThan(0);
+    const character = res.context_entities.find(
+      (e) => e.entity_type === "character",
+    );
+    expect(character?.label).toBe("Szelene");
+    expect(typeof character?.id).toBe("string");
+  });
+
+  it("coerces a response WITHOUT context_entities to [] (.default — older AI service / RAG skipped)", async () => {
+    // A response that omits the field entirely must still parse: the field is
+    // `.default([])`, so a missing list degrades to no context — never a throw.
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, () =>
+        HttpResponse.json({
+          revision: {
+            id: "rev-nocx",
+            scene_id: null,
+            job_id: null,
+            content: "szöveg",
+            approved: false,
+            revision_type: "rewrite",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          job: {
+            id: "job-nocx",
+            scene_id: null,
+            chapter_id: null,
+            job_type: "rewrite",
+            status: "done",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            input_data: {},
+            output_data: {},
+            error_message: null,
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          // context_entities intentionally omitted.
+        }),
+      ),
+    );
+    const res = await rewrite({ selected_text: "x", instruction: "y" });
+    expect(res.context_entities).toEqual([]);
+  });
+
+  it("parses an UNKNOWN entity_type without throwing (graceful FE fallback)", async () => {
+    // entity_type is a plain string on the wire; an unrecognised value parses
+    // (the UI maps it to a fallback icon) rather than failing the whole result.
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, () =>
+        HttpResponse.json({
+          revision: {
+            id: "rev-unk",
+            scene_id: null,
+            job_id: null,
+            content: "szöveg",
+            approved: false,
+            revision_type: "rewrite",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          job: {
+            id: "job-unk",
+            scene_id: null,
+            chapter_id: null,
+            job_type: "rewrite",
+            status: "done",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            input_data: {},
+            output_data: {},
+            error_message: null,
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          context_entities: [
+            { id: "x-1", label: "Valami", entity_type: "totally_unknown" },
+          ],
+        }),
+      ),
+    );
+    const res = await rewrite({ selected_text: "x", instruction: "y" });
+    expect(res.context_entities[0]?.entity_type).toBe("totally_unknown");
+  });
+
   it("describe returns one revision per requested channel", async () => {
     const res = await describeApi({
       selected_text: "x",
