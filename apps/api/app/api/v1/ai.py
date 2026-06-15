@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -74,12 +74,24 @@ async def list_models(
 
 
 # ── Request schemas ──────────────────────────────────────────────────────────
+# Generation parameters (temperature / max_tokens) are OPTIONAL on every AI
+# request. The frontend Settings → Generálás panel persists them and sends them
+# on each request. When omitted (None), AIService keeps its per-action defaults
+# (see ModelRouter.complete + per-method max_tokens) — fully backward compatible.
+
+# Shared validation bounds. temperature: typical 0–2 sampling range; max_tokens:
+# positive with a reasonable upper cap to avoid pathological requests.
+_TemperatureField = Field(default=None, ge=0.0, le=2.0)
+_MaxTokensField = Field(default=None, ge=1, le=32768)
+
 
 class RewriteRequest(BaseModel):
     selected_text: str
     instruction: str
     scene_id: uuid.UUID | None = None
     model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 class DescribeRequest(BaseModel):
@@ -87,6 +99,8 @@ class DescribeRequest(BaseModel):
     channels: list[str] | None = None  # defaults to all 6 in AIService
     scene_id: uuid.UUID | None = None
     model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 class WriteContinueRequest(BaseModel):
@@ -95,6 +109,8 @@ class WriteContinueRequest(BaseModel):
     word_count_target: int = 300
     scene_id: uuid.UUID | None = None
     model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 class GenerateSceneRequest(BaseModel):
@@ -104,6 +120,8 @@ class GenerateSceneRequest(BaseModel):
     style_notes: str = ""
     scene_id: uuid.UUID | None = None
     model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 class SummarizeRequest(BaseModel):
@@ -112,6 +130,8 @@ class SummarizeRequest(BaseModel):
     scene_id: uuid.UUID | None = None
     chapter_id: uuid.UUID | None = None
     model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 # ── Response schemas ─────────────────────────────────────────────────────────
@@ -142,6 +162,8 @@ async def rewrite(
             instruction=data.instruction,
             scene_id=data.scene_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
@@ -166,6 +188,8 @@ async def describe(
             channels=data.channels,
             scene_id=data.scene_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIDescribeResult(
             revisions=[RevisionRead.model_validate(r) for r in revisions],
@@ -192,6 +216,8 @@ async def write_continue(
             word_count_target=data.word_count_target,
             scene_id=data.scene_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
@@ -216,6 +242,8 @@ async def generate_scene(
             style_notes=data.style_notes,
             scene_id=data.scene_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
@@ -237,6 +265,8 @@ async def summarize_scene(
             content_type="jelenet",
             scene_id=scene_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
@@ -258,6 +288,8 @@ async def summarize_chapter(
             content_type="fejezet",
             chapter_id=chapter_id,
             model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:

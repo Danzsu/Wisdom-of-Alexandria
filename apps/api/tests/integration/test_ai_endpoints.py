@@ -167,6 +167,102 @@ async def test_summarize_chapter_returns_revision(client: AsyncClient, auth_head
     mock_ai_svc.summarize.assert_called_once()
 
 
+# ── Generation parameters (P1.2) ───────────────────────────────────────────────
+
+
+async def test_rewrite_forwards_generation_params(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post(
+        "/api/v1/ai/rewrite",
+        json={"selected_text": "x", "instruction": "y", "temperature": 0.3, "max_tokens": 256},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    kwargs = mock_ai_svc.rewrite.call_args.kwargs
+    assert kwargs["temperature"] == 0.3
+    assert kwargs["max_tokens"] == 256
+
+
+async def test_rewrite_omits_generation_params(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post(
+        "/api/v1/ai/rewrite",
+        json={"selected_text": "x", "instruction": "y"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    kwargs = mock_ai_svc.rewrite.call_args.kwargs
+    # Optional + backward compatible: defaults to None, AIService keeps per-action default.
+    assert kwargs["temperature"] is None
+    assert kwargs["max_tokens"] is None
+
+
+async def test_generate_scene_forwards_generation_params(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post(
+        "/api/v1/ai/generate-scene",
+        json={"beats": ["a"], "temperature": 1.2, "max_tokens": 8000},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    kwargs = mock_ai_svc.generate_scene.call_args.kwargs
+    assert kwargs["temperature"] == 1.2
+    assert kwargs["max_tokens"] == 8000
+
+
+async def test_summarize_forwards_generation_params(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    scene_id = str(uuid.uuid4())
+    resp = await client.post(
+        f"/api/v1/ai/scenes/{scene_id}/summarize",
+        json={"content": "x", "temperature": 0.0, "max_tokens": 600},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    kwargs = mock_ai_svc.summarize.call_args.kwargs
+    assert kwargs["temperature"] == 0.0
+    assert kwargs["max_tokens"] == 600
+
+
+@pytest.mark.parametrize("temperature", [-0.1, 2.1])
+async def test_rewrite_rejects_out_of_range_temperature(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc, temperature: float
+):
+    resp = await client.post(
+        "/api/v1/ai/rewrite",
+        json={"selected_text": "x", "instruction": "y", "temperature": temperature},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("max_tokens", [0, -5, 40000])
+async def test_rewrite_rejects_out_of_range_max_tokens(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc, max_tokens: int
+):
+    resp = await client.post(
+        "/api/v1/ai/rewrite",
+        json={"selected_text": "x", "instruction": "y", "max_tokens": max_tokens},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+async def test_generate_scene_rejects_out_of_range_max_tokens(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post(
+        "/api/v1/ai/generate-scene",
+        json={"beats": ["a"], "max_tokens": 32769},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
 async def test_all_ai_endpoints_require_auth(client: AsyncClient, mock_ai_svc):
     scene_id = str(uuid.uuid4())
     chapter_id = str(uuid.uuid4())

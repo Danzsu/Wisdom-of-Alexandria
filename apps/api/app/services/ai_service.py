@@ -1,4 +1,6 @@
 import uuid
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.generation_job import GenerationJob
@@ -7,9 +9,31 @@ from app.services.model_router import ModelRouter, model_router
 from app.services.prompt_loader import PromptLoader, prompt_loader
 from app.services.revision_service import RevisionService, revision_service
 
-
 DESCRIBE_CHANNELS = ["Látás", "Hang", "Tapintás", "Szag", "Íz", "Metaforák"]
 PROMPT_VERSION = "1.0"
+
+
+def _gen_overrides(
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    *,
+    default_max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """Build kwargs for ``ModelRouter.complete`` from optional generation params.
+
+    Only includes a key when a caller-supplied value exists, so that omitted
+    params fall through to the router's own defaults. ``default_max_tokens``
+    preserves an action's hardcoded ``max_tokens`` (e.g. summarize=512) when the
+    caller does not override it.
+    """
+    overrides: dict[str, Any] = {}
+    if temperature is not None:
+        overrides["temperature"] = temperature
+    if max_tokens is not None:
+        overrides["max_tokens"] = max_tokens
+    elif default_max_tokens is not None:
+        overrides["max_tokens"] = default_max_tokens
+    return overrides
 
 
 class AIService:
@@ -33,6 +57,8 @@ class AIService:
         instruction: str,
         scene_id: uuid.UUID | None = None,
         model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> tuple[Revision, GenerationJob]:
         job = await self.svc.create_job(
             db,
@@ -48,6 +74,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
+                **_gen_overrides(temperature, max_tokens),
             )
             revision = await self.svc.save_revision(
                 db,
@@ -72,6 +99,8 @@ class AIService:
         channels: list[str] | None = None,
         scene_id: uuid.UUID | None = None,
         model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> tuple[list[Revision], GenerationJob]:
         """Generate sensory description for each requested channel."""
         target_channels = channels or DESCRIBE_CHANNELS
@@ -96,6 +125,7 @@ class AIService:
                 response = await self.router.complete(
                     messages=self.router.build_messages(system, user),
                     model=model,
+                    **_gen_overrides(temperature, max_tokens),
                 )
                 rev = await self.svc.save_revision(
                     db,
@@ -122,6 +152,8 @@ class AIService:
         word_count_target: int = 300,
         scene_id: uuid.UUID | None = None,
         model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> tuple[Revision, GenerationJob]:
         job = await self.svc.create_job(
             db,
@@ -142,7 +174,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
-                max_tokens=word_count_target * 3,
+                **_gen_overrides(temperature, max_tokens, default_max_tokens=word_count_target * 3),
             )
             revision = await self.svc.save_revision(
                 db,
@@ -169,6 +201,8 @@ class AIService:
         style_notes: str = "",
         scene_id: uuid.UUID | None = None,
         model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> tuple[Revision, GenerationJob]:
         beats_text = "\n".join(f"- {b}" for b in beats)
         job = await self.svc.create_job(
@@ -191,7 +225,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
-                max_tokens=4096,
+                **_gen_overrides(temperature, max_tokens, default_max_tokens=4096),
             )
             revision = await self.svc.save_revision(
                 db,
@@ -217,6 +251,8 @@ class AIService:
         scene_id: uuid.UUID | None = None,
         chapter_id: uuid.UUID | None = None,
         model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> tuple[Revision, GenerationJob]:
         job = await self.svc.create_job(
             db,
@@ -233,7 +269,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
-                max_tokens=512,
+                **_gen_overrides(temperature, max_tokens, default_max_tokens=512),
             )
             revision = await self.svc.save_revision(
                 db,

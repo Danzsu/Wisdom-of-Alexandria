@@ -147,3 +147,121 @@ async def test_summarize_passes_content_type(mock_db):
 async def test_singleton_exists():
     from app.services.ai_service import ai_service
     assert isinstance(ai_service, AIService)
+
+
+# ── Generation parameters (P1.2) ───────────────────────────────────────────────
+# temperature / max_tokens are optional overrides. When provided they must reach
+# ModelRouter.complete with the exact values; when omitted the per-action default
+# (or no override at all) must be preserved.
+
+
+async def test_rewrite_passes_temperature_and_max_tokens(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.rewrite(
+        mock_db,
+        selected_text="x",
+        instruction="y",
+        temperature=0.2,
+        max_tokens=123,
+    )
+    kwargs = router.complete.call_args.kwargs
+    assert kwargs["temperature"] == 0.2
+    assert kwargs["max_tokens"] == 123
+
+
+async def test_rewrite_omits_overrides_when_not_provided(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.rewrite(mock_db, selected_text="x", instruction="y")
+    kwargs = router.complete.call_args.kwargs
+    # No per-action default for rewrite → fall through to router defaults.
+    assert "temperature" not in kwargs
+    assert "max_tokens" not in kwargs
+
+
+async def test_describe_passes_overrides_to_every_channel(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.describe(
+        mock_db,
+        selected_text="x",
+        channels=["Látás", "Hang"],
+        temperature=1.5,
+        max_tokens=256,
+    )
+    assert router.complete.call_count == 2
+    for call in router.complete.call_args_list:
+        assert call.kwargs["temperature"] == 1.5
+        assert call.kwargs["max_tokens"] == 256
+
+
+async def test_write_continue_keeps_word_count_default_when_omitted(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.write_continue(mock_db, scene_text="x", word_count_target=400)
+    kwargs = router.complete.call_args.kwargs
+    # Per-action default preserved: word_count_target * 3.
+    assert kwargs["max_tokens"] == 1200
+    assert "temperature" not in kwargs
+
+
+async def test_write_continue_override_beats_word_count_default(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.write_continue(
+        mock_db,
+        scene_text="x",
+        word_count_target=400,
+        temperature=0.9,
+        max_tokens=999,
+    )
+    kwargs = router.complete.call_args.kwargs
+    assert kwargs["max_tokens"] == 999  # override wins over word_count_target * 3
+    assert kwargs["temperature"] == 0.9
+
+
+async def test_generate_scene_keeps_default_max_tokens_when_omitted(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.generate_scene(mock_db, beats=["a", "b"])
+    kwargs = router.complete.call_args.kwargs
+    assert kwargs["max_tokens"] == 4096  # per-action default preserved
+    assert "temperature" not in kwargs
+
+
+async def test_generate_scene_override_max_tokens(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.generate_scene(mock_db, beats=["a"], max_tokens=2000, temperature=0.4)
+    kwargs = router.complete.call_args.kwargs
+    assert kwargs["max_tokens"] == 2000
+    assert kwargs["temperature"] == 0.4
+
+
+async def test_summarize_keeps_default_max_tokens_when_omitted(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.summarize(mock_db, content="x", content_type="jelenet")
+    kwargs = router.complete.call_args.kwargs
+    assert kwargs["max_tokens"] == 512  # per-action default preserved
+    assert "temperature" not in kwargs
+
+
+async def test_summarize_override_temperature_only(mock_db):
+    router = _make_mock_router()
+    service = AIService(router=router, loader=_make_mock_loader(), svc=_make_mock_svc())
+
+    await service.summarize(mock_db, content="x", temperature=0.1)
+    kwargs = router.complete.call_args.kwargs
+    # temperature overridden, max_tokens falls back to per-action default 512.
+    assert kwargs["temperature"] == 0.1
+    assert kwargs["max_tokens"] == 512
