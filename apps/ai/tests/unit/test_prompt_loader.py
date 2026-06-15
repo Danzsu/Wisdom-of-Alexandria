@@ -98,7 +98,11 @@ def test_real_rewrite_template_exists():
     if not hu_dir.exists():
         pytest.skip("packages/prompts/hu directory not found")
     loader = PromptLoader(hu_dir)
-    content = loader.load("rewrite", selected_text="teszt", instruction="javítsd")
+    # B2b added a {context} placeholder to the rewrite template; the loader's
+    # .format requires every placeholder to be supplied.
+    content = loader.load(
+        "rewrite", selected_text="teszt", instruction="javítsd", context=""
+    )
     assert "teszt" in content
     assert "javítsd" in content
 

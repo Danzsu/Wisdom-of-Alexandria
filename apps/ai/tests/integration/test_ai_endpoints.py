@@ -47,10 +47,12 @@ def _make_ai_service_mock():
     svc = AsyncMock()
     rev = _mock_revision()
     job = _mock_job()
-    svc.rewrite.return_value = (rev, job)
+    # rewrite / write_continue / generate_scene return a 3-tuple including
+    # context_entities (B2b RAG). describe / summarize stay 2-tuples.
+    svc.rewrite.return_value = (rev, job, [])
     svc.describe.return_value = ([_mock_revision(revision_type="describe_channel") for _ in range(6)], job)
-    svc.write_continue.return_value = (rev, job)
-    svc.generate_scene.return_value = (rev, job)
+    svc.write_continue.return_value = (rev, job, [])
+    svc.generate_scene.return_value = (rev, job, [])
     svc.summarize.return_value = (rev, job)
     return svc
 

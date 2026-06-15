@@ -57,7 +57,7 @@ async def test_rewrite_calls_model_router(mock_db):
     svc = _make_mock_svc()
     service = AIService(router=router, loader=loader, svc=svc)
 
-    revision, job = await service.rewrite(
+    revision, job, context_entities = await service.rewrite(
         mock_db,
         selected_text="Eredeti szöveg",
         instruction="Tedd poétikusabbá",
@@ -66,6 +66,8 @@ async def test_rewrite_calls_model_router(mock_db):
     svc.save_revision.assert_called_once()
     assert revision is not None
     assert job is not None
+    # No scene_id → RAG skipped → empty context entities.
+    assert context_entities == []
 
 
 async def test_rewrite_fails_job_on_exception(mock_db):

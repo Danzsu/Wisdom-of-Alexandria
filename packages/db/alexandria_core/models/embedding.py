@@ -16,9 +16,17 @@ class Embedding(UUIDPrimaryKey, Timestamps, Base):
     the indexer skip re-embedding unchanged content, and the
     ``(entity_type, entity_id)`` uniqueness keeps exactly one current vector per
     entity (re-embedding updates the row in place). ``entity_id`` is a globally
-    unique per-entity UUID, so ``book_id`` is intentionally NOT part of the
-    constraint — it is denormalized onto the row only for fast book-scoped
-    retrieval + cascade delete, not for identity.
+    unique per-entity UUID, so neither ``project_id`` nor ``book_id`` is part of
+    the constraint — they are denormalized onto the row only for scoping +
+    cascade delete, not for identity.
+
+    Scoping (B2b): RAG operates at the **PROJECT** level. A generation in book X
+    of project P needs P's codex (project-scoped) AND the project's manuscript
+    (scene/chapter, book-scoped). So ``project_id`` is the primary, NON-null
+    retrieval scope for every row; ``book_id`` is NULLABLE and set only for
+    manuscript entities (scene/chapter) as provenance + a future per-book filter.
+    Project-scoped entities (codex/character/location/worldbuilding/styleguide)
+    leave ``book_id`` NULL.
 
     The ``embedding`` column is a dialect-aware ``Vector``: a real
     ``vector(1536)`` column on PostgreSQL (cosine-distance ANN search) and a
@@ -31,10 +39,19 @@ class Embedding(UUIDPrimaryKey, Timestamps, Base):
         UniqueConstraint("entity_type", "entity_id", name="uq_embeddings_entity"),
     )
 
-    book_id: Mapped[uuid.UUID] = mapped_column(
+    # Primary retrieval scope — every embedding belongs to exactly one project.
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Provenance + future per-book filter; set only for manuscript entities
+    # (scene/chapter). NULL for project-scoped entities (codex, character, …).
+    book_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("books.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     # codex | character | location | worldbuilding | scene | chapter | styleguide

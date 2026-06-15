@@ -75,7 +75,7 @@ async def test_rewrite_uses_configured_cloud_provider_key(db_session):
         "app.services.model_router.acompletion",
         new=AsyncMock(return_value=_mock_response("Átírt szöveg")),
     ) as mock_call:
-        revision, job = await service.rewrite(
+        revision, job, _context = await service.rewrite(
             db_session,
             selected_text="Eredeti szöveg",
             instruction="Tedd poétikusabbá",

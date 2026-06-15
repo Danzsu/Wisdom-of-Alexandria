@@ -38,6 +38,26 @@ async def list_providers(db: AsyncSession, *, enabled_only: bool = False) -> lis
     return list(result.scalars().all())
 
 
+async def get_embedding_provider(db: AsyncSession) -> Provider | None:
+    """Pick an enabled provider that declares a (non-empty) embedding model.
+
+    RAG (B2b) uses this to resolve which embedding model to call. Cloud
+    embeddings are OPTIONAL — when no enabled provider has an ``embedding_model``
+    set, this returns ``None`` and the caller DEGRADES GRACEFULLY (skips
+    retrieval, empty context) rather than failing. Oldest-first (``created_at``),
+    so the result is stable when several providers qualify.
+    """
+    stmt = (
+        select(Provider)
+        .where(Provider.enabled.is_(True))
+        .where(Provider.embedding_model.is_not(None))
+        .where(Provider.embedding_model != "")
+        .order_by(Provider.created_at)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def update_provider(db: AsyncSession, provider: Provider, data: ProviderUpdate) -> Provider:
     payload = data.model_dump(exclude_unset=True)
     # api_key is special: re-encrypt only when explicitly provided.

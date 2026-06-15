@@ -170,7 +170,7 @@ async def test_ai_service_rewrite_persists_unapproved_revision(db_session: Async
         "app.services.model_router.acompletion",
         new=AsyncMock(return_value=fake_response),
     ):
-        revision, job = await service.rewrite(
+        revision, job, _context = await service.rewrite(
             db_session,
             selected_text="Eredeti szöveg.",
             instruction="Tedd drámaibbá",
@@ -227,7 +227,11 @@ async def test_every_ai_action_writes_unapproved_revision(
         "app.services.model_router.acompletion",
         new=AsyncMock(return_value=fake_response),
     ):
-        revision, _job = await getattr(service, action)(db_session, **kwargs)
+        # rewrite/write_continue/generate_scene return a 3-tuple (…,
+        # context_entities); summarize returns a 2-tuple. Take the revision
+        # (first element) uniformly.
+        result = await getattr(service, action)(db_session, **kwargs)
+        revision = result[0]
 
     persisted = (
         await db_session.execute(select(Revision).where(Revision.id == revision.id))

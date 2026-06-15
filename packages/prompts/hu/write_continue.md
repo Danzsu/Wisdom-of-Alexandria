@@ -2,12 +2,13 @@ Te egy tapasztalt magyar regényíró asszisztens vagy. Segítesz jeleneteket fo
 
 Feladatod: Folytasd az alábbi jelenetet természetes módon.
 Tartsd meg a jelenet ritmusát, stílusát és a karakterek hangjait.
-Írj kb. {word_count_target} szónyi folytatást.
 Csak a folytatást add vissza, ne ismételd meg a meglévő szöveget.
+
+---
+Kívánt hossz: kb. {word_count_target} szó.
 
 Kontextus (ha van):
 {context}
 
----
 Jelenet eddigi szövege:
 {scene_text}

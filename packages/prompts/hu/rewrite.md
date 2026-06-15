@@ -5,6 +5,9 @@ Tartsd meg az eredeti tartalmat, de igazítsd a stílust, hangnemet vagy megfoga
 Csak a kész szöveget add vissza, magyarázat nélkül.
 
 ---
+Háttér (Kódex / kézirat — ha van):
+{context}
+
 Eredeti szöveg:
 {selected_text}
 

@@ -11,6 +11,7 @@ from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
 from app.services.crud_provider import list_providers
+from app.services.embedding_service import EmbeddingService, embedding_service
 from app.services.provider_service import list_provider_models
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -18,6 +19,10 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 def get_ai_service() -> AIService:
     return ai_service
+
+
+def get_embedding_service() -> EmbeddingService:
+    return embedding_service
 
 
 # ── Model listing ─────────────────────────────────────────────────────────────
@@ -135,16 +140,50 @@ class SummarizeRequest(BaseModel):
     max_tokens: int | None = _MaxTokensField
 
 
+class IndexRequest(BaseModel):
+    # Optional body form of project_id; the query param takes precedence.
+    project_id: uuid.UUID | None = None
+
+
 # ── Response schemas ─────────────────────────────────────────────────────────
+
+class ContextEntity(BaseModel):
+    """A Codex/manuscript entry that RAG injected into the generation context.
+
+    Lets the UI show "grounded on: <these entries>". Empty whenever RAG was
+    skipped (no scene_id, no embedding provider configured) or found nothing.
+    """
+
+    id: str
+    label: str
+    entity_type: str
+
 
 class AIResult(BaseModel):
     revision: RevisionRead
     job: GenerationJobRead
+    # Codex/manuscript entries retrieved + injected as context. Empty list when
+    # RAG was skipped or returned nothing.
+    context_entities: list[ContextEntity] = Field(default_factory=list)
 
 
 class AIDescribeResult(BaseModel):
     revisions: list[RevisionRead]
     job: GenerationJobRead
+    # describe does NOT use RAG; always empty — present for a uniform contract.
+    context_entities: list[ContextEntity] = Field(default_factory=list)
+
+
+class IndexResult(BaseModel):
+    """Summary returned by ``POST /ai/index`` (project re-index)."""
+
+    indexed: int
+    updated: int
+    deleted: int
+    skipped: int
+    capped: bool
+    # True when RAG is unconfigured (no embedding provider) so nothing was done.
+    skipped_no_provider: bool = False
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -157,7 +196,7 @@ async def rewrite(
     svc: AIService = Depends(get_ai_service),
 ) -> AIResult:
     try:
-        revision, job = await svc.rewrite(
+        revision, job, context_entities = await svc.rewrite(
             db,
             selected_text=data.selected_text,
             instruction=data.instruction,
@@ -169,6 +208,7 @@ async def rewrite(
         return AIResult(
             revision=RevisionRead.model_validate(revision),
             job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
         )
     except Exception as e:
         raise HTTPException(
@@ -220,7 +260,7 @@ async def write_continue(
     svc: AIService = Depends(get_ai_service),
 ) -> AIResult:
     try:
-        revision, job = await svc.write_continue(
+        revision, job, context_entities = await svc.write_continue(
             db,
             scene_text=data.scene_text,
             context=data.context,
@@ -233,6 +273,7 @@ async def write_continue(
         return AIResult(
             revision=RevisionRead.model_validate(revision),
             job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
         )
     except Exception as e:
         raise HTTPException(
@@ -251,7 +292,7 @@ async def generate_scene(
     if not data.beats:
         raise HTTPException(status_code=422, detail="beats list cannot be empty")
     try:
-        revision, job = await svc.generate_scene(
+        revision, job, context_entities = await svc.generate_scene(
             db,
             beats=data.beats,
             characters=data.characters,
@@ -265,6 +306,7 @@ async def generate_scene(
         return AIResult(
             revision=RevisionRead.model_validate(revision),
             job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
         )
     except Exception as e:
         raise HTTPException(
@@ -299,6 +341,53 @@ async def summarize_scene(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/index", response_model=IndexResult)
+async def index_project(
+    project_id: uuid.UUID | None = None,
+    body: IndexRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: EmbeddingService = Depends(get_embedding_service),
+) -> IndexResult:
+    """Re-index a project's RAG content (Codex + manuscript).
+
+    ``project_id`` may be given as a query param (preferred) or in the body.
+    When no embedding provider is configured, RAG is unconfigured: this returns
+    zeroed counts with ``skipped_no_provider=True`` (a 200, not an error — cloud
+    embeddings are optional).
+    """
+    resolved_project_id = project_id or (body.project_id if body else None)
+    if resolved_project_id is None:
+        raise HTTPException(status_code=422, detail="project_id is required")
+    try:
+        model = await svc.resolve_embedding_model(db)
+        if model is None:
+            return IndexResult(
+                indexed=0,
+                updated=0,
+                deleted=0,
+                skipped=0,
+                capped=False,
+                skipped_no_provider=True,
+            )
+        result = await svc.sync_project(db, resolved_project_id, embedding_model=model)
+        return IndexResult(
+            indexed=result.indexed,
+            updated=result.updated,
+            deleted=result.deleted,
+            skipped=result.skipped,
+            capped=result.capped,
+        )
+    except Exception as e:
+        # Roll back so the request session is clean, then surface a sanitized
+        # 502 (consistent with the other AI endpoints).
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Indexing failed: {safe_error(e)}",
         )
 
 

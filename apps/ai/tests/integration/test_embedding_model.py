@@ -17,7 +17,12 @@ from sqlalchemy import select
 from tests.conftest import IS_POSTGRES
 
 
-async def _make_book(db_session) -> uuid.UUID:
+async def _make_book(db_session) -> tuple[uuid.UUID, uuid.UUID]:
+    """Persist a project + book; return ``(project_id, book_id)``.
+
+    B2b made ``Embedding.project_id`` the required scope and ``book_id`` nullable,
+    so callers need both ids.
+    """
     project = Project(title="Embed proj")
     db_session.add(project)
     await db_session.flush()
@@ -25,15 +30,16 @@ async def _make_book(db_session) -> uuid.UUID:
     db_session.add(book)
     await db_session.flush()
     await db_session.commit()
-    return book.id
+    return project.id, book.id
 
 
 @pytest.mark.integration
 async def test_embedding_inserts_and_round_trips_vector_on_sqlite(db_session):
-    book_id = await _make_book(db_session)
+    project_id, book_id = await _make_book(db_session)
     entity_id = uuid.uuid4()
     vec = [0.1, 0.2, 0.3, -0.4]
     row = Embedding(
+        project_id=project_id,
         book_id=book_id,
         entity_type="codex",
         entity_id=entity_id,
@@ -64,10 +70,11 @@ async def test_embedding_unique_entity_constraint(db_session):
     """(entity_type, entity_id) is unique — one current vector per entity."""
     from sqlalchemy.exc import IntegrityError
 
-    book_id = await _make_book(db_session)
+    project_id, book_id = await _make_book(db_session)
     entity_id = uuid.uuid4()
     db_session.add(
         Embedding(
+            project_id=project_id,
             book_id=book_id,
             entity_type="scene",
             entity_id=entity_id,
@@ -81,6 +88,7 @@ async def test_embedding_unique_entity_constraint(db_session):
 
     db_session.add(
         Embedding(
+            project_id=project_id,
             book_id=book_id,
             entity_type="scene",
             entity_id=entity_id,
@@ -97,10 +105,11 @@ async def test_embedding_unique_entity_constraint(db_session):
 
 @pytest.mark.integration
 async def test_embedding_nullable_vector_round_trips_none(db_session):
-    book_id = await _make_book(db_session)
+    project_id, book_id = await _make_book(db_session)
     entity_id = uuid.uuid4()
     db_session.add(
         Embedding(
+            project_id=project_id,
             book_id=book_id,
             entity_type="character",
             entity_id=entity_id,
@@ -124,11 +133,12 @@ async def test_embedding_nullable_vector_round_trips_none(db_session):
 async def test_embedding_vector_round_trips_on_postgres(db_session):
     """On real PostgreSQL the column is a true pgvector ``vector(1536)``; a
     round-trip returns the stored vector. Skipped on SQLite."""
-    book_id = await _make_book(db_session)
+    project_id, book_id = await _make_book(db_session)
     entity_id = uuid.uuid4()
     vec = [0.01 * i for i in range(1536)]
     db_session.add(
         Embedding(
+            project_id=project_id,
             book_id=book_id,
             entity_type="worldbuilding",
             entity_id=entity_id,

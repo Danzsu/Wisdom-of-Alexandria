@@ -57,13 +57,15 @@ def _job(job_type="rewrite"):
 @pytest.fixture
 def mock_ai():
     svc = AsyncMock()
-    svc.rewrite.return_value = (_rev(), _job("rewrite"))
+    # The three RAG-enabled actions return a 3-tuple (…, context_entities); the
+    # rest (describe, summarize) keep the 2-tuple shape.
+    svc.rewrite.return_value = (_rev(), _job("rewrite"), [])
     svc.describe.return_value = (
         [_rev(revision_type="describe_channel", content=f"Csatorna {i}") for i in range(6)],
         _job("describe"),
     )
-    svc.write_continue.return_value = (_rev(content="Folytatás szövege"), _job("write_continue"))
-    svc.generate_scene.return_value = (_rev(content="Generált jelenet"), _job("generate_scene"))
+    svc.write_continue.return_value = (_rev(content="Folytatás szövege"), _job("write_continue"), [])
+    svc.generate_scene.return_value = (_rev(content="Generált jelenet"), _job("generate_scene"), [])
     svc.summarize.return_value = (_rev(content="Összefoglaló"), _job("summarize"))
     app.dependency_overrides[get_ai_service] = lambda: svc
     yield svc
