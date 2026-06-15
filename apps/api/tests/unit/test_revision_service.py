@@ -63,6 +63,18 @@ async def test_fail_job_sets_failed(svc, mock_db):
     assert result.error_message == "LLM timed out"
 
 
+async def test_fail_job_sanitizes_error_message(svc, mock_db):
+    """FIX 2: GET /jobs/{id} returns error_message — bound + single-line it."""
+    from app.models.generation_job import GenerationJob
+    job = GenerationJob(job_type="rewrite", status=JobStatus.RUNNING)
+    raw = "stack\ntrace\r\nwith newlines " + ("y" * 5000)
+    result = await svc.fail_job(mock_db, job, error_message=raw)
+    assert result.status == JobStatus.FAILED
+    assert "\n" not in result.error_message
+    assert "\r" not in result.error_message
+    assert len(result.error_message) <= 300
+
+
 async def test_singleton_exists():
     from app.services.revision_service import revision_service
     assert isinstance(revision_service, RevisionService)

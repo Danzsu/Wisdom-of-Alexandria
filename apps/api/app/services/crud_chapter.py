@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chapter import Chapter
 from app.schemas.chapter import ChapterCreate, ChapterUpdate
+from app.services.ordering import validate_permutation
 
 
 async def create_chapter(db: AsyncSession, book_id: uuid.UUID, data: ChapterCreate) -> Chapter:
@@ -44,8 +45,8 @@ async def delete_chapter(db: AsyncSession, chapter: Chapter) -> None:
 async def reorder_chapters(db: AsyncSession, book_id: uuid.UUID, order: list[uuid.UUID]) -> list[Chapter]:
     chapters = await list_chapters(db, book_id)
     chapter_map = {c.id: c for c in chapters}
+    validate_permutation(order, set(chapter_map), "chapter")
     for idx, chapter_id in enumerate(order):
-        if chapter_id in chapter_map:
-            chapter_map[chapter_id].order_index = idx
+        chapter_map[chapter_id].order_index = idx
     await db.commit()
     return await list_chapters(db, book_id)

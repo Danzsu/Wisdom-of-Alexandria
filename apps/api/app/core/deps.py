@@ -13,7 +13,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            # If an endpoint/service raises mid-transaction, roll back so the
+            # session isn't left in a failed state (which would make any later
+            # commit raise PendingRollbackError and mask the original error).
+            await session.rollback()
+            raise
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:

@@ -8,6 +8,7 @@ Secrets are decrypted only in-memory here and are NEVER logged or returned.
 import httpx
 
 from app.core.crypto import DecryptionError, decrypt_secret
+from app.core.errors import safe_error as _safe_error
 from app.models.provider import Provider
 from app.schemas.provider import ProviderModelInfo, ProviderTestResult
 
@@ -136,10 +137,3 @@ def _default_probe_model(provider_type: str) -> str | None:
     if catalog:
         return catalog[0].id
     return None
-
-
-def _safe_error(exc: Exception) -> str:
-    """Produce a safe, non-secret error detail from an exception."""
-    msg = str(exc) or exc.__class__.__name__
-    # Defensive: never echo anything that looks like a long token back.
-    return msg[:300]

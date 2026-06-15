@@ -176,6 +176,54 @@ async def test_reorder_chapters_book_not_found(client: AsyncClient, auth_headers
     assert resp.status_code == 404
 
 
+async def test_reorder_chapters_rejects_unknown_id(client: AsyncClient, auth_headers: dict):
+    """FIX 5: a non-permutation order is a 400, not a silent drop."""
+    _, book_id = await _setup(client, auth_headers)
+    c1 = (await client.post(f"/api/v1/books/{book_id}/chapters", json={"title": "C1"}, headers=auth_headers)).json()["id"]
+    c2 = (await client.post(f"/api/v1/books/{book_id}/chapters", json={"title": "C2"}, headers=auth_headers)).json()["id"]
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/chapters/reorder",
+        json={"order": [c1, c2, str(uuid.uuid4())]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_reorder_chapters_rejects_missing_id(client: AsyncClient, auth_headers: dict):
+    _, book_id = await _setup(client, auth_headers)
+    c1 = (await client.post(f"/api/v1/books/{book_id}/chapters", json={"title": "C1"}, headers=auth_headers)).json()["id"]
+    await client.post(f"/api/v1/books/{book_id}/chapters", json={"title": "C2"}, headers=auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/chapters/reorder",
+        json={"order": [c1]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_create_chapter_rejects_invalid_status(client: AsyncClient, auth_headers: dict):
+    """FIX 7: chapter status is enum-validated → 422 for garbage."""
+    _, book_id = await _setup(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/chapters",
+        json={"title": "Ch", "status": "archived"},  # not a valid Chapter status
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("st", ["draft", "in_progress", "complete"])
+async def test_create_chapter_accepts_valid_status(client: AsyncClient, auth_headers: dict, st: str):
+    _, book_id = await _setup(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/chapters",
+        json={"title": "Ch", "status": st},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["status"] == st
+
+
 async def test_chapters_scoped_to_book(client: AsyncClient, auth_headers: dict):
     proj = await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)
     pid = proj.json()["id"]

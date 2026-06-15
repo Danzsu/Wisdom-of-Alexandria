@@ -2,14 +2,16 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.text import count_words
 from app.models.scene import Scene
 from app.schemas.scene import SceneCreate, SceneUpdate
+from app.services.ordering import validate_permutation
 
 
 async def create_scene(db: AsyncSession, chapter_id: uuid.UUID, data: SceneCreate) -> Scene:
     dump = data.model_dump()
     if dump.get("content"):
-        dump["word_count"] = len(dump["content"].split())
+        dump["word_count"] = count_words(dump["content"])
     scene = Scene(chapter_id=chapter_id, **dump)
     db.add(scene)
     await db.commit()
@@ -37,7 +39,7 @@ async def update_scene(db: AsyncSession, scene: Scene, data: SceneUpdate) -> Sce
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(scene, field, value)
     if "content" in data.model_dump(exclude_unset=True):
-        scene.word_count = len(scene.content.split()) if scene.content else 0
+        scene.word_count = count_words(scene.content)
     await db.commit()
     await db.refresh(scene)
     return scene
@@ -51,9 +53,9 @@ async def delete_scene(db: AsyncSession, scene: Scene) -> None:
 async def reorder_scenes(db: AsyncSession, chapter_id: uuid.UUID, order: list[uuid.UUID]) -> list[Scene]:
     scenes = await list_scenes(db, chapter_id, include_archived=True)
     scene_map = {s.id: s for s in scenes}
+    validate_permutation(order, set(scene_map), "scene")
     for idx, scene_id in enumerate(order):
-        if scene_id in scene_map:
-            scene_map[scene_id].order_index = idx
+        scene_map[scene_id].order_index = idx
     await db.commit()
     return await list_scenes(db, chapter_id, include_archived=False)
 

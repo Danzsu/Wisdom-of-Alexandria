@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.model_router import ModelRouter, ModelResponse
@@ -92,3 +94,29 @@ async def test_complete_handles_empty_content():
 async def test_module_level_singleton_exists():
     from app.services.model_router import model_router
     assert isinstance(model_router, ModelRouter)
+
+
+# ── Timeout (FIX 3) ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+async def test_complete_passes_timeout_to_acompletion():
+    from app.core.config import settings
+
+    router = ModelRouter(base_url="http://ollama:11434", default_model="ollama/llama3.2")
+    mock_resp = _mock_response("ok")
+    with patch("app.services.model_router.acompletion", new=AsyncMock(return_value=mock_resp)) as mock_call:
+        await router.complete(messages=[{"role": "user", "content": "test"}])
+    assert mock_call.call_args.kwargs["timeout"] == settings.ai_request_timeout
+
+
+@pytest.mark.unit
+async def test_complete_timeout_propagates_cleanly():
+    """A stalled provider surfaces as a raised exception, not a hang."""
+    router = ModelRouter(base_url="http://ollama:11434", default_model="ollama/llama3.2")
+    with patch(
+        "app.services.model_router.acompletion",
+        new=AsyncMock(side_effect=asyncio.TimeoutError("request timed out")),
+    ):
+        with pytest.raises(asyncio.TimeoutError):
+            await router.complete(messages=[{"role": "user", "content": "test"}])

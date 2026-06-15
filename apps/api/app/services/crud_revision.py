@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.text import count_words
 from app.models.revision import Revision
 from app.models.scene import Scene
 
@@ -29,9 +30,7 @@ async def approve_revision(db: AsyncSession, revision: Revision) -> Revision:
         scene = await db.get(Scene, revision.scene_id)
         if scene is not None:
             scene.content = revision.content
-            scene.word_count = (
-                len(revision.content.split()) if revision.content else 0
-            )
+            scene.word_count = count_words(revision.content)
     await db.commit()
     await db.refresh(revision)
     return revision

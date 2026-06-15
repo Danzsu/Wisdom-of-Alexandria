@@ -222,6 +222,31 @@ async def test_reorder_beats(client: AsyncClient, auth_headers: dict):
     assert beats[2]["order_index"] == 2
 
 
+async def test_reorder_beats_rejects_unknown_id(client: AsyncClient, auth_headers: dict):
+    """FIX 5: a non-permutation order is a 400, not a silent drop."""
+    scene_id = await _setup(client, auth_headers)
+    b1 = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B1"}, headers=auth_headers)).json()["id"]
+    b2 = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B2"}, headers=auth_headers)).json()["id"]
+    resp = await client.post(
+        f"/api/v1/scenes/{scene_id}/beats/reorder",
+        json={"order": [b1, b2, str(uuid.uuid4())]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_reorder_beats_rejects_missing_id(client: AsyncClient, auth_headers: dict):
+    scene_id = await _setup(client, auth_headers)
+    b1 = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B1"}, headers=auth_headers)).json()["id"]
+    await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B2"}, headers=auth_headers)
+    resp = await client.post(
+        f"/api/v1/scenes/{scene_id}/beats/reorder",
+        json={"order": [b1]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
 async def test_reorder_beats_scene_not_found(client: AsyncClient, auth_headers: dict):
     resp = await client.post(
         f"/api/v1/scenes/{uuid.uuid4()}/beats/reorder",

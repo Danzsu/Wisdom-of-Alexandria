@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.beat import Beat
 from app.schemas.beat import BeatCreate, BeatUpdate
+from app.services.ordering import validate_permutation
 
 
 async def create_beat(db: AsyncSession, scene_id: uuid.UUID, data: BeatCreate) -> Beat:
@@ -44,8 +45,8 @@ async def delete_beat(db: AsyncSession, beat: Beat) -> None:
 async def reorder_beats(db: AsyncSession, scene_id: uuid.UUID, order: list[uuid.UUID]) -> list[Beat]:
     beats = await list_beats(db, scene_id)
     beat_map = {b.id: b for b in beats}
+    validate_permutation(order, set(beat_map), "beat")
     for idx, beat_id in enumerate(order):
-        if beat_id in beat_map:
-            beat_map[beat_id].order_index = idx
+        beat_map[beat_id].order_index = idx
     await db.commit()
     return await list_beats(db, scene_id)

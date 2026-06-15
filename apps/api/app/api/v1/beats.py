@@ -50,7 +50,10 @@ async def reorder(
     _: str = Depends(get_current_user),
 ) -> list[BeatRead]:
     await _get_scene_or_404(scene_id, db)
-    return await reorder_beats(db, scene_id, data.order)
+    try:
+        return await reorder_beats(db, scene_id, data.order)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{beat_id}", response_model=BeatRead)

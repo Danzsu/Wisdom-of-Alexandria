@@ -64,6 +64,33 @@ def test_chapter_create_default_order_index():
     assert c.order_index == 0
 
 
+# Status enum validation (FIX 7)
+@pytest.mark.parametrize("st", ["draft", "in_progress", "complete"])
+def test_chapter_create_accepts_valid_status(st):
+    assert ChapterCreate(title="F", status=st).status == st
+
+
+def test_chapter_create_rejects_invalid_status():
+    with pytest.raises(ValidationError):
+        ChapterCreate(title="F", status="not_a_status")
+
+
+def test_chapter_create_rejects_scene_only_status():
+    # "archived" is valid for scenes but NOT for chapters.
+    with pytest.raises(ValidationError):
+        ChapterCreate(title="F", status="archived")
+
+
+@pytest.mark.parametrize("st", ["draft", "in_progress", "complete", "archived"])
+def test_scene_create_accepts_valid_status(st):
+    assert SceneCreate(title="J", status=st).status == st
+
+
+def test_scene_create_rejects_invalid_status():
+    with pytest.raises(ValidationError):
+        SceneCreate(title="J", status="bogus")
+
+
 # SceneCreate
 def test_scene_create_pov_character_id_optional():
     s = SceneCreate(title="Jelenet")

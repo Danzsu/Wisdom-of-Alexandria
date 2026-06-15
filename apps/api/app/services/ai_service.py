@@ -3,6 +3,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import safe_error
 from app.models.generation_job import GenerationJob
 from app.models.revision import Revision
 from app.services.model_router import ModelRouter, model_router
@@ -88,7 +89,11 @@ class AIService:
             await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
             return revision, job
         except Exception as e:
-            await self.svc.fail_job(db, job, error_message=str(e))
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
     async def describe(
@@ -140,7 +145,11 @@ class AIService:
             await self.svc.complete_job(db, job, output_data={"revision_ids": [str(r.id) for r in revisions]})
             return revisions, job
         except Exception as e:
-            await self.svc.fail_job(db, job, error_message=str(e))
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
     async def write_continue(
@@ -188,7 +197,11 @@ class AIService:
             await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
             return revision, job
         except Exception as e:
-            await self.svc.fail_job(db, job, error_message=str(e))
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
     async def generate_scene(
@@ -239,7 +252,11 @@ class AIService:
             await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
             return revision, job
         except Exception as e:
-            await self.svc.fail_job(db, job, error_message=str(e))
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
     async def summarize(
@@ -283,7 +300,11 @@ class AIService:
             await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
             return revision, job
         except Exception as e:
-            await self.svc.fail_job(db, job, error_message=str(e))
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
 

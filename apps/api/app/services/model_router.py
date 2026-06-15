@@ -111,6 +111,11 @@ class ModelRouter:
             # No DB context: keep legacy behaviour (Ollama base URL by prefix).
             api_base = self.base_url if resolved_model.startswith(_OLLAMA_PREFIX) else None
 
+        # Hard timeout so a stalled provider cannot hang the request/worker
+        # forever. LiteLLM raises a Timeout exception on expiry, which flows up
+        # to AIService.fail_job + the sanitized 502. A caller may override via
+        # kwargs (e.g. a longer full-book job in V1).
+        kwargs.setdefault("timeout", settings.ai_request_timeout)
         response = await acompletion(
             model=resolved_model,
             messages=messages,

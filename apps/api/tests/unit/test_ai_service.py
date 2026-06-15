@@ -78,6 +78,49 @@ async def test_rewrite_fails_job_on_exception(mock_db):
     svc.fail_job.assert_called_once()
 
 
+async def test_rewrite_rolls_back_before_failing_job(mock_db):
+    """FIX 4: a clean session for fail_job's commit even on a DB-side error."""
+    router = _make_mock_router()
+    svc = _make_mock_svc()
+    router.complete.side_effect = Exception("boom")
+
+    service = AIService(router=router, loader=_make_mock_loader(), svc=svc)
+    with pytest.raises(Exception, match="boom"):
+        await service.rewrite(mock_db, selected_text="x", instruction="y")
+    mock_db.rollback.assert_awaited_once()
+    svc.fail_job.assert_called_once()
+
+
+async def test_rewrite_fail_job_message_is_sanitized(mock_db):
+    """FIX 2: the error_message handed to fail_job is bounded + single-line."""
+    router = _make_mock_router()
+    svc = _make_mock_svc()
+    raw = "secret-trace\nline2\n" + ("x" * 5000)
+    router.complete.side_effect = Exception(raw)
+
+    service = AIService(router=router, loader=_make_mock_loader(), svc=svc)
+    with pytest.raises(Exception):
+        await service.rewrite(mock_db, selected_text="x", instruction="y")
+    msg = svc.fail_job.call_args.kwargs["error_message"]
+    assert "\n" not in msg
+    assert len(msg) <= 300
+
+
+async def test_rewrite_timeout_produces_clean_failure(mock_db):
+    """FIX 3: an acompletion timeout flows to fail_job + re-raise, no hang."""
+    import asyncio
+
+    router = _make_mock_router()
+    svc = _make_mock_svc()
+    router.complete.side_effect = asyncio.TimeoutError("timed out")
+
+    service = AIService(router=router, loader=_make_mock_loader(), svc=svc)
+    with pytest.raises(asyncio.TimeoutError):
+        await service.rewrite(mock_db, selected_text="x", instruction="y")
+    mock_db.rollback.assert_awaited_once()
+    svc.fail_job.assert_called_once()
+
+
 async def test_describe_generates_one_revision_per_channel(mock_db):
     router = _make_mock_router()
     loader = _make_mock_loader()

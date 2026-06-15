@@ -55,7 +55,10 @@ async def reorder(
     _: str = Depends(get_current_user),
 ) -> list[ChapterRead]:
     await _get_book_or_404(book_id, db)
-    return await reorder_chapters(db, book_id, data.order)
+    try:
+        return await reorder_chapters(db, book_id, data.order)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{chapter_id}", response_model=ChapterRead)

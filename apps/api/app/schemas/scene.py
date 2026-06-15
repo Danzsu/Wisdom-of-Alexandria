@@ -1,6 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
+# Must match SceneStatus in app/models/scene.py EXACTLY. Constrained so an
+# invalid status is rejected with 422 rather than silently persisted.
+SceneStatusLiteral = Literal["draft", "in_progress", "complete", "archived"]
 
 
 class SceneCreate(BaseModel):
@@ -8,7 +14,7 @@ class SceneCreate(BaseModel):
     content: str | None = None
     summary: str | None = None
     order_index: int = 0
-    status: str = "draft"
+    status: SceneStatusLiteral = "draft"
     pov_character_id: uuid.UUID | None = None
 
 
@@ -17,7 +23,7 @@ class SceneUpdate(BaseModel):
     content: str | None = None
     summary: str | None = None
     order_index: int | None = None
-    status: str | None = None
+    status: SceneStatusLiteral | None = None
     pov_character_id: uuid.UUID | None = None
 
 

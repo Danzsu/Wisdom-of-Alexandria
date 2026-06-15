@@ -130,6 +130,33 @@ async def test_approve_revision_updates_scene(
     assert scene_data["word_count"] == 6
 
 
+async def test_approve_revision_word_count_strips_markup(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """FIX 6: approving a rich-text revision counts visible words, not tags."""
+    from app.models.revision import Revision
+
+    chapter_id, scene_id = await _setup_scene(client, auth_headers)
+
+    rev = Revision(
+        scene_id=uuid.UUID(scene_id),
+        content="<p>A hős <em>belép</em> a szobába.</p>",
+        approved=False,
+        revision_type="generate_scene",
+    )
+    db_session.add(rev)
+    await db_session.commit()
+
+    resp = await client.post(f"/api/v1/revisions/{rev.id}/approve", headers=auth_headers)
+    assert resp.status_code == 200
+
+    scene_resp = await client.get(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}", headers=auth_headers
+    )
+    # "A hős belép a szobába." → 5 words, tags excluded.
+    assert scene_resp.json()["word_count"] == 5
+
+
 async def test_approve_revision_without_scene_id(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):

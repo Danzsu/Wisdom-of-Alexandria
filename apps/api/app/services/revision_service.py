@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import safe_error
 from app.models.generation_job import GenerationJob, JobStatus
 from app.models.revision import Revision
 
@@ -81,7 +82,10 @@ class RevisionService:
         error_message: str,
     ) -> GenerationJob:
         job.status = JobStatus.FAILED
-        job.error_message = error_message
+        # GET /jobs/{id} returns error_message, so bound + single-line it to
+        # avoid persisting (and later leaking) unbounded raw internal text.
+        # Idempotent if the caller already sanitized.
+        job.error_message = safe_error(error_message)
         await db.commit()
         await db.refresh(job)
         return job

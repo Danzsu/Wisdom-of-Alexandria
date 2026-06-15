@@ -90,6 +90,50 @@ async def test_rewrite_ai_error_returns_502(client: AsyncClient, auth_headers: d
     assert resp.status_code == 502
 
 
+async def test_rewrite_ai_error_detail_is_sanitized(client: AsyncClient, auth_headers: dict, mock_ai_svc):
+    """FIX 1: the 502 detail must be bounded, single-line, generic-prefixed."""
+    raw = "Traceback (most recent call last):\n  File ...\n" + ("z" * 5000)
+    mock_ai_svc.rewrite.side_effect = Exception(raw)
+    resp = await client.post(
+        "/api/v1/ai/rewrite",
+        json={"selected_text": "x", "instruction": "y"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert detail.startswith("AI generation failed: ")
+    assert "\n" not in detail
+    # generic prefix (23 chars) + bounded body (<= 300).
+    assert len(detail) <= len("AI generation failed: ") + 300
+    # The old leaky format must be gone.
+    assert not detail.startswith("AI error:")
+
+
+async def test_all_ai_endpoints_sanitize_error_detail(client: AsyncClient, auth_headers: dict, mock_ai_svc):
+    """Every AI handler uses the sanitized prefix, never the old raw format."""
+    scene_id = str(uuid.uuid4())
+    chapter_id = str(uuid.uuid4())
+    mock_ai_svc.rewrite.side_effect = Exception("boom\nleak")
+    mock_ai_svc.describe.side_effect = Exception("boom\nleak")
+    mock_ai_svc.write_continue.side_effect = Exception("boom\nleak")
+    mock_ai_svc.generate_scene.side_effect = Exception("boom\nleak")
+    mock_ai_svc.summarize.side_effect = Exception("boom\nleak")
+    endpoints = [
+        ("/api/v1/ai/rewrite", {"selected_text": "x", "instruction": "y"}),
+        ("/api/v1/ai/describe", {"selected_text": "x"}),
+        ("/api/v1/ai/write-continue", {"scene_text": "x"}),
+        ("/api/v1/ai/generate-scene", {"beats": ["x"]}),
+        (f"/api/v1/ai/scenes/{scene_id}/summarize", {"content": "x"}),
+        (f"/api/v1/ai/chapters/{chapter_id}/summarize", {"content": "x"}),
+    ]
+    for url, body in endpoints:
+        resp = await client.post(url, json=body, headers=auth_headers)
+        assert resp.status_code == 502, url
+        detail = resp.json()["detail"]
+        assert detail.startswith("AI generation failed: "), url
+        assert "\n" not in detail, url
+
+
 async def test_describe_returns_6_revisions_by_default(client: AsyncClient, auth_headers: dict, mock_ai_svc):
     resp = await client.post(
         "/api/v1/ai/describe",

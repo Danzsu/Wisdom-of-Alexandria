@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
+from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead
 from app.schemas.revision import RevisionRead
 from app.services.ai_service import DESCRIBE_CHANNELS, AIService, ai_service
@@ -167,7 +168,10 @@ async def rewrite(
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
 
 
 @router.post("/describe", response_model=AIDescribeResult)
@@ -198,7 +202,10 @@ async def describe(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
 
 
 @router.post("/write-continue", response_model=AIResult)
@@ -221,7 +228,10 @@ async def write_continue(
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
 
 
 @router.post("/generate-scene", response_model=AIResult)
@@ -247,7 +257,10 @@ async def generate_scene(
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
 
 
 @router.post("/scenes/{scene_id}/summarize", response_model=AIResult)
@@ -270,7 +283,10 @@ async def summarize_scene(
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
 
 
 @router.post("/chapters/{chapter_id}/summarize", response_model=AIResult)
@@ -293,4 +309,7 @@ async def summarize_chapter(
         )
         return AIResult(revision=RevisionRead.model_validate(revision), job=GenerationJobRead.model_validate(job))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
