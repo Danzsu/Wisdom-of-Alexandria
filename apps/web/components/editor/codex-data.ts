@@ -11,7 +11,6 @@
  * mounted (e.g. the extension unit harness).
  */
 import { povSlot } from "@/lib/pov-color";
-import { decodeTags } from "@/lib/api/codex";
 import type { CodexEntryRead } from "@/lib/api/types";
 
 /** Visual type of a codex entry (drives the avatar tone in the popover). */
@@ -99,7 +98,7 @@ export function buildCodexMentionIndex(
 ): CodexMentionIndex {
   const index: CodexMentionIndex = {};
   for (const entry of entries) {
-    const { aliases, role } = decodeTags(entry.tags);
+    const { aliases, role } = entry;
     const isCharacter = entry.entry_type === "character";
     const typeName = HU_TYPE_LINE[entry.entry_type] ?? "Bejegyzés";
     const mention: CodexMentionEntry = {

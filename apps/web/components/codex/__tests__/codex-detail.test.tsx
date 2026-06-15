@@ -18,8 +18,11 @@ const SZELENE: CodexEntryRead = {
   title: "Szelene",
   entry_type: "character",
   content: "A Nagykönyvtár éjszakai írnoka.",
+  // P1.4 — aliases + role are now dedicated columns, not a `tags` codec.
+  aliases: ["Lené"],
+  role: "Protagonista",
   ai_visible: true,
-  tags: ["__woa:alias=Lené", "__woa:role=Protagonista"],
+  tags: [],
   created_at: "2026-06-14T14:32:00Z",
   updated_at: "2026-06-14T14:32:00Z",
 };
@@ -85,7 +88,7 @@ describe("CodexDetail", () => {
     expect(bodies.at(-1)).toMatchObject({ content: "Új leírás." });
   });
 
-  it("adding an alias PATCHes the tags list (__woa:alias= key)", async () => {
+  it("adding an alias PATCHes the dedicated aliases field", async () => {
     const user = userEvent.setup();
     const { bodies } = capturePatches();
     renderDetail();
@@ -94,17 +97,12 @@ describe("CodexDetail", () => {
     await user.type(aliasInput, "az írnok{Enter}");
 
     await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const last = bodies.at(-1) as { tags: string[] };
-    expect(last.tags).toEqual(
-      expect.arrayContaining([
-        "__woa:alias=Lené",
-        "__woa:alias=az írnok",
-        "__woa:role=Protagonista",
-      ]),
-    );
+    const last = bodies.at(-1) as { aliases: string[] };
+    // The new alias is appended to the existing aliases (Lené), not folded into tags.
+    expect(last.aliases).toEqual(["Lené", "az írnok"]);
   });
 
-  it("editing the story role PATCHes the __woa:role= key", async () => {
+  it("editing the story role PATCHes the dedicated role field", async () => {
     const user = userEvent.setup();
     const { bodies } = capturePatches();
     renderDetail();
@@ -115,13 +113,7 @@ describe("CodexDetail", () => {
     await user.tab();
 
     await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const last = bodies.at(-1) as { tags: string[] };
-    expect(last.tags).toEqual(
-      expect.arrayContaining(["__woa:role=Antagonista"]),
-    );
-    expect(last.tags).not.toEqual(
-      expect.arrayContaining(["__woa:role=Protagonista"]),
-    );
+    expect(bodies.at(-1)).toMatchObject({ role: "Antagonista" });
   });
 
   it("the ai_visible toggle persists via PATCH (assert request body)", async () => {

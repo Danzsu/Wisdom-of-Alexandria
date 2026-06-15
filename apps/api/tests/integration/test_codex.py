@@ -598,6 +598,8 @@ async def test_create_codex_entry(client: AsyncClient, auth_headers: dict):
     assert data["entry_type"] == "custom"
     assert data["ai_visible"] is True
     assert data["tags"] == []
+    assert data["aliases"] == []
+    assert data["role"] is None
     assert data["content"] is None
     assert "id" in data
     assert "created_at" in data
@@ -612,6 +614,8 @@ async def test_create_codex_entry_with_all_fields(client: AsyncClient, auth_head
             "title": "Varázslat Szabályai",
             "entry_type": "magic_system",
             "content": "A mágia az energia átalakításán alapul",
+            "aliases": ["Varázs", "Mágia rendszer"],
+            "role": "rendszer",
             "ai_visible": False,
             "tags": ["mágia", "szabályok", "rendszer"],
         },
@@ -622,6 +626,8 @@ async def test_create_codex_entry_with_all_fields(client: AsyncClient, auth_head
     assert data["title"] == "Varázslat Szabályai"
     assert data["entry_type"] == "magic_system"
     assert data["content"] == "A mágia az energia átalakításán alapul"
+    assert data["aliases"] == ["Varázs", "Mágia rendszer"]
+    assert data["role"] == "rendszer"
     assert data["ai_visible"] is False
     assert data["tags"] == ["mágia", "szabályok", "rendszer"]
 
@@ -641,6 +647,54 @@ async def test_create_codex_entry_tags_stored_correctly(client: AsyncClient, aut
         headers=auth_headers,
     )
     assert get_resp.json()["tags"] == ["x", "y", "z"]
+
+
+async def test_create_codex_entry_aliases_stored_correctly(client: AsyncClient, auth_headers: dict):
+    """Aliases persist as a real JSON list column (P1.4), round-tripping on GET."""
+    project_id = await _create_project(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/codex",
+        json={"title": "Álnév Teszt", "aliases": ["Lené", "az írnok"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["aliases"] == ["Lené", "az írnok"]
+
+    entry_id = data["id"]
+    get_resp = await client.get(
+        f"/api/v1/projects/{project_id}/codex/{entry_id}",
+        headers=auth_headers,
+    )
+    assert get_resp.json()["aliases"] == ["Lené", "az írnok"]
+
+
+async def test_update_codex_entry_aliases_and_role(client: AsyncClient, auth_headers: dict):
+    """PATCH persists the dedicated aliases + role columns (P1.4)."""
+    project_id = await _create_project(client, auth_headers)
+    entry_id = (await client.post(
+        f"/api/v1/projects/{project_id}/codex",
+        json={"title": "Szelene", "aliases": ["Lené"], "role": "Protagonista"},
+        headers=auth_headers,
+    )).json()["id"]
+
+    resp = await client.patch(
+        f"/api/v1/projects/{project_id}/codex/{entry_id}",
+        json={"aliases": ["Lené", "az írnok"], "role": "Antagonista"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["aliases"] == ["Lené", "az írnok"]
+    assert data["role"] == "Antagonista"
+
+    # Verify persisted (not just echoed) by fetching.
+    get_resp = await client.get(
+        f"/api/v1/projects/{project_id}/codex/{entry_id}",
+        headers=auth_headers,
+    )
+    assert get_resp.json()["aliases"] == ["Lené", "az írnok"]
+    assert get_resp.json()["role"] == "Antagonista"
 
 
 async def test_create_codex_entry_project_not_found(client: AsyncClient, auth_headers: dict):

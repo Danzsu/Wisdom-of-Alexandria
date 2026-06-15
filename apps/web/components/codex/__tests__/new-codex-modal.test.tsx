@@ -15,7 +15,7 @@ const base = `${API_BASE_URL}/api/v1`;
 describe("NewCodexModal — two-step create", () => {
   beforeEach(() => resetCodexStore());
 
-  it("picks a type, submits, and POSTs the correct payload (aliases → tags)", async () => {
+  it("picks a type, submits, and POSTs the correct payload (aliases field)", async () => {
     const user = userEvent.setup();
     const onCreated = vi.fn();
     const onOpenChange = vi.fn();
@@ -69,11 +69,14 @@ describe("NewCodexModal — two-step create", () => {
       title: "Theón",
       entry_type: "character",
       ai_visible: true,
+      role: null,
+      tags: [],
     });
-    // Aliases are folded into tags with the namespaced `__woa:alias=` key.
-    expect((captured as { tags: string[] }).tags).toEqual(
-      expect.arrayContaining(["__woa:alias=a mester", "__woa:alias=Theónt"]),
-    );
+    // Aliases go to the dedicated `aliases` column (P1.4 — no tags codec).
+    expect((captured as { aliases: string[] }).aliases).toEqual([
+      "a mester",
+      "Theónt",
+    ]);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

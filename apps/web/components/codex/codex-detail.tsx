@@ -7,10 +7,12 @@
  *
  * MVP tabs (real, persisted):
  *   - Részletek: aliases chips + AI-suggest stub, description, story role →
- *     saved via the update mutation (aliases/role fold into `tags`; see codex.ts)
+ *     saved via the update mutation to the dedicated `aliases` / `role` columns
+ *     (P1.4 — no more `tags` codec; see lib/api/codex.ts)
  *   - Megemlítések: scenes whose content contains the name / an alias (best-
  *     effort scan over the book's scene tree)
- *   - Nyomon követés: name-tracking checkbox, AI-context radios, and the
+ *   - Nyomon követés: name-tracking checkbox (UI-only — the backend has no field
+ *     for it; the real AI gate is `ai_visible`), AI-context radios, and the
  *     `ai_visible` spoiler toggle → ai_visible persists via the update mutation.
  *
  * V1 placeholders (honest empty states, no faked engine):
@@ -36,8 +38,6 @@ import { toast } from "@/components/kit/toast";
 import {
   contentMentions,
   countMentions,
-  decodeTags,
-  encodeTags,
   mentionNeedles,
   parseAliasInput,
 } from "@/lib/api/codex";
@@ -90,14 +90,12 @@ export function CodexDetail({
     setTab("details");
   }, [entry.id]);
 
-  const decoded = useMemo(() => decodeTags(entry.tags), [entry.tags]);
-
   // Single manuscript scan, shared by the header count + the Megemlítések tab,
   // so "N megemlítés" means real scene mentions everywhere (NOT the alias count).
   const tree = useBookTree(bookId);
   const needles = useMemo(
-    () => mentionNeedles(entry.title, decoded.aliases),
-    [entry.title, decoded.aliases],
+    () => mentionNeedles(entry.title, entry.aliases),
+    [entry.title, entry.aliases],
   );
   const mentionCount = useMemo(
     () => countMentions(tree.chapters, needles),
@@ -144,7 +142,6 @@ export function CodexDetail({
       <div className="mx-auto max-w-[720px]">
         <DetailHeader
           entry={entry}
-          decoded={decoded}
           mentionCount={mentionCount}
           saving={update.isPending}
           onRename={(title) => patch({ title })}
@@ -177,11 +174,11 @@ export function CodexDetail({
         </div>
 
         {tab === "details" ? (
-          <DetailsTab entry={entry} decoded={decoded} onPatch={patch} />
+          <DetailsTab entry={entry} onPatch={patch} />
         ) : tab === "mentions" ? (
           <MentionsTab tree={tree} needles={needles} />
         ) : tab === "tracking" ? (
-          <TrackingTab entry={entry} decoded={decoded} onPatch={patch} />
+          <TrackingTab entry={entry} onPatch={patch} />
         ) : tab === "research" ? (
           <V1Placeholder
             title={hu.codex.researchV1Title}
@@ -217,14 +214,12 @@ export function CodexDetail({
 
 function DetailHeader({
   entry,
-  decoded,
   mentionCount,
   saving,
   onRename,
   onDelete,
 }: {
   entry: CodexEntryRead;
-  decoded: ReturnType<typeof decodeTags>;
   mentionCount: number;
   saving: boolean;
   onRename: (title: string) => void;
@@ -264,12 +259,12 @@ function DetailHeader({
         />
 
         <div className="flex items-center gap-1.5">
-          {decoded.role ? (
+          {entry.role ? (
             <span className="flex h-5 items-center rounded-full bg-pov2-bg px-[9px] text-[11px] font-semibold text-pov2-tx">
-              {decoded.role}
+              {entry.role}
             </span>
           ) : null}
-          {decoded.labels.map((label) => (
+          {entry.tags.map((label) => (
             <span
               key={label}
               className="flex h-5 items-center rounded-full bg-surface-muted px-[9px] text-[11px] text-text-soft"
@@ -339,26 +334,28 @@ function DetailHeader({
 
 function DetailsTab({
   entry,
-  decoded,
   onPatch,
 }: {
   entry: CodexEntryRead;
-  decoded: ReturnType<typeof decodeTags>;
-  onPatch: (patch: { tags?: string[]; content?: string | null }) => void;
+  onPatch: (patch: {
+    aliases?: string[];
+    role?: string | null;
+    content?: string | null;
+  }) => void;
 }) {
   const [aliasInput, setAliasInput] = useState("");
   const [description, setDescription] = useState(entry.content ?? "");
   useEffect(() => setDescription(entry.content ?? ""), [entry.content]);
 
-  /** Rebuild + persist the tags list from a new alias set. */
+  /** Persist a new alias set to the dedicated `aliases` column. */
   function commitAliases(aliases: string[]) {
-    onPatch({ tags: encodeTags({ ...decoded, aliases }) });
+    onPatch({ aliases });
   }
 
   function addAliases() {
     const additions = parseAliasInput(aliasInput);
     if (additions.length === 0) return;
-    const merged = [...decoded.aliases];
+    const merged = [...entry.aliases];
     for (const alias of additions) {
       if (!merged.some((a) => a.toLowerCase() === alias.toLowerCase())) {
         merged.push(alias);
@@ -369,7 +366,7 @@ function DetailsTab({
   }
 
   function removeAlias(alias: string) {
-    commitAliases(decoded.aliases.filter((a) => a !== alias));
+    commitAliases(entry.aliases.filter((a) => a !== alias));
   }
 
   function commitDescription() {
@@ -388,9 +385,9 @@ function DetailsTab({
         <p className="m-0 mb-[7px] text-[12px] text-text-muted">
           {hu.codex.aliasesHint}
         </p>
-        {decoded.aliases.length > 0 ? (
+        {entry.aliases.length > 0 ? (
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {decoded.aliases.map((alias) => (
+            {entry.aliases.map((alias) => (
               <span
                 key={alias}
                 className="flex h-6 items-center gap-1.5 rounded-full bg-surface-muted px-2.5 text-[12px] text-text-soft"
@@ -474,7 +471,7 @@ function DetailsTab({
       </div>
 
       {/* Story role */}
-      <RoleField decoded={decoded} onPatch={onPatch} />
+      <RoleField role={entry.role} onPatch={onPatch} />
 
       <button
         type="button"
@@ -488,21 +485,21 @@ function DetailsTab({
   );
 }
 
-/** Story-role field — a single `role:` tag, edited inline and persisted. */
+/** Story-role field — the dedicated `role` column, edited inline and persisted. */
 function RoleField({
-  decoded,
+  role: roleValue,
   onPatch,
 }: {
-  decoded: ReturnType<typeof decodeTags>;
-  onPatch: (patch: { tags?: string[] }) => void;
+  role: string | null;
+  onPatch: (patch: { role?: string | null }) => void;
 }) {
-  const [role, setRole] = useState(decoded.role ?? "");
-  useEffect(() => setRole(decoded.role ?? ""), [decoded.role]);
+  const [role, setRole] = useState(roleValue ?? "");
+  useEffect(() => setRole(roleValue ?? ""), [roleValue]);
 
   function commitRole() {
     const next = role.trim();
-    if (next !== (decoded.role ?? "")) {
-      onPatch({ tags: encodeTags({ ...decoded, role: next || null }) });
+    if (next !== (roleValue ?? "")) {
+      onPatch({ role: next || null });
     }
   }
 
@@ -599,27 +596,23 @@ function MentionsTab({
 
 function TrackingTab({
   entry,
-  decoded,
   onPatch,
 }: {
   entry: CodexEntryRead;
-  decoded: ReturnType<typeof decodeTags>;
-  onPatch: (patch: { tags?: string[]; ai_visible?: boolean }) => void;
+  onPatch: (patch: { ai_visible?: boolean }) => void;
 }) {
-  // The name-tracking opt-out is the codec's "__woa:tracking=off" control key
-  // (the backend has no dedicated column); its absence means tracking is on.
-  const tracking = !decoded.trackingOff;
-
-  function toggleTracking(next: boolean) {
-    onPatch({ tags: encodeTags({ ...decoded, trackingOff: !next }) });
-  }
+  // Name-tracking is a UI-only preference: the backend has no field for it (the
+  // recognition scan is title+aliases based, and the real AI gate is the
+  // `ai_visible` column below). It is local component state, reset per entry.
+  const [tracking, setTracking] = useState(true);
+  useEffect(() => setTracking(true), [entry.id]);
 
   return (
     <div className="flex max-w-[480px] flex-col gap-4">
       <CheckboxRow
         label={hu.codex.trackingByName}
         checked={tracking}
-        onCheckedChange={(next) => toggleTracking(next === true)}
+        onCheckedChange={(next) => setTracking(next === true)}
       />
 
       <div className="border-t border-border pt-3.5">

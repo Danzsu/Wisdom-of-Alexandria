@@ -19,6 +19,11 @@ class CodexEntry(UUIDPrimaryKey, Timestamps, Base):
         String(100), nullable=False, default="custom"
     )
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Recognition names (Álnevek / Becenevek) — mirrors Character.aliases so the
+    # manuscript name-scan can resolve a mention by an alias, not just the title.
+    aliases: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    # The single story role (Hős / Antagonista / …) — mirrors Character.role.
+    role: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     tags: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
 

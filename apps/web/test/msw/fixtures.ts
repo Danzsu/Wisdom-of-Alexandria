@@ -187,10 +187,11 @@ export const FAROSZ_CODEX: CodexEntryRead[] = [
     title: "Szelene",
     entry_type: "character",
     content: "A Nagykönyvtár éjszakai írnoka.",
+    // P1.4 — dedicated columns: aliases + role; "főszereplő" is a plain label.
+    aliases: ["Lené"],
+    role: "Protagonista",
     ai_visible: true,
-    // The __woa: codec folds aliases + story role into the real `tags` list
-    // (see lib/api/codex.ts); "főszereplő" is a plain user label.
-    tags: ["__woa:alias=Lené", "__woa:role=Protagonista", "főszereplő"],
+    tags: ["főszereplő"],
     created_at: "2026-06-14T14:32:00Z",
     updated_at: "2026-06-14T14:32:00Z",
   },
@@ -200,6 +201,8 @@ export const FAROSZ_CODEX: CodexEntryRead[] = [
     title: "Nagykönyvtár",
     entry_type: "location",
     content: "A keleti szárny és a tiltott termek.",
+    aliases: [],
+    role: null,
     ai_visible: true,
     tags: [],
     created_at: "2026-06-14T14:32:00Z",
@@ -216,6 +219,8 @@ export function makeCodexEntry(
     title?: string;
     entry_type?: string;
     content?: string | null;
+    aliases?: string[];
+    role?: string | null;
     ai_visible?: boolean;
     tags?: string[];
   },
@@ -227,6 +232,8 @@ export function makeCodexEntry(
     title: body.title ?? "Névtelen bejegyzés",
     entry_type: body.entry_type ?? "custom",
     content: body.content ?? null,
+    aliases: body.aliases ?? [],
+    role: body.role ?? null,
     ai_visible: body.ai_visible ?? true,
     tags: body.tags ?? [],
     created_at: NOW,

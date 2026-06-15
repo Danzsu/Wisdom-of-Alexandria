@@ -1,5 +1,5 @@
 /**
- * Typed endpoint functions + domain codec for the Codex resource.
+ * Typed endpoint functions + small helpers for the Codex resource.
  *
  * Codex entries are PROJECT-scoped (`apps/api/app/api/v1/codex.py`, prefix
  * `/projects/{project_id}/codex` under `/api/v1`):
@@ -9,41 +9,19 @@
  *   PATCH  /projects/{pid}/codex/{id}       → CodexEntryRead
  *   DELETE /projects/{pid}/codex/{id}       → 204
  *
- * REAL BACKEND CONTRACT (apps/api/app/schemas/codex_entry.py): a Codex entry is
- * a GENERIC card with `title` (the NAME), `entry_type`, `content` (the
- * DESCRIPTION), `ai_visible` and a single `tags` list. There are NO dedicated
- * `aliases` / `role` columns. The prototype's Character Detail shows separate
- * Álnevek (aliases) + Story-role fields, so we fold those into the real `tags`
- * array via a small, documented codec.
+ * BACKEND CONTRACT (apps/api/app/schemas/codex_entry.py): since P1.4 a Codex card
+ * carries DEDICATED `aliases: string[]` (recognition names) + `role: string|null`
+ * (the single story role) columns, mirroring `Character`. `content` is the
+ * DESCRIPTION, `ai_visible` is the spoiler-protection AI gate, and `tags` is a
+ * list of plain user labels.
  *
- * BACKEND GAP: the proper MVP fix is a real `aliases: string[]` + `role: string`
- * (+ a name-tracking opt-out) column on `codex_entry`. Until the schema grows
- * those, this namespaced codec is the interim workaround.
- *
- * Encoding scheme — internal control keys live under a `__woa:` sentinel that a
- * user/seed/API free-form tag cannot reasonably author, so they are NEVER
- * confused with a plain label:
- *
- *   - an alias        → "__woa:alias=<value>"   (e.g. "__woa:alias=Lené")
- *   - the story role  → "__woa:role=<value>"    (single, e.g. "__woa:role=Hős")
- *   - name-tracking off → "__woa:tracking=off"  (absence ⇒ tracking on)
- *   - any other tag   → a free-form label ("+ címke" chips)
- *
- * `decodeTags` recognises ONLY sentinel-prefixed keys as structured; everything
- * else (including a literal "alias:foo" / "role:X" / "tracking:off") is a plain
- * user label and is returned in `labels`. `encodeTags` rebuilds the flat list.
- *
- * Guarantees: `encode(decode(tags))` is stable (idempotent) for already-encoded
- * input — user-label order is preserved, aliases are de-duplicated, and multiple
- * `__woa:role=` keys collapse to the LAST one (last wins, no crash). Empty /
- * whitespace-only values are trimmed and skipped. The sentinel keys are stripped
- * from `labels`, so no internal key ever surfaces as a visible chip.
- *
- * Backward-compatibility: the OLD bare `alias:` / `role:` / `tracking:off`
- * scheme is NOT read. Any pre-existing local-dev data on the old scheme now
- * decodes as plain labels (harmless, fully visible, never corrupted). This is a
- * local-dev-only app with no migration burden; the seed fixture was moved to the
- * new scheme so tests reflect reality.
+ * HISTORY: M6 had no `aliases` / `role` columns, so the UI folded those (plus a
+ * "name-tracking off" flag) into `tags` via a `__woa:` namespaced codec. P1.4
+ * added the real columns and REMOVED that codec entirely — aliases + role now
+ * come from / go to their own fields, and `tags` is purely user labels. The M6
+ * "track by name" toggle had no backend gate (the real AI gate is `ai_visible`,
+ * a separate column), so it is now UI-only local state in the Tracking tab — no
+ * residual `__woa:` tag is written. See `components/codex/codex-detail.tsx`.
  */
 import { apiFetch } from "./client";
 import {
@@ -80,104 +58,8 @@ export function asCodexEntryType(value: string): CodexEntryType | null {
 }
 
 /* ---------------------------------------------------------------------------
- * tags codec — aliases / role / labels ↔ the flat backend `tags` list.
+ * Alias input parsing — comma-separated free text → a clean alias list.
  * ------------------------------------------------------------------------- */
-
-/**
- * Sentinel namespace for the codec's internal control keys. A plain user/seed/
- * API tag cannot reasonably author this prefix, so structured data is never
- * confused with a free-form label. Centralised here — never inline the strings.
- */
-const SENTINEL = "__woa:";
-const ALIAS_KEY = `${SENTINEL}alias=`;
-const ROLE_KEY = `${SENTINEL}role=`;
-const TRACKING_OFF = `${SENTINEL}tracking=off`;
-
-/** True when a raw tag is one of this codec's internal control keys. */
-export function isControlTag(tag: string): boolean {
-  return tag.startsWith(SENTINEL);
-}
-
-/** The decoded view of a codex entry's `tags` list. */
-export interface DecodedTags {
-  /** Recognition names (Álnevek / Becenevek). */
-  aliases: string[];
-  /** The single story role, or null. */
-  role: string | null;
-  /** Free-form labels ("+ címke" chips) — anything not an alias or role. */
-  labels: string[];
-  /** Name-tracking opt-out: true ⇒ "__woa:tracking=off" present. */
-  trackingOff: boolean;
-}
-
-/**
- * Split a raw `tags` list into { aliases, role, labels, trackingOff }.
- *
- * Only `__woa:`-prefixed keys are treated as structured. A literal user tag such
- * as "alias:foo", "role:X", or "tracking:off" is returned verbatim in `labels`
- * — never misclassified. Internal sentinels never leak into `labels`.
- */
-export function decodeTags(tags: readonly string[]): DecodedTags {
-  const aliasSeen = new Set<string>();
-  const aliases: string[] = [];
-  const labels: string[] = [];
-  let role: string | null = null;
-  let trackingOff = false;
-  for (const tag of tags) {
-    if (tag.startsWith(ALIAS_KEY)) {
-      const value = tag.slice(ALIAS_KEY.length).trim();
-      const key = value.toLowerCase();
-      if (value && !aliasSeen.has(key)) {
-        aliasSeen.add(key);
-        aliases.push(value);
-      }
-    } else if (tag.startsWith(ROLE_KEY)) {
-      // Multiple role keys: last non-empty wins (documented), never crashes.
-      const value = tag.slice(ROLE_KEY.length).trim();
-      role = value || null;
-    } else if (tag === TRACKING_OFF) {
-      trackingOff = true;
-    } else if (isControlTag(tag)) {
-      // Unknown sentinel key — drop it so no internal token surfaces as a chip.
-    } else {
-      const value = tag.trim();
-      if (value) labels.push(value);
-    }
-  }
-  return { aliases, role, labels, trackingOff };
-}
-
-/**
- * Rebuild the flat `tags` list from a decoded view (the PATCH/POST shape).
- * `encode(decode(tags))` is stable for already-encoded input: aliases dedup,
- * user-label order preserved, empties skipped.
- */
-export function encodeTags({
-  aliases,
-  role,
-  labels,
-  trackingOff,
-}: DecodedTags): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const alias of aliases) {
-    const value = alias.trim();
-    const key = value.toLowerCase();
-    if (value && !seen.has(key)) {
-      seen.add(key);
-      out.push(`${ALIAS_KEY}${value}`);
-    }
-  }
-  if (role?.trim()) out.push(`${ROLE_KEY}${role.trim()}`);
-  for (const label of labels) {
-    const value = label.trim();
-    // A label that happens to be a sentinel key would round-trip into structured
-    // data; drop it defensively (decode never emits one into `labels` anyway).
-    if (value && !isControlTag(value)) out.push(value);
-  }
-  if (trackingOff) out.push(TRACKING_OFF);
-  return out;
-}
 
 /** Parse a comma-separated alias input into a deduped, trimmed list. */
 export function parseAliasInput(raw: string): string[] {

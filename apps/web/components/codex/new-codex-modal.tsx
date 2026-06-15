@@ -7,8 +7,8 @@
  *       Szabály) → (2) form (Név required / Álnevek / Leírás / "Nyomon
  *       követés" checkbox).
  *
- * On submit it creates the entry via {@link useCreateCodexEntry}, folding the
- * aliases into the real `tags` list (the backend has no `aliases` column — see
+ * On submit it creates the entry via {@link useCreateCodexEntry}, sending the
+ * aliases to the dedicated `aliases` column (P1.4 — no more `tags` codec; see
  * lib/api/codex.ts). On success it selects the new entry + toasts. Errors are
  * surfaced inline (never swallowed).
  */
@@ -34,7 +34,6 @@ import {
 import { BrandStar } from "@/components/kit/brand-star";
 import {
   CODEX_ENTRY_TYPES,
-  encodeTags,
   parseAliasInput,
   type CodexEntryType,
 } from "@/lib/api/codex";
@@ -98,9 +97,9 @@ export function NewCodexModal({
   function handleCreate(data: FormValues) {
     if (!projectId || !type) return;
     setSubmitError(null);
-    // The "Nyomon követés" checkbox controls name-based recognition. When OFF we
-    // record the opt-out via the codec's `trackingOff` control key so the
-    // Tracking tab can reflect it; everything stays in the real `tags` list.
+    // The "Nyomon követés" checkbox is a UI-only recognition preference — the
+    // backend has no field for it (the real AI gate is `ai_visible`), so it does
+    // not affect the payload. Aliases go to the dedicated `aliases` column.
     const aliases = parseAliasInput(data.aliases);
     createEntry.mutate(
       {
@@ -109,13 +108,10 @@ export function NewCodexModal({
           title: data.title.trim(),
           entry_type: type,
           content: data.description.trim() ? data.description.trim() : null,
+          aliases,
+          role: null,
           ai_visible: true,
-          tags: encodeTags({
-            aliases,
-            role: null,
-            labels: [],
-            trackingOff: !data.track,
-          }),
+          tags: [],
         },
       },
       {

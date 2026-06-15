@@ -24,7 +24,7 @@ import { bookIdFromPathname } from "@/lib/use-shell-chrome";
 import { usePathname } from "next/navigation";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
 import { useBookTree, useCodexEntries } from "@/lib/api/hooks";
-import { countMentions, decodeTags, mentionNeedles } from "@/lib/api/codex";
+import { countMentions, mentionNeedles } from "@/lib/api/codex";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
@@ -79,8 +79,7 @@ export function CodexSidebar() {
   const mentionsById = useMemo(() => {
     const out = new Map<string, number>();
     for (const entry of entries) {
-      const { aliases } = decodeTags(entry.tags);
-      const needles = mentionNeedles(entry.title, aliases);
+      const needles = mentionNeedles(entry.title, entry.aliases);
       out.set(entry.id, countMentions(tree.chapters, needles));
     }
     return out;
@@ -89,13 +88,11 @@ export function CodexSidebar() {
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = needle
-      ? entries.filter((e) => {
-          const { aliases } = decodeTags(e.tags);
-          return (
+      ? entries.filter(
+          (e) =>
             e.title.toLowerCase().includes(needle) ||
-            aliases.some((a) => a.toLowerCase().includes(needle))
-          );
-        })
+            e.aliases.some((a) => a.toLowerCase().includes(needle)),
+        )
       : entries;
     return groupEntries(filtered);
   }, [entries, query]);
@@ -255,10 +252,9 @@ export function CodexSidebar() {
                 {hu.codex.groupHeading(group.label, group.entries.length)}
               </p>
               {group.entries.map((entry) => {
-                const { aliases } = decodeTags(entry.tags);
                 const description =
                   entry.content?.trim() ||
-                  (aliases.length > 0 ? aliases.join(", ") : "");
+                  (entry.aliases.length > 0 ? entry.aliases.join(", ") : "");
                 const mentions = mentionsById.get(entry.id) ?? 0;
                 return (
                   <button

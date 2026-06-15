@@ -190,13 +190,21 @@ export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
  * CodexMention popover; full CRUD is M6 and is project-scoped).
  * ------------------------------------------------------------------------- */
 
-/** A codex entry as returned by the API (`CodexEntryRead`). */
+/**
+ * A codex entry as returned by the API (`CodexEntryRead`).
+ *
+ * Since P1.4 the backend carries dedicated `aliases` (recognition names) + `role`
+ * (story role) columns, mirroring `Character` (`app/schemas/codex_entry.py`).
+ * `tags` is now plain user labels only — the old `__woa:` tags codec is gone.
+ */
 export const codexEntryReadSchema = z.object({
   id: idString,
   project_id: idString,
   title: z.string(),
   entry_type: z.string(),
   content: z.string().nullable(),
+  aliases: z.array(z.string()),
+  role: z.string().nullable(),
   ai_visible: z.boolean(),
   tags: z.array(z.string()),
   created_at: z.string(),
@@ -207,17 +215,19 @@ export type CodexEntryRead = z.infer<typeof codexEntryReadSchema>;
 /**
  * Request body for creating a codex entry (`CodexEntryCreate`).
  *
- * Mirrors `apps/api/app/schemas/codex_entry.py` EXACTLY — the backend Codex is a
- * generic card: `title` (the entry NAME), `entry_type` (Character/Location/…),
- * `content` (the DESCRIPTION), `ai_visible` (spoiler-protection toggle) and a
- * single `tags` list. There are no dedicated `aliases` / `role` columns, so the
- * frontend folds aliases + role into `tags` via a documented codec (see
- * `lib/api/codex.ts`). `entry_type` defaults to "custom" server-side.
+ * Mirrors `apps/api/app/schemas/codex_entry.py` EXACTLY — the backend Codex card
+ * carries `title` (the entry NAME), `entry_type` (Character/Location/…),
+ * `content` (the DESCRIPTION), `aliases` (recognition names), `role` (the single
+ * story role), `ai_visible` (spoiler-protection toggle) and a `tags` list of
+ * plain user labels. `entry_type` defaults to "custom" server-side; `aliases`
+ * defaults to `[]` and `role` to `null`.
  */
 export const codexEntryCreateSchema = z.object({
   title: z.string().min(1).max(255),
   entry_type: z.string().max(100).default("custom"),
   content: z.string().nullable().optional(),
+  aliases: z.array(z.string()).default([]),
+  role: z.string().max(100).nullable().optional(),
   ai_visible: z.boolean().default(true),
   tags: z.array(z.string()).default([]),
 });
@@ -228,6 +238,8 @@ export const codexEntryUpdateSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   entry_type: z.string().max(100).optional(),
   content: z.string().nullable().optional(),
+  aliases: z.array(z.string()).optional(),
+  role: z.string().max(100).nullable().optional(),
   ai_visible: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
