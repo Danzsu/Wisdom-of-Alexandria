@@ -1,16 +1,38 @@
 "use client";
 
-import { forwardRef } from "react";
-import type {
-  ComponentPropsWithoutRef,
-  ComponentRef,
-  ReactNode,
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type ComponentRef,
+  type ReactNode,
+  type RefObject,
 } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hu } from "@/lib/i18n/hu";
 import { Icon } from "./icon";
 import { IconButton } from "./icon-button";
+
+/**
+ * Tracks whether something inside the shell already rendered the single Radix
+ * `Dialog.Title` (the `title` prop or a `ModalHeader`). The fallback consumer
+ * reads `titledRef` to decide whether to emit a visually-hidden title — so the
+ * dialog always has an accessible name and we never render two `Dialog.Title`
+ * nodes (which would collide on the same Radix-assigned id).
+ */
+const ModalTitleContext = createContext<{
+  titledRef: RefObject<boolean>;
+} | null>(null);
+
+/** Called by `ModalHeader` during render to register that it owns the title. */
+export function useMarkModalTitled() {
+  const ctx = useContext(ModalTitleContext);
+  if (ctx) ctx.titledRef.current = true;
+}
 
 /* ============================================================================
    ModalShell — a centred dialog on Radix Dialog. Composed as:
@@ -39,7 +61,12 @@ export interface ModalShellProps
   scrim?: "default" | "strong" | "soft";
   /** Max width in px. */
   maxWidth?: number;
-  /** Accessible title — required; renders a visually-hidden `Dialog.Title` when no visible header is used. */
+  /**
+   * Accessible title rendered as a visually-hidden `Dialog.Title` when no
+   * visible `ModalHeader` is used. Omit it when a `ModalHeader` supplies the
+   * title; if neither is present a generic hidden fallback keeps the dialog
+   * from ever being nameless.
+   */
   title?: string;
   /** Optional visually-hidden description for assistive tech. */
   description?: string;
@@ -48,11 +75,29 @@ export interface ModalShellProps
 }
 
 /**
+ * Visually-hidden last-resort `Dialog.Title`. Rendered AFTER the shell's
+ * children, it reads the title ref (synchronously mutated during the render of
+ * the `title` prop's title or a `ModalHeader`) at its OWN render time and emits a
+ * generic sr-only title only when nothing else did — so a dialog can never be
+ * nameless, and we never render two `Dialog.Title` nodes.
+ */
+function ModalTitleFallback() {
+  const ctx = useContext(ModalTitleContext);
+  if (ctx?.titledRef.current) return null;
+  return (
+    <DialogPrimitive.Title className="sr-only">
+      {hu.modal.untitledFallback}
+    </DialogPrimitive.Title>
+  );
+}
+
+/**
  * Centred modal surface (portalled). Overlay is a translucent scrim with a
  * `woaFade` entrance; content is a surface card (14–16px radius, popover shadow)
- * with a `woaReveal` entrance. Always renders a `Dialog.Title` for a11y — pass a
- * visible `ModalHeader` (which supplies its own title) and the `title` prop is
- * used only as the visually-hidden fallback when no header title is present.
+ * with a `woaReveal` entrance. Always renders exactly one `Dialog.Title` for
+ * a11y: the `title` prop renders a visually-hidden title, a `ModalHeader`
+ * renders the visible one, and if a caller supplies neither a generic
+ * visually-hidden fallback is emitted so the dialog is never nameless.
  */
 export const ModalShell = forwardRef<
   ComponentRef<typeof DialogPrimitive.Content>,
@@ -70,6 +115,14 @@ export const ModalShell = forwardRef<
   },
   ref,
 ) {
+  // Mutated synchronously during the render of any Title source below; the
+  // trailing <ModalTitleFallback> (rendered last) reads it to decide whether to
+  // emit the generic fallback. A ref written during a child's render is visible
+  // to a later sibling's render, which is exactly the order we rely on here.
+  const titledRef = useRef(false);
+  titledRef.current = Boolean(title);
+  const ctxValue = useRef({ titledRef }).current;
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
@@ -80,7 +133,6 @@ export const ModalShell = forwardRef<
       >
         <DialogPrimitive.Content
           ref={ref}
-          aria-label={title}
           style={{ maxWidth, ...style }}
           className={cn(
             "flex max-h-[85vh] w-full flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-popover",
@@ -89,20 +141,20 @@ export const ModalShell = forwardRef<
           )}
           {...props}
         >
-          {/* Always provide a Title node so Radix's a11y requirement is met. If
-              a visible ModalHeader is rendered it supplies the real title and
-              this hidden one is omitted by the caller passing `title=""`. */}
-          {title ? (
-            <DialogPrimitive.Title className="sr-only">
-              {title}
-            </DialogPrimitive.Title>
-          ) : null}
-          {description ? (
-            <DialogPrimitive.Description className="sr-only">
-              {description}
-            </DialogPrimitive.Description>
-          ) : null}
-          {children}
+          <ModalTitleContext.Provider value={ctxValue}>
+            {title ? (
+              <DialogPrimitive.Title className="sr-only">
+                {title}
+              </DialogPrimitive.Title>
+            ) : null}
+            {description ? (
+              <DialogPrimitive.Description className="sr-only">
+                {description}
+              </DialogPrimitive.Description>
+            ) : null}
+            {children}
+            <ModalTitleFallback />
+          </ModalTitleContext.Provider>
         </DialogPrimitive.Content>
       </DialogPrimitive.Overlay>
     </DialogPrimitive.Portal>
@@ -134,7 +186,10 @@ export function ModalHeader({
   hideClose = false,
   closeLabel = "Bezárás",
   className,
-}: ModalHeaderProps) {
+}: Readonly<ModalHeaderProps>) {
+  // Register that this header owns the dialog's single Dialog.Title so the
+  // shell's last-resort fallback title is suppressed.
+  useMarkModalTitled();
   return (
     <div
       className={cn(

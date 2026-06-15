@@ -99,6 +99,31 @@ describe("SlashMenu", () => {
     ).toBeInTheDocument();
   });
 
+  it("sets aria-activedescendant to the active item's id (and items carry matching ids)", async () => {
+    let editor: Editor | null = null;
+    render(<SlashHarness onReady={(e) => (editor = e)} />);
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    act(() => {
+      (editor as Editor).chain().focus().insertContent("/").run();
+    });
+    const menu = await screen.findByRole("menu", { name: "Parancsmenü" });
+    const active = menu.getAttribute("aria-activedescendant");
+    expect(active).toBe("slash-item-beat");
+    // The referenced id must resolve to a real menuitem.
+    const target = document.getElementById(active as string);
+    expect(target).not.toBeNull();
+    expect(target).toHaveAttribute("role", "menuitem");
+
+    // Arrow-down moves the descendant to the next item.
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await waitFor(() =>
+      expect(menu.getAttribute("aria-activedescendant")).toBe(
+        "slash-item-continue",
+      ),
+    );
+  });
+
   it("Escape closes the menu", async () => {
     let editor: Editor | null = null;
     render(<SlashHarness onReady={(e) => (editor = e)} />);

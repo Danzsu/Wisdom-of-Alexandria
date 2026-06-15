@@ -205,7 +205,7 @@ export function ManuscriptEditor({
         data-testid="manuscript-article"
         data-indent={docIndent ? "on" : "off"}
         style={articleStyle}
-        className="woa-manuscript-article mx-auto rounded-2xl border border-border bg-surface-soft p-[clamp(28px,4vw,48px)] shadow-panel [hyphens:auto]"
+        className="woa-manuscript-article mx-auto rounded-2xl border border-border bg-surface-soft py-[clamp(28px,4vw,48px)] px-[clamp(22px,5vw,64px)] shadow-panel [hyphens:auto]"
       >
         <p className="m-0 mb-2 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
           {kicker}

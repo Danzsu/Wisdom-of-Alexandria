@@ -49,6 +49,14 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Műveletek")).toBeInTheDocument();
   });
 
+  it("exposes an accessible name and description on the dialog (Radix requires both)", async () => {
+    renderPalette();
+    useUIStore.getState().openCommand();
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Keresés");
+    expect(dialog).toHaveAccessibleDescription(/nyilakkal navigálhatsz/);
+  });
+
   it("toggles via Cmd/Ctrl+K", async () => {
     renderPalette();
     await userEvent.keyboard("{Control>}k{/Control}");

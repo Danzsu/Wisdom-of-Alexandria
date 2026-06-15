@@ -33,6 +33,15 @@ export const hu = {
     breadcrumbChapter: "II. fejezet",
     breadcrumbScene: "3. jelenet — Rejtett jelek",
   },
+  /** Modal/dialog shared microcopy. */
+  modal: {
+    /**
+     * Screen-reader-only fallback title for a dialog that supplies neither a
+     * `title` prop nor a `ModalHeader`. Never visible; exists only so the
+     * dialog can never be nameless for assistive tech.
+     */
+    untitledFallback: "Párbeszédablak",
+  },
   /** Icon-rail workspace destinations. */
   nav: {
     attekintes: "Áttekintés",
@@ -606,7 +615,6 @@ export const hu = {
     /** Scope (Tartomány) radios. */
     scopeLabel: "Tartomány",
     scopeBook: (title: string) => `Teljes könyv — ${title}`,
-    scopeBookFallback: "Teljes könyv",
     scopeChapter: "Csak a II. fejezet",
     scopeScene: "Csak a 3. jelenet",
     /** Honest note: only book scope hits the real endpoint in the MVP. */
@@ -621,6 +629,11 @@ export const hu = {
     audioFootnote:
       "3 hang · ~1,8 MB · csak EPUB 3 / Apple Books / Thorium támogatja.",
     audioV2Note: "A hangbeágyazás a V2-ben érkezik.",
+    /** Demo audio rows in the accordion (verbatim sample tracks). */
+    audioRow1Title: "Éjszakai könyvtár",
+    audioRow1Meta: "II. fejezet · atmoszféra",
+    audioRow2Title: "Pergamen zizzenése",
+    audioRow2Meta: "3. jelenet · effekt",
     /** Export CTA + footnote. */
     exportCta: "Exportálás",
     exporting: "Exportálás…",
@@ -746,6 +759,9 @@ export const hu = {
   },
   command: {
     placeholder: "Keresés a projektben… jelenetek, Codex, műveletek",
+    /** Screen-reader-only description (Radix Dialog requires one). */
+    description:
+      "Keress jelenetek, Codex-bejegyzések és műveletek között; nyilakkal navigálhatsz, Enterrel választasz.",
     escHint: "Esc",
     groupScenes: "Jelenetek",
     groupCodex: "Codex",
@@ -790,16 +806,10 @@ export const hu = {
   placeholders: {
     attekintesLabel: "Áttekintés",
     attekintesHint: "Az Áttekintés az M10-ben érkezik.",
-    beallitasokLabel: "Beállítások",
-    beallitasokHint: "A Beállítások az M8-ban érkezik.",
     chatLabel: "Chat",
     chatHint: "A Chat az M10-ben érkezik.",
-    codexLabel: "Codex",
-    codexHint: "A Codex az M6-ban érkezik.",
     cselekmenyszalakLabel: "Cselekményszálak",
     cselekmenyszalakHint: "A Cselekményszálak az M10-ben érkezik.",
-    exportLabel: "Export",
-    exportHint: "Az Export az M8-ban érkezik.",
     feladatokLabel: "AI feladatok",
     feladatokHint: "Az AI feladatok az M10-ben érkezik.",
     hangokLabel: "Hangkönyvtár",
@@ -810,8 +820,6 @@ export const hu = {
     kapcsolatokHint: "A Kapcsolatok az M10-ben érkezik.",
     promptokLabel: "Prompt Library",
     promptokHint: "A Prompt Library az M10-ben érkezik.",
-    tervLabel: "Terv",
-    tervHint: "A Plan Board az M7-ben érkezik.",
   },
   /** Projektek dashboard (`showprojects` prototype screen). */
   projects: {

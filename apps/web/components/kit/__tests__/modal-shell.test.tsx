@@ -8,6 +8,7 @@ import {
   ModalHeader,
   ModalBody,
 } from "@/components/kit/modal-shell";
+import { hu } from "@/lib/i18n/hu";
 
 function ControlledModal({
   open,
@@ -58,6 +59,38 @@ describe("ModalShell", () => {
     await userEvent.click(screen.getByText("Megnyitás"));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveAccessibleName("Csak a11y cím");
+  });
+
+  it("falls back to a generic accessible name when neither title nor header is provided", async () => {
+    render(
+      <Modal>
+        <ModalTrigger>Megnyitás</ModalTrigger>
+        <ModalShell>
+          <ModalBody>Tartalom</ModalBody>
+        </ModalShell>
+      </Modal>,
+    );
+    await userEvent.click(screen.getByText("Megnyitás"));
+    const dialog = await screen.findByRole("dialog");
+    // A dialog must never be nameless: the shell emits a hidden fallback title.
+    expect(dialog).toHaveAccessibleName(hu.modal.untitledFallback);
+  });
+
+  it("does not double-render a title when a ModalHeader supplies one", async () => {
+    render(
+      <Modal>
+        <ModalTrigger>Megnyitás</ModalTrigger>
+        <ModalShell>
+          <ModalHeader title="Profil" />
+          <ModalBody>Tartalom</ModalBody>
+        </ModalShell>
+      </Modal>,
+    );
+    await userEvent.click(screen.getByText("Megnyitás"));
+    const dialog = await screen.findByRole("dialog");
+    // The header title is the only accessible name (no fallback duplication).
+    expect(dialog).toHaveAccessibleName("Profil");
+    expect(screen.queryByText(hu.modal.untitledFallback)).not.toBeInTheDocument();
   });
 
   it("closes via onOpenChange when the close button is clicked", async () => {

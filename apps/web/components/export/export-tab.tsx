@@ -72,7 +72,9 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
       <SectionEyebrow as="h3" className="mb-2">
         {hu.exportScreen.scopeLabel}
       </SectionEyebrow>
-      <div className="mb-2">
+      {/* When book scope is selected there is no V1 note, so the radio group
+          itself carries the bottom margin that the note would otherwise add. */}
+      <div className={scope === "book" ? "mb-7" : "mb-2"}>
         <TypedRadioGroup<ExportScope>
           aria-label={hu.exportScreen.scopeLabel}
           value={scope}
@@ -84,9 +86,7 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
           ]}
         />
       </div>
-      {scope === "book" ? (
-        <div className="mb-5" />
-      ) : (
+      {scope === "book" ? null : (
         <p className="mb-5 text-[12px] text-warning-text">
           {hu.exportScreen.scopeV1Note}
         </p>
@@ -130,16 +130,16 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
           <div className="flex flex-col gap-px border-t border-border p-1.5">
             <div className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] text-text-soft">
               <Play size={13} className="fill-accent text-accent" aria-hidden="true" />
-              <span className="flex-1">Éjszakai könyvtár</span>
+              <span className="flex-1">{hu.exportScreen.audioRow1Title}</span>
               <span className="text-[11px] text-text-muted">
-                II. fejezet · atmoszféra
+                {hu.exportScreen.audioRow1Meta}
               </span>
             </div>
             <div className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] text-text-soft">
               <Play size={13} className="fill-accent text-accent" aria-hidden="true" />
-              <span className="flex-1">Pergamen zizzenése</span>
+              <span className="flex-1">{hu.exportScreen.audioRow2Title}</span>
               <span className="text-[11px] text-text-muted">
-                3. jelenet · effekt
+                {hu.exportScreen.audioRow2Meta}
               </span>
             </div>
             <p className="mx-2.5 mb-1 mt-1.5 text-[11px] text-text-muted">

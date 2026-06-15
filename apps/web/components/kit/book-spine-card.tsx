@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 import { BookOpen, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COVER_GRADIENT } from "@/lib/gradients";
 import { Icon } from "./icon";
 
 /** Cover sizes (w×h px). */
@@ -11,11 +12,6 @@ const SIZE_CLASS: Record<BookSpineSize, string> = {
   sm: "w-10 h-14", // 40×56
   grid: "h-[88px] w-[62px]", // 88-tall grid thumbnail
   wizard: "h-[106px] w-[76px]", // 76×106 wizard cover
-};
-
-const GRADIENT: Record<"gold" | "blueGrey", string> = {
-  gold: "linear-gradient(150deg,var(--accent) 0%,#b8893f 55%,#8a6a2e 100%)",
-  blueGrey: "linear-gradient(150deg,#5b7a8c 0%,#42606f 60%,#2f4855 100%)",
 };
 
 export interface BookSpineCardProps extends HTMLAttributes<HTMLDivElement> {
@@ -40,17 +36,22 @@ export const BookSpineCard = forwardRef<HTMLDivElement, BookSpineCardProps>(
     ref,
   ) {
     const style: CSSProperties = {
-      background: GRADIENT[variant],
+      background: COVER_GRADIENT[variant],
       boxShadow:
         "inset 0 0 0 2px rgba(255,255,255,.12), inset 2px 0 0 rgba(0,0,0,.12), var(--shadow-card)",
     };
     const textColor =
       variant === "gold" ? "text-accent-fg" : "text-white/85";
+    // With a title the card is a labelled image; without one it is purely
+    // decorative, so mark it aria-hidden rather than shipping an unlabelled
+    // `role="img"` with `aria-label={undefined}`.
+    const a11yProps = title
+      ? ({ role: "img", "aria-label": title } as const)
+      : ({ "aria-hidden": true } as const);
     return (
       <div
         ref={ref}
-        role="img"
-        aria-label={title}
+        {...a11yProps}
         className={cn(
           "flex flex-none items-end justify-center rounded-md border border-accent pb-1.5",
           SIZE_CLASS[size],

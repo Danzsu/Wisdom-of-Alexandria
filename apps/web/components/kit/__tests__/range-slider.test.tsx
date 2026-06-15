@@ -56,4 +56,45 @@ describe("RangeSlider", () => {
     );
     expect(screen.getByText("0.8")).toBeInTheDocument();
   });
+
+  it("tracks the value label to the thumb in UNCONTROLLED mode", async () => {
+    const user = (await import("@testing-library/user-event")).default;
+    render(
+      <RangeSlider
+        aria-label="Temperature"
+        min={0}
+        max={2}
+        step={0.1}
+        defaultValue={0.8}
+        showValue
+        // No `value` prop → uncontrolled. The label previously froze at 0.8.
+      />,
+    );
+    expect(screen.getByText("0.8")).toBeInTheDocument();
+    const slider = screen.getByRole("slider", { name: "Temperature" });
+    slider.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByText("0.9")).toBeInTheDocument();
+    expect(screen.queryByText("0.8")).not.toBeInTheDocument();
+  });
+
+  it("formats the uncontrolled label via formatValue as the thumb moves", async () => {
+    const user = (await import("@testing-library/user-event")).default;
+    render(
+      <RangeSlider
+        aria-label="Temperature"
+        min={0}
+        max={2}
+        step={0.1}
+        defaultValue={1}
+        showValue
+        formatValue={(v) => `${v}×`}
+      />,
+    );
+    expect(screen.getByText("1×")).toBeInTheDocument();
+    const slider = screen.getByRole("slider", { name: "Temperature" });
+    slider.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByText("1.1×")).toBeInTheDocument();
+  });
 });

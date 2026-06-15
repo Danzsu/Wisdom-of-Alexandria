@@ -61,6 +61,9 @@ export function StoryTimelineRail({
         {scenes.map((scene) => {
           const active = scene.id === activeSceneId;
           return (
+            // The button is a ≥24px-wide transparent hit target (the whole rail
+            // width) for an easy pointer/touch tap; the thin coloured pill inside
+            // stays the slim visual the prototype shows. Keeps keyboard + aria.
             <button
               key={scene.id}
               type="button"
@@ -68,14 +71,19 @@ export function StoryTimelineRail({
               aria-label={scene.title}
               aria-current={active ? "true" : undefined}
               onClick={() => onSelect(scene.id)}
-              className={cn(
-                "min-h-[18px] flex-1 cursor-pointer rounded-full border-none p-0 transition-all",
-                toneClass(scene.tone, active),
-                active
-                  ? "w-[10px] shadow-[0_0_0_3px_var(--accent-muted)]"
-                  : "w-1.5 opacity-55 hover:w-2.5 hover:opacity-100",
-              )}
-            />
+              className="group flex min-h-[24px] w-full min-w-[24px] flex-1 cursor-pointer items-center justify-center border-none bg-transparent p-0"
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "h-full w-1.5 rounded-full transition-all",
+                  toneClass(scene.tone, active),
+                  active
+                    ? "w-[10px] shadow-[0_0_0_3px_var(--accent-muted)]"
+                    : "opacity-55 group-hover:w-2.5 group-hover:opacity-100",
+                )}
+              />
+            </button>
           );
         })}
       </div>

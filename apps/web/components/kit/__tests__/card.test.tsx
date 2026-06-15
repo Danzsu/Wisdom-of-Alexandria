@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Card } from "@/components/kit/card";
+import { COVER_GRADIENT } from "@/lib/gradients";
 
 describe("Card", () => {
   it("applies the base surface/border/radius/shadow classes", () => {
@@ -38,5 +39,21 @@ describe("Card", () => {
     );
     expect(screen.getByTestId("cover")).toBeInTheDocument();
     expect(screen.getByTestId("body")).toBeInTheDocument();
+  });
+
+  it("paints the cover header with the shared cover gradient", () => {
+    render(
+      <Card coverTop={<span data-testid="cover" />} coverVariant="blueGrey">
+        body
+      </Card>,
+    );
+    const cover = screen.getByTestId("cover").parentElement as HTMLElement;
+    // jsdom serialises the gradient (hex → rgb()), so assert it is a gradient
+    // carrying the blue-grey stop rather than matching the raw literal byte for
+    // byte. The constant itself is verified against lib/gradients below.
+    const style = cover.getAttribute("style") ?? "";
+    expect(style).toContain("linear-gradient");
+    expect(style).toContain("rgb(91, 122, 140)"); // #5b7a8c from COVER_GRADIENT
+    expect(COVER_GRADIENT.blueGrey).toContain("#5b7a8c");
   });
 });

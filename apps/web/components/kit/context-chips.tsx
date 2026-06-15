@@ -32,9 +32,12 @@ export function ContextChips({
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
       <span className="text-[11px] font-semibold text-text-muted">{label}</span>
-      {entities.map((entity) => (
+      {entities.map((entity, index) => (
         <span
-          key={entity.label}
+          // Labels can repeat (two characters named the same, etc.), so the
+          // key combines the label with its array index instead of the bare
+          // label text, which previously collided on duplicates.
+          key={`${entity.label}-${index}`}
           className="inline-flex h-5 items-center gap-1 rounded-full bg-surface-muted px-2 text-[11px] font-medium text-text-soft"
         >
           {entity.icon}

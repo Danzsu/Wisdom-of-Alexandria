@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { COVER_GRADIENT } from "@/lib/gradients";
 
 /** Coloured left edge (3px) for status emphasis. */
 export type CardAccentEdge =
@@ -34,11 +35,6 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   coverVariant?: "gold" | "blueGrey";
   children?: ReactNode;
 }
-
-const COVER_GRADIENT: Record<NonNullable<CardProps["coverVariant"]>, string> = {
-  gold: "linear-gradient(150deg,var(--accent) 0%,#b8893f 55%,#8a6a2e 100%)",
-  blueGrey: "linear-gradient(150deg,#5b7a8c 0%,#42606f 60%,#2f4855 100%)",
-};
 
 /**
  * Surface card. Default: surface bg, border, 12px radius, card shadow, 16px

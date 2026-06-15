@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import type { ComponentPropsWithoutRef, ComponentRef } from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,12 @@ export const RangeSlider = forwardRef<
 ) {
   // Radix uses arrays for (potentially) multi-thumb sliders; we expose a single
   // scalar to the caller for the common one-thumb case.
-  const currentValue = value ?? defaultValue ?? min;
+  const isControlled = value !== undefined;
+  // Track the value internally so the `showValue` label follows the thumb in
+  // UNCONTROLLED mode too (where there is no `value` prop to read). In controlled
+  // mode the `value` prop is the source of truth and this state is ignored.
+  const [internalValue, setInternalValue] = useState(defaultValue ?? min);
+  const currentValue = isControlled ? value : internalValue;
   const labelText = formatValue
     ? formatValue(currentValue)
     : String(currentValue);
@@ -70,7 +75,9 @@ export const RangeSlider = forwardRef<
         value={value === undefined ? undefined : [value]}
         defaultValue={defaultValue === undefined ? undefined : [defaultValue]}
         onValueChange={(next) => {
-          if (next.length > 0) onValueChange?.(next[0]);
+          if (next.length === 0) return;
+          if (!isControlled) setInternalValue(next[0]);
+          onValueChange?.(next[0]);
         }}
         className={cn(
           "relative flex flex-1 cursor-pointer touch-none select-none items-center",

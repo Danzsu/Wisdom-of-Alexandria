@@ -140,6 +140,9 @@ export function CommandPalette() {
           className="fixed left-1/2 top-20 z-[56] w-[520px] max-w-[calc(100%-48px)] -translate-x-1/2 overflow-hidden rounded-[14px] border border-border bg-surface shadow-popover [animation:woaReveal_.18s_cubic-bezier(.22,1,.36,1)]"
         >
           <Dialog.Title className="sr-only">{hu.topbar.searchAria}</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            {hu.command.description}
+          </Dialog.Description>
           <div className="flex items-center gap-2.5 border-b border-border px-4 py-[13px]">
             <Icon icon={Search} size={16} className="text-text-muted" />
             <input
