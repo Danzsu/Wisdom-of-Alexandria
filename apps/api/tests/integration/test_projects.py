@@ -163,3 +163,28 @@ async def test_list_projects_pagination(client: AsyncClient, auth_headers: dict)
     resp = await client.get("/api/v1/projects?limit=2&skip=0", headers=auth_headers)
     assert resp.status_code == 200
     assert len(resp.json()) <= 2
+
+
+# ── A4: pagination bounds ───────────────────────────────────────────────────
+# Unbounded skip/limit are a DoS footgun (huge LIMIT, negative OFFSET). FastAPI
+# Query bounds reject out-of-range values with a 422 before they hit the DB.
+
+
+async def test_list_projects_limit_zero_is_422(client: AsyncClient, auth_headers: dict):
+    resp = await client.get("/api/v1/projects?limit=0", headers=auth_headers)
+    assert resp.status_code == 422
+
+
+async def test_list_projects_limit_too_large_is_422(client: AsyncClient, auth_headers: dict):
+    resp = await client.get("/api/v1/projects?limit=100000", headers=auth_headers)
+    assert resp.status_code == 422
+
+
+async def test_list_projects_negative_skip_is_422(client: AsyncClient, auth_headers: dict):
+    resp = await client.get("/api/v1/projects?skip=-1", headers=auth_headers)
+    assert resp.status_code == 422
+
+
+async def test_list_projects_limit_at_cap_ok(client: AsyncClient, auth_headers: dict):
+    resp = await client.get("/api/v1/projects?limit=200", headers=auth_headers)
+    assert resp.status_code == 200

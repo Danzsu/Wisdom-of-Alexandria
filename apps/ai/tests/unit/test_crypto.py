@@ -39,6 +39,37 @@ def test_decrypt_invalid_token_raises_decryption_error():
 
 
 @pytest.mark.unit
+def test_decrypt_tampered_ciphertext_raises(_reset_fernet_cache):
+    """A1/A6a: a VALID ciphertext whose bytes are mutated must fail loudly with
+    DecryptionError (HMAC mismatch), never return garbled plaintext."""
+    ciphertext = encrypt_secret("sk-real-secret-value")
+    # Flip a character in the middle of the token to break the HMAC.
+    mid = len(ciphertext) // 2
+    flipped = "A" if ciphertext[mid] != "A" else "B"
+    tampered = ciphertext[:mid] + flipped + ciphertext[mid + 1 :]
+    with pytest.raises(DecryptionError):
+        decrypt_secret(tampered)
+
+
+@pytest.mark.unit
+def test_decrypt_with_wrong_key_raises(monkeypatch, _reset_fernet_cache):
+    """A6a: ciphertext from one key must not decrypt under a DIFFERENT key —
+    it raises DecryptionError (key rotated/corrupted), never silently succeeds."""
+    from cryptography.fernet import Fernet
+
+    # Encrypt under the conftest key.
+    ciphertext = encrypt_secret("sk-rotate-me")
+
+    # Now swap in a DIFFERENT valid key and rebuild the cached Fernet.
+    other_key = Fernet.generate_key().decode()
+    monkeypatch.setattr(crypto.settings, "provider_encryption_key", other_key)
+    _get_fernet.cache_clear()
+
+    with pytest.raises(DecryptionError):
+        decrypt_secret(ciphertext)
+
+
+@pytest.mark.unit
 def test_decrypt_error_does_not_leak_ciphertext():
     bogus = "totally-bogus-ciphertext-value"
     try:

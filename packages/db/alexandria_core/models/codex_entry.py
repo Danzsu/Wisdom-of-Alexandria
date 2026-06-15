@@ -21,11 +21,20 @@ class CodexEntry(UUIDPrimaryKey, Timestamps, Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Recognition names (Álnevek / Becenevek) — mirrors Character.aliases so the
     # manuscript name-scan can resolve a mention by an alias, not just the title.
-    aliases: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    # No Python-side ``default=list`` (mutable-default footgun). The DB column
+    # carries ``server_default='[]'`` (migration a1c4d7e9f2b3) for rows whose
+    # INSERT omits the column. The normal write path is the create schema, which
+    # defaults aliases to ``[]`` (default_factory), so the API never persists
+    # NULL. Direct model construction without aliases may persist NULL, which the
+    # CodexEntryRead schema coerces back to ``[]`` (it never raises on a NULL).
+    aliases: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # The single story role (Hős / Antagonista / …) — mirrors Character.role.
     role: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    tags: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    # No Python-side ``default=list`` here either (same mutable-default footgun as
+    # aliases): the create schema defaults tags to ``[]`` and CodexEntryRead coerces
+    # a NULL back to ``[]``, so a direct construction never leaks a shared list.
+    tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     project: Mapped["Project"] = relationship(
         "Project", back_populates="codex_entries"

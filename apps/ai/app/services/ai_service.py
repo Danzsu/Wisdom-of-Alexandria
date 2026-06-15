@@ -75,6 +75,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
+                db=db,
                 **_gen_overrides(temperature, max_tokens),
             )
             revision = await self.svc.save_revision(
@@ -130,6 +131,7 @@ class AIService:
                 response = await self.router.complete(
                     messages=self.router.build_messages(system, user),
                     model=model,
+                    db=db,
                     **_gen_overrides(temperature, max_tokens),
                 )
                 rev = await self.svc.save_revision(
@@ -183,6 +185,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
+                db=db,
                 **_gen_overrides(temperature, max_tokens, default_max_tokens=word_count_target * 3),
             )
             revision = await self.svc.save_revision(
@@ -238,6 +241,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
+                db=db,
                 **_gen_overrides(temperature, max_tokens, default_max_tokens=4096),
             )
             revision = await self.svc.save_revision(
@@ -286,6 +290,7 @@ class AIService:
             response = await self.router.complete(
                 messages=self.router.build_messages(system, user),
                 model=model,
+                db=db,
                 **_gen_overrides(temperature, max_tokens, default_max_tokens=512),
             )
             revision = await self.svc.save_revision(

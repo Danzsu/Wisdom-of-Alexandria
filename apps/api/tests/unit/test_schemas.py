@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -7,7 +8,7 @@ from app.schemas.beat import BeatCreate
 from app.schemas.book import BookCreate, BookUpdate
 from app.schemas.chapter import ChapterCreate
 from app.schemas.character import CharacterCreate, CharacterUpdate
-from app.schemas.codex_entry import CodexEntryCreate
+from app.schemas.codex_entry import CodexEntryCreate, CodexEntryRead
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 from app.schemas.scene import SceneCreate
 from app.schemas.snippet import SnippetCreate
@@ -135,6 +136,48 @@ def test_character_update_all_optional():
 def test_codex_entry_tags_defaults_to_empty_list():
     c = CodexEntryCreate(title="Varázslat")
     assert c.tags == []
+
+
+def test_codex_entry_aliases_defaults_to_empty_list():
+    # The create schema (not the model's Python default) is what guarantees a
+    # transient CodexEntry gets aliases=[] — see A5b.
+    c = CodexEntryCreate(title="Varázslat")
+    assert c.aliases == []
+
+
+# A5b: CodexEntryRead must never error on a NULL aliases/tags column. The model
+# column is nullable with no Python default; a refreshed row backfills via the
+# DB server_default, but a stray None must still coerce to [] on serialization.
+
+
+def _codex_read_payload(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "project_id": uuid.uuid4(),
+        "title": "X",
+        "entry_type": "custom",
+        "content": None,
+        "aliases": None,
+        "role": None,
+        "ai_visible": True,
+        "tags": None,
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
+    }
+    base.update(overrides)
+    return base
+
+
+def test_codex_entry_read_coerces_none_aliases_to_empty_list():
+    r = CodexEntryRead(**_codex_read_payload())
+    assert r.aliases == []
+    assert r.tags == []
+
+
+def test_codex_entry_read_preserves_aliases_list():
+    r = CodexEntryRead(**_codex_read_payload(aliases=["Évi"], tags=["fő"]))
+    assert r.aliases == ["Évi"]
+    assert r.tags == ["fő"]
 
 
 # SnippetCreate

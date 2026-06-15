@@ -328,3 +328,43 @@ async def test_ai_models_zero_config_still_returns_default(client: AsyncClient, 
     data = resp.json()
     ids = [m["id"] for m in data["models"]]
     assert data["default"] in ids
+
+
+# ── A6b: ProviderRead serialization never leaks plaintext/ciphertext ─────────
+# A focused unit check on the to_read mapper + Pydantic serialization (no HTTP):
+# even when fully dumped (model_dump / model_dump_json), a keyed provider only
+# exposes api_key_masked + has_key — never the plaintext or the ciphertext.
+
+
+def test_provider_read_serialization_never_leaks_key():
+    from app.core.crypto import encrypt_secret
+    from app.services.crud_provider import to_read
+
+    plaintext = "sk-supersecret-abcdef1234"
+    ciphertext = encrypt_secret(plaintext)
+    provider = Provider(
+        type="openai",
+        label="Keyed",
+        api_key_encrypted=ciphertext,
+        enabled=True,
+    )
+    provider.id = uuid.uuid4()
+    from datetime import UTC, datetime
+
+    provider.created_at = datetime.now(UTC)
+    provider.updated_at = datetime.now(UTC)
+
+    read = to_read(provider)
+    assert read.has_key is True
+    assert read.api_key_masked == "••••1234"
+
+    dumped = read.model_dump()
+    assert "api_key" not in dumped
+    assert "api_key_encrypted" not in dumped
+
+    as_json = read.model_dump_json()
+    assert plaintext not in as_json
+    assert ciphertext not in as_json
+    # Only the masked tail is present.
+    assert "1234" in as_json
+    assert "supersecret" not in as_json

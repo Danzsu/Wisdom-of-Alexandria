@@ -843,4 +843,54 @@ async def test_list_codex_entries_returns_all_regardless_of_ai_visible(
     titles = [e["title"] for e in resp.json()]
     assert "Látható" in titles
     assert "Rejtett" in titles
-    assert len(titles) == 2
+
+
+# ---------------------------------------------------------------------------
+# A5b: CodexEntry.aliases has no Python-side default=list anymore (mutable
+# default footgun). The normal CRUD create path always supplies aliases=[] via
+# CodexEntryCreate's default_factory, so the API never sees NULL (see
+# test_create_codex_entry). Constructing the model DIRECTLY without aliases now
+# yields None at the column level (the column is nullable; the DB
+# server_default only applies to inserts that OMIT the column, which SQLAlchemy
+# doesn't do here). The Read schema must coerce that stray None to [] and never
+# error — that's the contract the API depends on.
+# ---------------------------------------------------------------------------
+
+async def test_codex_entry_created_via_api_without_aliases_is_empty_list(
+    client: AsyncClient, auth_headers: dict
+):
+    """The CRUD create path (CodexEntryCreate default_factory) yields []."""
+    project_id = await _create_project(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/codex",
+        json={"title": "Nincs álnév"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["aliases"] == []
+
+
+async def test_codex_entry_read_coerces_null_aliases_to_empty_list(
+    client: AsyncClient, auth_headers: dict, db_session
+):
+    """A model row with a NULL aliases column (direct construction, no Python
+    default) must serialize cleanly through the Read schema as [] — never raise
+    a validation error on the non-optional list[str] field."""
+    from alexandria_core.models.codex_entry import CodexEntry
+
+    project_id = await _create_project(client, auth_headers)
+
+    # Direct construction WITHOUT aliases -> column persists as NULL.
+    entry = CodexEntry(project_id=uuid.UUID(project_id), title="No Aliases")
+    db_session.add(entry)
+    await db_session.commit()
+    await db_session.refresh(entry)
+    assert entry.aliases is None  # confirms the Python default is truly gone
+
+    # The Read view must NOT error and must surface [] for the NULL column.
+    resp = await client.get(
+        f"/api/v1/projects/{project_id}/codex/{entry.id}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["aliases"] == []

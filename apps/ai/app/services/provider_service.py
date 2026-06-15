@@ -5,12 +5,16 @@ calls used by ``POST /providers/{id}/test`` and ``GET /providers/{id}/models``.
 Secrets are decrypted only in-memory here and are NEVER logged or returned.
 """
 
+import logging
+
 import httpx
 from alexandria_core.models.provider import Provider
 
 from app.core.crypto import DecryptionError, decrypt_secret
 from app.core.errors import safe_error as _safe_error
 from app.schemas.provider import ProviderModelInfo, ProviderTestResult
+
+logger = logging.getLogger(__name__)
 
 # Static, well-known model catalogs per cloud provider type. The UI must not
 # hardcode model names (CLAUDE.md); it reads them from the API. These are the
@@ -127,7 +131,13 @@ async def list_provider_models(provider: Provider) -> list[ProviderModelInfo]:
         base = provider.base_url or "http://ollama:11434"
         try:
             return await _ollama_models(base)
-        except Exception:  # noqa: BLE001 — unreachable Ollama -> no models
+        except Exception as e:  # noqa: BLE001 — unreachable Ollama -> no models
+            # An empty list is a valid "no models" result, but the failure must
+            # not be silent. Log it (sanitized — never the key/ciphertext) so an
+            # operator can diagnose an unreachable/misconfigured Ollama.
+            logger.warning(
+                "Failed to fetch Ollama models from %s: %s", base, _safe_error(e)
+            )
             return []
     return list(STATIC_CLOUD_MODELS.get(provider.type, []))
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CodexEntryCreate(BaseModel):
@@ -38,3 +38,13 @@ class CodexEntryRead(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
+
+    # The model column is nullable (no Python-side default — see
+    # alexandria_core.models.codex_entry). A normally-created/refreshed row
+    # backfills to ``[]`` via the DB server_default, but coerce a stray ``None``
+    # (e.g. a raw insert) to ``[]`` so this read view never raises on
+    # serialization.
+    @field_validator("aliases", "tags", mode="before")
+    @classmethod
+    def _none_to_empty_list(cls, v: list[str] | None) -> list[str]:
+        return v if v is not None else []
