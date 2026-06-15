@@ -1,13 +1,16 @@
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
-from app.schemas.revision import RevisionRead
 from app.schemas.generation_job import GenerationJobRead
-from app.services.ai_service import AIService, ai_service, DESCRIBE_CHANNELS
+from app.schemas.revision import RevisionRead
+from app.services.ai_service import DESCRIBE_CHANNELS, AIService, ai_service
+from app.services.crud_provider import list_providers
+from app.services.provider_service import list_provider_models
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -37,22 +40,36 @@ class ModelsResponse(BaseModel):
 
 @router.get("/models", response_model=ModelsResponse)
 async def list_models(
+    db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> ModelsResponse:
     """Return the AI models the backend is configured to use.
 
-    Sourced from the ModelRouter configuration (settings) — not hardcoded in the
-    UI. MVP: the configured local Ollama model. Cloud models join in V1 when their
-    credentials/config are present.
+    Aggregated from the configured + enabled Provider rows (local Ollama + any
+    cloud providers). The built-in Ollama default from settings is always
+    included so the app works out of the box with no providers configured. Model
+    names are never hardcoded in the UI — it reads them from here.
     """
     default = settings.default_local_model
-    models = [
-        ModelInfo(
-            id=default,
-            label=default.split("/", 1)[-1] if "/" in default else default,
-            kind="local",
-        )
-    ]
+    seen: set[str] = set()
+    models: list[ModelInfo] = []
+
+    def _add(model_id: str, kind: str) -> None:
+        if model_id in seen:
+            return
+        seen.add(model_id)
+        label = model_id.split("/", 1)[-1] if "/" in model_id else model_id
+        models.append(ModelInfo(id=model_id, label=label, kind=kind))
+
+    # Always expose the built-in local default (back-compat / zero-config).
+    _add(default, "local")
+
+    providers = await list_providers(db, enabled_only=True)
+    for provider in providers:
+        kind = "local" if provider.type == "ollama" else "cloud"
+        for m in await list_provider_models(provider):
+            _add(m.id, kind)
+
     return ModelsResponse(models=models, default=default)
 
 

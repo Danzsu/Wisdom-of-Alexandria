@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "generation_jobs",
     "revisions",
     "ai_comments",
+    "providers",
 }
 
 
@@ -36,11 +37,11 @@ def test_all_tables_in_metadata():
     )
 
 
-def test_metadata_has_16_tables():
-    """Verify that exactly 16 tables are registered."""
+def test_metadata_has_17_tables():
+    """Verify that exactly 17 tables are registered."""
     import app.models  # noqa: F401
-    assert len(Base.metadata.tables) == 16, (
-        f"Expected 16 tables, got {len(Base.metadata.tables)}"
+    assert len(Base.metadata.tables) == 17, (
+        f"Expected 17 tables, got {len(Base.metadata.tables)}"
     )
 
 

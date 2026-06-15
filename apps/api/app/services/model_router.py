@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 from typing import Any
 
-import litellm
 from litellm import acompletion
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.crypto import DecryptionError, decrypt_secret
+from app.models.provider import Provider
 
 
 @dataclass
@@ -14,6 +16,43 @@ class ModelResponse:
     usage: dict[str, int]
 
 
+@dataclass
+class ResolvedProvider:
+    """Credentials/config resolved for a given model string."""
+
+    api_key: str | None
+    base_url: str | None
+
+
+_OLLAMA_PREFIX = "ollama/"
+
+# Maps a model-string prefix to the Provider.type that serves it.
+_PREFIX_TO_TYPE: dict[str, str] = {
+    _OLLAMA_PREFIX: "ollama",
+    "gemini/": "gemini",
+    "anthropic/": "anthropic",
+    "claude": "anthropic",
+    "openai/": "openai",
+    "gpt-": "openai",
+    "openrouter/": "openrouter",
+}
+
+
+def _provider_type_for_model(model: str) -> str | None:
+    for prefix, ptype in _PREFIX_TO_TYPE.items():
+        if model.startswith(prefix):
+            return ptype
+    return None
+
+
+def _pick_provider(providers: list[Provider], ptype: str, model: str) -> Provider | None:
+    """Prefer a provider whose default_model matches exactly, else first of type."""
+    exact = next((p for p in providers if p.type == ptype and p.default_model == model), None)
+    if exact is not None:
+        return exact
+    return next((p for p in providers if p.type == ptype), None)
+
+
 class ModelRouter:
     """Central LiteLLM abstraction. All AI calls go through this."""
 
@@ -21,21 +60,64 @@ class ModelRouter:
         self.base_url = base_url or settings.ollama_base_url
         self.default_model = default_model or settings.default_local_model
 
+    async def resolve_provider(self, db: AsyncSession, model: str) -> ResolvedProvider:
+        """Resolve a model string to a configured + enabled Provider's creds.
+
+        Falls back to settings (Ollama base URL / no key) when no matching
+        provider row exists — preserving the pre-provider behaviour.
+        """
+        ptype = _provider_type_for_model(model)
+        provider: Provider | None = None
+        if ptype is not None:
+            from app.services.crud_provider import list_providers
+
+            providers = await list_providers(db, enabled_only=True)
+            provider = _pick_provider(providers, ptype, model)
+
+        if provider is None:
+            # Back-compat default: Ollama uses the settings base URL, others
+            # rely on environment vars LiteLLM already reads.
+            base = self.base_url if model.startswith(_OLLAMA_PREFIX) else None
+            return ResolvedProvider(api_key=None, base_url=base)
+
+        api_key: str | None = None
+        if provider.api_key_encrypted:
+            try:
+                api_key = decrypt_secret(provider.api_key_encrypted)
+            except DecryptionError:
+                api_key = None
+        base_url = provider.base_url
+        if base_url is None and provider.type == "ollama":
+            base_url = self.base_url
+        return ResolvedProvider(api_key=api_key, base_url=base_url)
+
     async def complete(
         self,
         messages: list[dict[str, str]],
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        db: AsyncSession | None = None,
         **kwargs: Any,
     ) -> ModelResponse:
         resolved_model = model or self.default_model
+
+        api_key: str | None = None
+        if db is not None:
+            resolved = await self.resolve_provider(db, resolved_model)
+            api_base = resolved.base_url
+            api_key = resolved.api_key
+        else:
+            # No DB context: keep legacy behaviour (Ollama base URL by prefix).
+            api_base = self.base_url if resolved_model.startswith(_OLLAMA_PREFIX) else None
+
         response = await acompletion(
             model=resolved_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            api_base=self.base_url if resolved_model.startswith("ollama/") else None,
+            api_base=api_base,
+            api_key=api_key,
             **kwargs,
         )
         content = response.choices[0].message.content or ""
