@@ -208,7 +208,7 @@ describe("AI calls carry the persisted generation params", () => {
             scene_id: null,
             chapter_id: null,
             job_type: "rewrite",
-            status: "completed",
+            status: "done",
             model_name: "ollama/llama3.2",
             prompt_version: "1.0",
             input_data: {},

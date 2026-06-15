@@ -79,7 +79,7 @@ const jobShape = {
   scene_id: "5ce33333-3333-3333-3333-333333333333",
   chapter_id: null,
   job_type: "rewrite",
-  status: "completed",
+  status: "done",
   model_name: "ollama/llama3.2",
   prompt_version: "1.0",
   input_data: {},

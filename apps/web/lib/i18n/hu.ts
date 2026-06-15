@@ -68,6 +68,69 @@ export const hu = {
     jobs: "AI feladatok",
     prompts: "Prompt Library",
     audio: "Hangkönyvtár",
+    /** Aria-label on the Tools button's failed-job badge (n = count). */
+    jobsBadgeAria: (n: number) => `${n} sikertelen AI feladat`,
+  },
+  /**
+   * AI feladatok screen (B1) — the live generation-jobs list. Reads the real
+   * GenerationJob records the (synchronous) AI actions persist; surfaces status,
+   * context and any failure. Status / job-type labels degrade gracefully on an
+   * unknown value (raw string fallback, never a crash).
+   */
+  jobs: {
+    title: "AI feladatok",
+    subtitle: "A könyvhöz tartozó AI generálások előzménye és állapota.",
+    /** Status pill labels (backend JobStatus: pending/running/done/failed). */
+    statusPending: "Várakozik",
+    statusRunning: "Folyamatban",
+    statusDone: "Kész",
+    statusFailed: "Sikertelen",
+    /** Job-type labels (backend job_type values). */
+    typeRewrite: "Átírás",
+    typeDescribe: "Érzéki leírás",
+    typeGenerateScene: "Jelenet generálása",
+    typeWriteContinue: "Folytatás",
+    typeSummarize: "Összefoglalás",
+    /** Context line: which scene/chapter the job belongs to. */
+    contextScene: "Jelenet",
+    contextChapter: "Fejezet",
+    contextNone: "Nincs jelenethez kötve",
+    /** Model + prompt-version meta line. */
+    modelLabel: "Modell",
+    promptVersionLabel: "Prompt verzió",
+    /** Expandable error block on a failed job. */
+    errorHeading: "Hibaüzenet",
+    errorToggleShow: "Hibaüzenet megjelenítése",
+    errorToggleHide: "Hibaüzenet elrejtése",
+    errorUnknown: "Ismeretlen hiba történt.",
+    /** Loading / empty / error screen states. */
+    loadingAria: "AI feladatok betöltése",
+    emptyTitle: "Nincs még AI feladat",
+    emptyHint:
+      "Amint az AI segéddel generálsz vagy átírsz, a feladatok itt jelennek meg.",
+    errorTitle: "Nem sikerült betölteni az AI feladatokat",
+    /**
+     * Hungarian relative-time label for a job's created_at, relative to `now`.
+     * Short-span aware (jobs are recent): "épp most" → "N perce" → "N órája" →
+     * day/week/month/year. Returns "" for an unparseable timestamp.
+     */
+    relativeCreated: (iso: string, now: Date = new Date()): string => {
+      const then = new Date(iso).getTime();
+      if (Number.isNaN(then)) return "";
+      const diffMs = Math.max(0, now.getTime() - then);
+      const minute = 60_000;
+      const hour = 3_600_000;
+      const day = 86_400_000;
+      if (diffMs < minute) return "épp most";
+      if (diffMs < hour) return `${Math.floor(diffMs / minute)} perce`;
+      if (diffMs < day) return `${Math.floor(diffMs / hour)} órája`;
+      const days = Math.floor(diffMs / day);
+      if (days === 1) return "tegnap";
+      if (days < 7) return `${days} napja`;
+      if (days < 30) return `${Math.floor(days / 7)} hete`;
+      if (days < 365) return `${Math.floor(days / 30)} hónapja`;
+      return `${Math.floor(days / 365)} éve`;
+    },
   },
   statusbar: {
     saved: "Mentve",
@@ -908,8 +971,6 @@ export const hu = {
     chatHint: "A Chat az M10-ben érkezik.",
     cselekmenyszalakLabel: "Cselekményszálak",
     cselekmenyszalakHint: "A Cselekményszálak az M10-ben érkezik.",
-    feladatokLabel: "AI feladatok",
-    feladatokHint: "Az AI feladatok az M10-ben érkezik.",
     hangokLabel: "Hangkönyvtár",
     hangokHint: "A Hangkönyvtár az M11-ben (V2) érkezik.",
     idosorLabel: "Idősor",

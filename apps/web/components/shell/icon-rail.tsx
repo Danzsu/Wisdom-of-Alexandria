@@ -33,6 +33,7 @@ import { useNavTo } from "@/lib/use-nav-to";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useEditorStore } from "@/lib/stores/editor-store";
 import { useBookTree } from "@/lib/api/hooks";
+import { useFailedJobCount } from "@/lib/api/ai-hooks";
 import { routes, type BookSegment } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 
@@ -131,6 +132,12 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
     ? routes.scene(bookId, firstSceneId)
     : routes.book(bookId, "terv");
 
+  // Live attention count: the number of FAILED AI jobs for this book (B1). Drives
+  // the Tools warning dot + the "AI feladatok" badge. Both are hidden when 0, so
+  // the rail signals attention HONESTLY (no permanent dot / fabricated count).
+  const failedJobCount = useFailedJobCount(bookId || undefined);
+  const hasFailedJobs = failedJobCount > 0;
+
   /** Tiszta írás: open the manuscript in AI-free mode (prototype gocleanwrite). */
   function goCleanWrite() {
     setAiFree(true);
@@ -202,11 +209,14 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
               )}
             >
               <Icon icon={Wrench} size={18} />
-              {/* Unread/attention dot. */}
-              <span
-                aria-hidden="true"
-                className="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full border-[1.5px] border-bg-subtle bg-warning"
-              />
+              {/* Attention dot — shown ONLY when there are failed AI jobs (B1).
+                  No failures → no dot, so the rail never cries wolf. */}
+              {hasFailedJobs ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full border-[1.5px] border-bg-subtle bg-warning"
+                />
+              ) : null}
             </button>
           </PopoverMenuTrigger>
         </Tooltip>
@@ -239,9 +249,17 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           <MenuRow
             leadingIcon={<Icon icon={ListChecks} size={15} />}
             trailing={
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-ai px-1 text-[9px] font-bold text-white">
-                2
-              </span>
+              // Failed-job count badge — real count from useJobs (B1). Hidden
+              // entirely at 0 (no badge when nothing needs attention). The
+              // count is also announced for screen readers via aria-label.
+              hasFailedJobs ? (
+                <span
+                  aria-label={hu.tools.jobsBadgeAria(failedJobCount)}
+                  className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[9px] font-bold text-white"
+                >
+                  {failedJobCount}
+                </span>
+              ) : undefined
             }
             onSelect={() => navTo(routes.book(bookId, "feladatok"))}
           >

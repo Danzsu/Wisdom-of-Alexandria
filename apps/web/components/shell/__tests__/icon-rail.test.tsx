@@ -139,4 +139,32 @@ describe("IconRail", () => {
     await userEvent.click(prompts);
     expect(push).toHaveBeenCalledWith(`/konyv/${FAROSZ_BOOK.id}/promptok`);
   });
+
+  it("shows the failed-job count badge on AI feladatok (real count)", async () => {
+    // The Fárosz book seeds one FAILED job → the badge reads "1".
+    renderRail("terv", FAROSZ_BOOK.id);
+    await userEvent.click(screen.getByRole("button", { name: "Eszközök" }));
+    await screen.findByText("AI feladatok");
+    // Accessible: the count is announced via aria-label.
+    const badge = await screen.findByLabelText("1 sikertelen AI feladat");
+    expect(badge).toHaveTextContent("1");
+  });
+
+  it("hides the badge AND the warning dot when there are no failed jobs", async () => {
+    // A book with no seeded jobs → 0 failed → no badge, no attention dot.
+    const { container } = renderRail(
+      "terv",
+      "00000000-0000-0000-0000-000000000000",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Eszközök" }));
+    await screen.findByText("AI feladatok");
+    // Give the jobs query a tick to settle to an empty list, then assert both
+    // the count badge (aria-label) and the aria-hidden attention dot are gone.
+    await waitFor(() => {
+      expect(
+        screen.queryByLabelText(/sikertelen AI feladat/),
+      ).not.toBeInTheDocument();
+    });
+    expect(container.querySelector("span.bg-warning")).toBeNull();
+  });
 });

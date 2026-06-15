@@ -11,6 +11,7 @@ import {
   FAROSZ_BOOK,
   FAROSZ_CODEX,
   FAROSZ_PROJECT,
+  JOBS_FIXTURE,
   MODELS_FIXTURE,
   PROJECTS_FIXTURE,
   PROVIDERS_FIXTURE,
@@ -942,6 +943,35 @@ export const handlers = [
       "Metaforák",
     ];
     return HttpResponse.json(makeDescribeResult(channels, model));
+  }),
+
+  /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
+   * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional
+   * status filter, bounded limit, newest-first. ---- */
+  http.get(`${aiBase}/jobs`, ({ request }) => {
+    const url = new URL(request.url);
+    const bookId = url.searchParams.get("book_id");
+    const statusFilter = url.searchParams.get("status");
+    const limitParam = url.searchParams.get("limit");
+    // Only the Fárosz book has seeded jobs; any other book is empty (mirrors a
+    // real book-scoped query returning nothing for an unrelated book).
+    let jobs = bookId === FAROSZ_BOOK.id ? [...JOBS_FIXTURE] : [];
+    if (statusFilter) {
+      jobs = jobs.filter((j) => j.status === statusFilter);
+    }
+    if (limitParam) {
+      const limit = Number(limitParam);
+      if (Number.isFinite(limit)) jobs = jobs.slice(0, limit);
+    }
+    return HttpResponse.json(jobs);
+  }),
+
+  http.delete(`${aiBase}/jobs/:jobId`, ({ params }) => {
+    const exists = JOBS_FIXTURE.some((j) => j.id === String(params.jobId));
+    if (!exists) {
+      return HttpResponse.json({ detail: "Job not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 204 });
   }),
 
   /* ---- Revision approval (the human-in-the-loop accept) ---- */

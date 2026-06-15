@@ -14,10 +14,14 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 async def list_all(
     scene_id: uuid.UUID | None = Query(default=None),
     status: str | None = Query(default=None),
+    book_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> list[GenerationJobRead]:
-    return await list_jobs(db, scene_id=scene_id, status=status)
+    return await list_jobs(
+        db, scene_id=scene_id, status=status, book_id=book_id, limit=limit
+    )
 
 
 @router.get("/{job_id}", response_model=GenerationJobRead)

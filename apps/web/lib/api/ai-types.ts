@@ -37,6 +37,12 @@ export type RevisionRead = z.infer<typeof revisionReadSchema>;
 
 /* ---------------------------------------------------------------------------
  * GenerationJob — mirrors app/schemas/generation_job.py (GenerationJobRead).
+ *
+ * `status` and `job_type` are kept as plain `z.string()` on the wire (the
+ * backend columns are free strings, not DB enums), so a value the UI does not
+ * recognise still parses and renders with a graceful fallback rather than
+ * throwing. {@link JOB_STATUSES} / {@link JOB_TYPES} below enumerate the values
+ * the AI service actually writes today, for the badge variant + label maps.
  * ------------------------------------------------------------------------- */
 export const generationJobReadSchema = z.object({
   id: idString,
@@ -53,6 +59,37 @@ export const generationJobReadSchema = z.object({
   updated_at: z.string(),
 });
 export type GenerationJobRead = z.infer<typeof generationJobReadSchema>;
+
+/**
+ * The job statuses the AI service writes, verbatim from the backend `JobStatus`
+ * class (`alexandria_core/models/generation_job.py`): pending / running / done
+ * / failed. `failed` is the attention status that drives the nav warning badge.
+ * An unknown status (e.g. legacy data) is rendered with a neutral fallback —
+ * the union is for the colour/label maps, NOT a parse gate.
+ */
+export const JOB_STATUSES = ["pending", "running", "done", "failed"] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+/** Narrow an arbitrary status string to a known {@link JobStatus}, or null. */
+export function asJobStatus(value: string): JobStatus | null {
+  return (JOB_STATUSES as readonly string[]).includes(value)
+    ? (value as JobStatus)
+    : null;
+}
+
+/**
+ * The job types the AI service writes today (one per AI action that persists a
+ * GenerationJob — see `apps/ai/app/api/v1/ai.py`). Used for the localized
+ * job-type label; an unknown type falls back to the raw string in the UI.
+ */
+export const JOB_TYPES = [
+  "rewrite",
+  "describe",
+  "generate_scene",
+  "write_continue",
+  "summarize",
+] as const;
+export type JobType = (typeof JOB_TYPES)[number];
 
 /* ---------------------------------------------------------------------------
  * AI results — mirror app/api/v1/ai.py (AIResult / AIDescribeResult).

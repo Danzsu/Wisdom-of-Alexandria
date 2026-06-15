@@ -237,7 +237,7 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
             scene_id: SCENE_ACTIVE.id,
             chapter_id: null,
             job_type: "rewrite",
-            status: "completed",
+            status: "done",
             model_name: "ollama/llama3.2",
             prompt_version: "1.0",
             input_data: {},

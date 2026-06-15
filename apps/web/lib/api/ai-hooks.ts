@@ -26,11 +26,13 @@ import {
   rewrite,
   writeContinue,
 } from "./ai";
+import { listJobs } from "./jobs";
 import type {
   AIDescribeResult,
   AIResult,
   DescribeRequest,
   GenerateSceneRequest,
+  GenerationJobRead,
   ModelsResponse,
   RevisionRead,
   RewriteRequest,
@@ -43,7 +45,59 @@ import type {
 export const aiQueryKeys = {
   models: ["ai", "models"] as const,
   bookProject: (bookId: string) => ["ai", "book-project", bookId] as const,
+  jobs: (bookId: string) => ["jobs", bookId] as const,
 };
+
+/* ---------------------------------------------------------------------------
+ * Generation jobs (B1 — live AI-feladatok screen + nav attention badge).
+ *
+ * Interactive single-scene AI is SYNCHRONOUS, so the job list is mostly a
+ * history view; the poll keeps it (and the nav badge) live and surfaces any
+ * failures without a manual refresh. Errors surface via Query's `error` /
+ * `isError` — never swallowed.
+ * ------------------------------------------------------------------------- */
+
+/** How often the jobs list re-polls (ms) so the screen + badge stay live. */
+const JOBS_POLL_INTERVAL_MS = 5_000;
+
+/**
+ * List the generation jobs for a book (newest first), polling every ~5s so the
+ * screen and the nav badge stay live. Disabled until a book id is supplied.
+ */
+export function useJobs(
+  bookId: string | undefined,
+): UseQueryResult<GenerationJobRead[], Error> {
+  return useQuery({
+    queryKey: aiQueryKeys.jobs(bookId ?? "__none__"),
+    queryFn: () => listJobs({ bookId: bookId as string }),
+    enabled: Boolean(bookId),
+    refetchInterval: JOBS_POLL_INTERVAL_MS,
+    // Don't poll a hidden tab, and don't retry-storm a down AI service: for a
+    // background poller the 5s interval IS the retry, so a failed poll surfaces
+    // the error immediately and the next tick recovers on its own.
+    refetchIntervalInBackground: false,
+    retry: false,
+  });
+}
+
+/** Count the FAILED jobs in a list (the nav badge's attention count). */
+export function countFailedJobs(
+  jobs: readonly GenerationJobRead[] | undefined,
+): number {
+  if (!jobs) return 0;
+  return jobs.reduce((n, job) => (job.status === "failed" ? n + 1 : n), 0);
+}
+
+/**
+ * The number of FAILED jobs for a book — the nav warning-badge count. Built on
+ * {@link useJobs} (shared cache + poll), so the badge stays in sync with the
+ * screen. Returns 0 while loading or on error (the badge hides honestly rather
+ * than flashing a stale or misleading count).
+ */
+export function useFailedJobCount(bookId: string | undefined): number {
+  const { data } = useJobs(bookId);
+  return countFailedJobs(data);
+}
 
 /**
  * List the configured AI models (config-driven; never hardcoded). The result

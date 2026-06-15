@@ -266,7 +266,7 @@ function makeJob(jobType: string, model: string): GenerationJobRead {
     scene_id: SCENE_ACTIVE.id,
     chapter_id: null,
     job_type: jobType,
-    status: "completed",
+    status: "done",
     model_name: model,
     prompt_version: "1.0",
     input_data: {},
@@ -410,6 +410,66 @@ export function maskKey(key: string): string {
   const tail = key.slice(-4);
   return `••••${tail}`;
 }
+
+/* ---------------------------------------------------------------------------
+ * Generation jobs (B1) — the live AI-feladatok screen + nav badge fixtures.
+ *
+ * Statuses are the REAL backend `JobStatus` values (pending/running/done/
+ * failed). The set spans every status and includes ONE failed job so the
+ * screen's error rendering + the badge's failed-count both have data. All
+ * scoped to the Fárosz book's active scene.
+ * ------------------------------------------------------------------------- */
+export const JOB_DONE: GenerationJobRead = {
+  id: "job-done-1",
+  scene_id: SCENE_ACTIVE.id,
+  chapter_id: null,
+  job_type: "rewrite",
+  status: "done",
+  model_name: "ollama/llama3.2",
+  prompt_version: "1.0",
+  input_data: {},
+  output_data: { ok: true },
+  error_message: null,
+  created_at: "2026-06-15T11:00:00Z",
+  updated_at: "2026-06-15T11:00:01Z",
+};
+
+export const JOB_RUNNING: GenerationJobRead = {
+  id: "job-running-1",
+  scene_id: SCENE_ACTIVE.id,
+  chapter_id: null,
+  job_type: "generate_scene",
+  status: "running",
+  model_name: "ollama/llama3.2",
+  prompt_version: "1.0",
+  input_data: {},
+  output_data: null,
+  error_message: null,
+  created_at: "2026-06-15T11:05:00Z",
+  updated_at: "2026-06-15T11:05:00Z",
+};
+
+export const JOB_FAILED: GenerationJobRead = {
+  id: "job-failed-1",
+  scene_id: SCENE_ACTIVE.id,
+  chapter_id: null,
+  job_type: "describe",
+  status: "failed",
+  model_name: "ollama/llama3.2",
+  prompt_version: "1.0",
+  input_data: {},
+  output_data: null,
+  error_message: "A modell időtúllépés miatt nem válaszolt.",
+  created_at: "2026-06-15T11:10:00Z",
+  updated_at: "2026-06-15T11:10:02Z",
+};
+
+/** Jobs newest-first, mirroring the backend `created_at desc` ordering. */
+export const JOBS_FIXTURE: GenerationJobRead[] = [
+  JOB_FAILED,
+  JOB_RUNNING,
+  JOB_DONE,
+];
 
 /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */
 export const SCENE_BEATS_FIXTURE: BeatRead[] = [
