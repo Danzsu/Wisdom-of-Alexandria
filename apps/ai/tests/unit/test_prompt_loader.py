@@ -122,7 +122,6 @@ def test_all_6_templates_exist():
     hu_dir = repo_root / "packages" / "prompts" / "hu"
     if not hu_dir.exists():
         pytest.skip("packages/prompts/hu directory not found")
-    loader = PromptLoader(hu_dir)
     for name in ["rewrite", "describe", "write_continue", "generate_scene", "summarize", "continuity_check"]:
         path = hu_dir / f"{name}.md"
         assert path.exists(), f"Missing template: {name}.md"

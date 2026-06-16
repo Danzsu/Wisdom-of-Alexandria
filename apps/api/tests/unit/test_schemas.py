@@ -5,14 +5,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.beat import BeatCreate
-from app.schemas.book import BookCreate, BookUpdate
+from app.schemas.book import BookCreate
 from app.schemas.chapter import ChapterCreate
 from app.schemas.character import CharacterCreate, CharacterUpdate
 from app.schemas.codex_entry import CodexEntryCreate, CodexEntryRead
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.schemas.scene import SceneCreate
 from app.schemas.snippet import SnippetCreate
-from app.schemas.style_guide import StyleGuideCreate
 
 
 # ProjectCreate

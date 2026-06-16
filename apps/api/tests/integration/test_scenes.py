@@ -215,7 +215,7 @@ async def test_reorder_scenes_rejects_missing_id(client: AsyncClient, auth_heade
 async def test_reorder_scenes_rejects_duplicate_id(client: AsyncClient, auth_headers: dict):
     chapter_id = await _setup(client, auth_headers)
     s1 = (await client.post(f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S1"}, headers=auth_headers)).json()["id"]
-    s2 = (await client.post(f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S2"}, headers=auth_headers)).json()["id"]
+    await client.post(f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S2"}, headers=auth_headers)
     resp = await client.post(
         f"/api/v1/chapters/{chapter_id}/scenes/reorder",
         json={"order": [s1, s1]},

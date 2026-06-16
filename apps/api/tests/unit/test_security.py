@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import pytest
 from alexandria_core.core.config import settings
 from alexandria_core.core.security import create_access_token, decode_token
 from jose import jwt
@@ -48,7 +47,7 @@ def test_decode_token_wrong_secret_returns_none():
 
 def test_decode_token_expired_returns_none():
     # Create a token that expired 1 hour ago
-    expired = datetime.now(timezone.utc) - timedelta(hours=1)
+    expired = datetime.now(UTC) - timedelta(hours=1)
     expired_token = jwt.encode(
         {"sub": "admin", "exp": expired},
         settings.secret_key,
@@ -67,4 +66,4 @@ def test_token_payload_contains_exp():
     token = create_access_token("admin")
     payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     assert "exp" in payload
-    assert payload["exp"] > datetime.now(timezone.utc).timestamp()
+    assert payload["exp"] > datetime.now(UTC).timestamp()

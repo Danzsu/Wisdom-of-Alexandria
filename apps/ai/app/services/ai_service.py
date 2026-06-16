@@ -353,7 +353,9 @@ class AIService:
             system = self.loader.load_system("describe")
             revisions = []
             for channel in target_channels:
-                user = self.loader.load_user("describe", selected_text=selected_text, channel=channel)
+                user = self.loader.load_user(
+                    "describe", selected_text=selected_text, channel=channel
+                )
                 response = await self.router.complete(
                     messages=self.router.build_messages(system, user),
                     model=model,
@@ -370,7 +372,9 @@ class AIService:
                     prompt_version=PROMPT_VERSION,
                 )
                 revisions.append(rev)
-            await self.svc.complete_job(db, job, output_data={"revision_ids": [str(r.id) for r in revisions]})
+            await self.svc.complete_job(
+                db, job, output_data={"revision_ids": [str(r.id) for r in revisions]}
+            )
             return revisions, job
         except Exception as e:
             # Roll back any partial / failed transaction so fail_job's commit

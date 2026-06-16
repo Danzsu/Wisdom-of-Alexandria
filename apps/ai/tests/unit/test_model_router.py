@@ -117,7 +117,7 @@ async def test_complete_timeout_propagates_cleanly():
     router = ModelRouter(base_url="http://ollama:11434", default_model="ollama/llama3.2")
     with patch(
         "app.services.model_router.acompletion",
-        new=AsyncMock(side_effect=asyncio.TimeoutError("request timed out")),
+        new=AsyncMock(side_effect=TimeoutError("request timed out")),
     ):
         with pytest.raises(asyncio.TimeoutError):
             await router.complete(messages=[{"role": "user", "content": "test"}])

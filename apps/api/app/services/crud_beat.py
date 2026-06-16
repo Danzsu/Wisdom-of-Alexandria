@@ -43,7 +43,9 @@ async def delete_beat(db: AsyncSession, beat: Beat) -> None:
     await db.commit()
 
 
-async def reorder_beats(db: AsyncSession, scene_id: uuid.UUID, order: list[uuid.UUID]) -> list[Beat]:
+async def reorder_beats(
+    db: AsyncSession, scene_id: uuid.UUID, order: list[uuid.UUID]
+) -> list[Beat]:
     beats = await list_beats(db, scene_id)
     beat_map = {b.id: b for b in beats}
     validate_permutation(order, set(beat_map), "beat")

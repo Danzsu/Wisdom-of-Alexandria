@@ -27,7 +27,9 @@ async def get_scene(db: AsyncSession, chapter_id: uuid.UUID, scene_id: uuid.UUID
     return result.scalar_one_or_none()
 
 
-async def list_scenes(db: AsyncSession, chapter_id: uuid.UUID, include_archived: bool = False) -> list[Scene]:
+async def list_scenes(
+    db: AsyncSession, chapter_id: uuid.UUID, include_archived: bool = False
+) -> list[Scene]:
     query = select(Scene).where(Scene.chapter_id == chapter_id)
     if not include_archived:
         query = query.where(Scene.status != "archived")
@@ -51,7 +53,9 @@ async def delete_scene(db: AsyncSession, scene: Scene) -> None:
     await db.commit()
 
 
-async def reorder_scenes(db: AsyncSession, chapter_id: uuid.UUID, order: list[uuid.UUID]) -> list[Scene]:
+async def reorder_scenes(
+    db: AsyncSession, chapter_id: uuid.UUID, order: list[uuid.UUID]
+) -> list[Scene]:
     scenes = await list_scenes(db, chapter_id, include_archived=True)
     scene_map = {s.id: s for s in scenes}
     validate_permutation(order, set(scene_map), "scene")

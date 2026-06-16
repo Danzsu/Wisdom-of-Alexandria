@@ -1,7 +1,6 @@
 """Integration tests for Codex CRUD: Character, Location, WorldbuildingEntry, CodexEntry."""
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 

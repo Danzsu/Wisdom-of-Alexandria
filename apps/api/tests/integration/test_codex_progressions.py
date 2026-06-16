@@ -1,7 +1,6 @@
 """Integration tests for CodexProgression CRUD."""
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 

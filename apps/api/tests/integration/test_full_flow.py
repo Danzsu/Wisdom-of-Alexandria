@@ -4,7 +4,6 @@ These tests exercise the full project hierarchy and verify cascades, scoping, an
 """
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 # ── helpers ──────────────────────────────────────────────────────────────────

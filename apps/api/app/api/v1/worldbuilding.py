@@ -59,7 +59,9 @@ async def get_one(
     await _get_project_or_404(project_id, db)
     entry = await get_worldbuilding_entry(db, project_id, entry_id)
     if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found"
+        )
     return entry
 
 
@@ -74,7 +76,9 @@ async def update(
     await _get_project_or_404(project_id, db)
     entry = await get_worldbuilding_entry(db, project_id, entry_id)
     if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found"
+        )
     return await update_worldbuilding_entry(db, entry, data)
 
 
@@ -88,5 +92,7 @@ async def delete(
     await _get_project_or_404(project_id, db)
     entry = await get_worldbuilding_entry(db, project_id, entry_id)
     if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Worldbuilding entry not found"
+        )
     await delete_worldbuilding_entry(db, entry)

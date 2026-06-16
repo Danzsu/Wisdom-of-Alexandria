@@ -12,7 +12,6 @@ os.environ.setdefault(
 )
 
 import pytest  # noqa: E402
-from alexandria_core.db.session import AsyncSessionLocal  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,

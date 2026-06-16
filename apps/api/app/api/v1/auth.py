@@ -14,7 +14,10 @@ class Token(BaseModel):
 
 @router.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
-    if form_data.username != settings.admin_username or form_data.password != settings.admin_password:
+    if (
+        form_data.username != settings.admin_username
+        or form_data.password != settings.admin_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

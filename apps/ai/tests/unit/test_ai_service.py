@@ -1,11 +1,10 @@
-import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from alexandria_core.models.generation_job import GenerationJob, JobStatus
 from alexandria_core.models.revision import Revision
 
-from app.services.ai_service import DESCRIBE_CHANNELS, AIService
+from app.services.ai_service import AIService
 from app.services.model_router import ModelResponse, ModelRouter
 from app.services.prompt_loader import PromptLoader
 from app.services.revision_service import RevisionService
@@ -116,7 +115,7 @@ async def test_rewrite_timeout_produces_clean_failure(mock_db):
 
     router = _make_mock_router()
     svc = _make_mock_svc()
-    router.complete.side_effect = asyncio.TimeoutError("timed out")
+    router.complete.side_effect = TimeoutError("timed out")
 
     service = AIService(router=router, loader=_make_mock_loader(), svc=svc)
     with pytest.raises(asyncio.TimeoutError):

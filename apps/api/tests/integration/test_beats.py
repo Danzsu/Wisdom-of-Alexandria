@@ -1,6 +1,5 @@
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 
@@ -85,14 +84,13 @@ async def test_list_beats_empty(client: AsyncClient, auth_headers: dict):
 
 async def test_list_beats_ordered(client: AsyncClient, auth_headers: dict):
     scene_id = await _setup(client, auth_headers)
-    b1_id = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B1"}, headers=auth_headers)).json()["id"]
-    b2_id = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B2", "order_index": 1}, headers=auth_headers)).json()["id"]
-    b3_id = (await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B3", "order_index": 0}, headers=auth_headers)).json()["id"]
+    await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B1"}, headers=auth_headers)
+    await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B2", "order_index": 1}, headers=auth_headers)
+    await client.post(f"/api/v1/scenes/{scene_id}/beats", json={"description": "B3", "order_index": 0}, headers=auth_headers)
 
     resp = await client.get(f"/api/v1/scenes/{scene_id}/beats", headers=auth_headers)
     assert resp.status_code == 200
     beats = resp.json()
-    ids = [b["id"] for b in beats]
     # Should be ordered by order_index, then created_at
     # b3 and b1 both have order_index 0, so b3 (newer) comes last among them
     # Then b2 with order_index 1

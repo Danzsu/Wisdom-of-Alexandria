@@ -16,7 +16,9 @@ async def create_chapter(db: AsyncSession, book_id: uuid.UUID, data: ChapterCrea
     return chapter
 
 
-async def get_chapter(db: AsyncSession, book_id: uuid.UUID, chapter_id: uuid.UUID) -> Chapter | None:
+async def get_chapter(
+    db: AsyncSession, book_id: uuid.UUID, chapter_id: uuid.UUID
+) -> Chapter | None:
     result = await db.execute(
         select(Chapter).where(Chapter.id == chapter_id, Chapter.book_id == book_id)
     )
@@ -25,7 +27,9 @@ async def get_chapter(db: AsyncSession, book_id: uuid.UUID, chapter_id: uuid.UUI
 
 async def list_chapters(db: AsyncSession, book_id: uuid.UUID) -> list[Chapter]:
     result = await db.execute(
-        select(Chapter).where(Chapter.book_id == book_id).order_by(Chapter.order_index, Chapter.created_at)
+        select(Chapter)
+        .where(Chapter.book_id == book_id)
+        .order_by(Chapter.order_index, Chapter.created_at)
     )
     return list(result.scalars().all())
 
@@ -43,7 +47,9 @@ async def delete_chapter(db: AsyncSession, chapter: Chapter) -> None:
     await db.commit()
 
 
-async def reorder_chapters(db: AsyncSession, book_id: uuid.UUID, order: list[uuid.UUID]) -> list[Chapter]:
+async def reorder_chapters(
+    db: AsyncSession, book_id: uuid.UUID, order: list[uuid.UUID]
+) -> list[Chapter]:
     chapters = await list_chapters(db, book_id)
     chapter_map = {c.id: c for c in chapters}
     validate_permutation(order, set(chapter_map), "chapter")

@@ -24,7 +24,9 @@ async def get_book(db: AsyncSession, project_id: uuid.UUID, book_id: uuid.UUID) 
 
 async def list_books(db: AsyncSession, project_id: uuid.UUID) -> list[Book]:
     result = await db.execute(
-        select(Book).where(Book.project_id == project_id).order_by(Book.order_index, Book.created_at)
+        select(Book)
+        .where(Book.project_id == project_id)
+        .order_by(Book.order_index, Book.created_at)
     )
     return list(result.scalars().all())
 

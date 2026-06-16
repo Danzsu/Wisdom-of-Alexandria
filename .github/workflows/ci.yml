@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend: ruff + Alembic migrations + pytest (apps/api & apps/ai) against a
+  # real PostgreSQL + pgvector service. Running on Postgres is what actually
+  # exercises the migrations (incl. the pgvector extension + embeddings table)
+  # and unskips the @pytest.mark.postgres tests (the test conftest derives
+  # IS_POSTGRES from TEST_DATABASE_URL).
+  # ---------------------------------------------------------------------------
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # pgvector-enabled Postgres so `CREATE EXTENSION vector` + the vector()
+        # column DDL work (same image family as docker-compose).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: forgewriter
+          POSTGRES_PASSWORD: forgewriter
+          POSTGRES_DB: forgewriter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forgewriter"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # JWT signing secret (shared by apps/api auth and apps/ai token validation).
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      # Main app DB — migrations run here.
+      DATABASE_URL: postgresql+asyncpg://forgewriter:forgewriter@localhost:5432/forgewriter
+      # Dedicated test DB — pytest conftest builds the schema here via create_all,
+      # and IS_POSTGRES becomes true so the postgres-marked tests run.
+      TEST_DATABASE_URL: postgresql+asyncpg://forgewriter:forgewriter@localhost:5432/forgewriter_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install workspace (with dev deps)
+        run: uv sync
+
+      # PROVIDER_ENCRYPTION_KEY must be a valid Fernet key (urlsafe base64, 32
+      # bytes). Generate a fresh one per run rather than committing a key.
+      - name: Generate provider encryption key
+        run: |
+          KEY=$(uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "PROVIDER_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Ruff (apps/api)
+        run: uv run --directory apps/api ruff check
+
+      - name: Ruff (apps/ai)
+        run: uv run --directory apps/ai ruff check
+
+      # Genuinely EXECUTE every migration's upgrade() on a fresh Postgres. Fails
+      # CI if a migration is broken (this includes `CREATE EXTENSION vector`, the
+      # vector(1536) embeddings column, and the ivfflat cosine index).
+      - name: Alembic upgrade head (apps/api, Postgres)
+        run: uv run --directory apps/api alembic upgrade head
+
+      # The test DB is a SEPARATE database that pytest builds with create_all
+      # (not migrations). create_all emits the vector() column DDL, which requires
+      # the `vector` extension to already exist — so create it here before pytest.
+      - name: Create test database + pgvector extension
+        env:
+          PGPASSWORD: forgewriter
+        run: |
+          psql -h localhost -U forgewriter -d forgewriter \
+            -c "CREATE DATABASE forgewriter_test"
+          psql -h localhost -U forgewriter -d forgewriter_test \
+            -c "CREATE EXTENSION IF NOT EXISTS vector"
+
+      - name: Pytest (apps/api)
+        run: uv run --directory apps/api pytest -q
+
+      # apps/ai owns the 4 @pytest.mark.postgres tests; with TEST_DATABASE_URL
+      # pointing at Postgres they run instead of skipping.
+      - name: Pytest (apps/ai)
+        run: uv run --directory apps/ai pytest -q
+
+  # ---------------------------------------------------------------------------
+  # Frontend: type-check + lint + vitest.
+  # ---------------------------------------------------------------------------
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: corepack pnpm -C apps/web type-check
+
+      - name: Lint
+        run: corepack pnpm -C apps/web lint
+
+      - name: Test
+        run: corepack pnpm -C apps/web test
+
+  # ---------------------------------------------------------------------------
+  # TODO (future milestones — intentionally NOT implemented in C0):
+  #
+  #   e2e:
+  #     Playwright E2E against a running web + api stack (CLAUDE.md target).
+  #     Blocked today by: (a) apps/api and apps/ai both declare the Python
+  #     package name `app`, so they cannot be installed side-by-side in one
+  #     image without renaming; (b) there is no web Dockerfile yet. Resolve both
+  #     before standing up a two-service compose for E2E.
+  #
+  #   deploy:
+  #     Runs only after e2e passes -> Vercel (web) + Cloud Run (api). Deferred
+  #     until E2E exists and deployment targets/secrets are provisioned.
+  # ---------------------------------------------------------------------------
