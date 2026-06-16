@@ -15,6 +15,7 @@ from app.services import pandoc
 from app.services.pandoc import (
     PandocConversionError,
     PandocUnavailableError,
+    convert_docx_to_markdown,
     convert_markdown,
     pandoc_available,
 )
@@ -115,6 +116,77 @@ def test_timeout_raises_conversion_error(monkeypatch):
     assert "timed out" in str(exc.value).lower()
 
 
+# --- DOCX -> Markdown (import direction, #2b) ------------------------------ #
+
+
+def test_docx_to_markdown_builds_correct_invocation(monkeypatch):
+    """convert_docx_to_markdown calls pandoc -f docx -t markdown, returns stdout."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        seen["timeout"] = kwargs.get("timeout")
+        return SimpleNamespace(
+            returncode=0, stdout=b"# Cim\n\nSzoveg.\n", stderr=b""
+        )
+
+    monkeypatch.setattr(pandoc.subprocess, "run", fake_run)
+
+    md = convert_docx_to_markdown(b"PKfake-docx-bytes")
+
+    assert md == "# Cim\n\nSzoveg.\n"
+    cmd = seen["cmd"]
+    assert cmd[0] == "/usr/bin/pandoc"
+    assert "-f" in cmd and cmd[cmd.index("-f") + 1] == "docx"
+    assert "-t" in cmd and cmd[cmd.index("-t") + 1] == "markdown"
+    assert isinstance(seen["timeout"], int) and seen["timeout"] > 0
+
+
+def test_docx_to_markdown_missing_pandoc_raises_unavailable(monkeypatch):
+    """which() == None -> PandocUnavailableError (mapped to 503 at the endpoint)."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: None)
+
+    with pytest.raises(PandocUnavailableError) as exc:
+        convert_docx_to_markdown(b"x")
+    assert "pandoc" in str(exc.value).lower()
+
+
+def test_docx_to_markdown_nonzero_exit_sanitized(monkeypatch):
+    """Non-zero exit -> PandocConversionError with the temp path scrubbed."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+
+    def fake_run(cmd, **kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout=b"",
+            stderr=b"pandoc: cannot read /tmp/woa-import-xyz/input.docx",
+        )
+
+    monkeypatch.setattr(pandoc.subprocess, "run", fake_run)
+
+    with pytest.raises(PandocConversionError) as exc:
+        convert_docx_to_markdown(b"x")
+    message = str(exc.value)
+    assert "/tmp/woa-import-xyz/input.docx" not in message
+    assert "<path>" in message
+
+
+def test_docx_to_markdown_timeout_raises_conversion_error(monkeypatch):
+    """A subprocess timeout surfaces as PandocConversionError, not a raw crash."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 60))
+
+    monkeypatch.setattr(pandoc.subprocess, "run", fake_run)
+
+    with pytest.raises(PandocConversionError) as exc:
+        convert_docx_to_markdown(b"x")
+    assert "timed out" in str(exc.value).lower()
+
+
 # --- pandoc-gated REAL round-trip (skips locally, runs in CI) -------------- #
 
 
@@ -132,3 +204,24 @@ def test_real_conversion_roundtrip_produces_zip(fmt):
     assert len(data) > 0
     # DOCX and EPUB are both ZIP containers -> they start with the PK signature.
     assert data[:2] == b"PK"
+
+
+@pytest.mark.pandoc
+@pytest.mark.skipif(
+    not pandoc_available(), reason="pandoc CLI not on PATH (installed in CI)"
+)
+def test_real_docx_to_markdown_roundtrip():
+    """REAL round-trip: build a docx via pandoc, read it back, headings survive.
+
+    Avoids a python-docx dependency by using pandoc itself to MAKE the docx
+    (md -> docx), then exercising the import direction (docx -> md). The chapter
+    heading + body text must reappear in the recovered Markdown.
+    """
+    docx_bytes = convert_markdown(
+        "# Első fejezet\n\nElső bekezdés szövege.\n", "docx", title="Teszt"
+    )
+    assert docx_bytes[:2] == b"PK"
+
+    recovered = convert_docx_to_markdown(docx_bytes)
+    assert "Első fejezet" in recovered
+    assert "Első bekezdés szövege." in recovered

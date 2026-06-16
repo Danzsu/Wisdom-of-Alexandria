@@ -28,6 +28,7 @@ import {
 } from "@tanstack/react-query";
 import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks } from "./books";
+import { importDocx, type BookImportSummary } from "./imports";
 import {
   createChapter,
   deleteChapter,
@@ -185,6 +186,40 @@ export function useCreateBookWithProject(): UseMutationResult<
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.projectBooks(createdBook.project_id),
+      });
+    },
+  });
+}
+
+/** Inputs for the DOCX import mutation (#2b). */
+export interface ImportDocxInput {
+  projectId: string;
+  file: File;
+  /** Optional explicit book title (overrides the server-derived title). */
+  title?: string;
+}
+
+/**
+ * Import a `.docx` as a new book under an existing project. Returns the import
+ * summary (the created book id + structure counts) so the caller can navigate
+ * to the new book. On success the project list and the project's book list are
+ * invalidated so the new book appears. Errors propagate via the mutation's
+ * `error` (the `ApiError` carries the server's 400/413/502/503 detail) — never
+ * swallowed.
+ */
+export function useImportDocx(): UseMutationResult<
+  BookImportSummary,
+  Error,
+  ImportDocxInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, file, title }: ImportDocxInput) =>
+      importDocx(projectId, file, title),
+    onSuccess: async (_summary, { projectId }) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.projectBooks(projectId),
       });
     },
   });

@@ -162,3 +162,64 @@ def convert_markdown(
             )
 
         return output_path.read_bytes()
+
+
+def convert_docx_to_markdown(docx_bytes: bytes) -> str:
+    """Convert DOCX bytes to Markdown via the pandoc CLI (import direction, #2b).
+
+    Mirrors :func:`convert_markdown` (same robustness contract) but the OTHER
+    way: the uploaded ``.docx`` bytes are written to a temp file and pandoc reads
+    them with ``-f docx -t markdown``, emitting Markdown the import parser then
+    structures into chapters/scenes. The Markdown is captured from stdout (text,
+    unlike the binary DOCX/EPUB writers), the temp dir is always cleaned up, and
+    every failure mode is surfaced LOUDLY — never a silent empty import.
+
+    Raises:
+        PandocUnavailableError: pandoc is not installed (PATH miss) -> 503.
+        PandocConversionError:  pandoc exited non-zero, timed out, or produced no
+                                output -> 502.
+    """
+    pandoc = shutil.which("pandoc")
+    if pandoc is None:
+        raise PandocUnavailableError(
+            "DOCX import requires pandoc; not available on this server. "
+            "Install pandoc (the API Docker image and CI provide it)."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="woa-import-") as tmp:
+        input_path = Path(tmp) / "input.docx"
+        input_path.write_bytes(docx_bytes)
+
+        cmd = [
+            pandoc,
+            str(input_path),
+            "-f",
+            "docx",
+            "-t",
+            "markdown",
+        ]
+
+        try:
+            result = subprocess.run(  # noqa: S603 — fixed argv, no shell, pandoc resolved via which
+                cmd,
+                capture_output=True,
+                timeout=_PANDOC_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise PandocConversionError(
+                f"pandoc timed out after {_PANDOC_TIMEOUT_SECONDS}s while "
+                "reading the DOCX."
+            ) from exc
+        except OSError as exc:
+            raise PandocConversionError(
+                f"pandoc could not be executed: {_safe_error(str(exc))}"
+            ) from exc
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            raise PandocConversionError(
+                f"pandoc failed to read the DOCX: {_safe_error(stderr)}"
+            )
+
+        return result.stdout.decode("utf-8", errors="replace")

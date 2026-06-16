@@ -36,6 +36,7 @@ import { useNavTo } from "@/lib/use-nav-to";
 import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { NewBookWizard } from "./new-book-wizard";
+import { ImportDocxDialog } from "./import-docx-dialog";
 
 const ONBOARD_KEY = "woa-onboard-dismissed";
 type SortKey = "recent" | "title";
@@ -46,6 +47,7 @@ export function ProjectsDashboard() {
   const navTo = useNavTo();
   const resolveFirstBookId = useResolveFirstBookId();
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const projectsQuery = useProjects();
 
   /**
@@ -85,7 +87,10 @@ export function ProjectsDashboard() {
 
         <WelcomeHero />
 
-        <QuickActions onNewBook={() => setWizardOpen(true)} />
+        <QuickActions
+          onNewBook={() => setWizardOpen(true)}
+          onImport={() => setImportOpen(true)}
+        />
 
         <DailySpark />
 
@@ -99,6 +104,7 @@ export function ProjectsDashboard() {
       </div>
 
       <NewBookWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+      <ImportDocxDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }
@@ -220,7 +226,13 @@ function WelcomeHero() {
 /* Quick-action grid                                                          */
 /* -------------------------------------------------------------------------- */
 
-function QuickActions({ onNewBook }: { onNewBook: () => void }) {
+function QuickActions({
+  onNewBook,
+  onImport,
+}: {
+  onNewBook: () => void;
+  onImport: () => void;
+}) {
   const actions: {
     key: string;
     icon: typeof Plus;
@@ -243,7 +255,7 @@ function QuickActions({ onNewBook }: { onNewBook: () => void }) {
       label: hu.projects.quickImport,
       primary: false,
       ai: true,
-      onClick: () => toast.info(hu.projects.importToast),
+      onClick: onImport,
     },
     {
       key: "clean",

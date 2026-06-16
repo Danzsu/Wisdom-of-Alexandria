@@ -550,6 +550,31 @@ export const handlers = [
     });
   }),
 
+  /* ---- DOCX import (#2b) ----
+   * NOTE: `request.formData()` is unreliable in the jsdom + undici test stack,
+   * so we read the title from the raw multipart text instead of parsing it.
+   */
+  http.post(
+    `${base}/projects/:projectId/imports`,
+    async ({ request }) => {
+      const body = await request.text();
+      const match = body.match(
+        /name="title"\r?\n\r?\n([\s\S]*?)\r?\n--/,
+      );
+      const title = match?.[1]?.trim() || "Importált könyv";
+      return HttpResponse.json(
+        {
+          book_id: "imported-book-1",
+          title,
+          chapter_count: 2,
+          scene_count: 3,
+          word_count: 9,
+        },
+        { status: 201 },
+      );
+    },
+  ),
+
   /* ---- Chapters (book-scoped, full CRUD + reorder — M7) ---- */
   http.get(`${base}/books/:bookId/chapters`, ({ params }) =>
     HttpResponse.json(planStore.listChapters(String(params.bookId))),

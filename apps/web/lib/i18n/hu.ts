@@ -1088,6 +1088,27 @@ export const hu = {
     /** Generic "opening project…" failure when the book lookup errors. */
     openProjectError: "Nem sikerült megnyitni a projektet",
   },
+  /** DOCX import dialog (Feature #2b). */
+  importDialog: {
+    title: "Kézirat importálása",
+    description:
+      "Tölts fel egy .docx fájlt — az Alexandria fejezetekre és jelenetekre bontja, és új könyvet hoz létre belőle.",
+    fileLabel: "Word dokumentum (.docx)",
+    filePickerCta: "Fájl kiválasztása",
+    titleLabel: "Könyv címe (opcionális)",
+    titlePlaceholder: "Ha üres, a fájlnévből vagy a dokumentum első sorából derül ki",
+    submit: "Importálás",
+    cancel: "Mégse",
+    importing: "Importálás folyamatban…",
+    /** Success toast: how many chapters/scenes were created. */
+    successToast: (chapters: number, scenes: number): string =>
+      `Kész: ${chapters} fejezet, ${scenes} jelenet importálva.`,
+    errorTitle: "Az importálás sikertelen",
+    /** Shown when the user submits without choosing a file. */
+    noFileError: "Válassz ki egy .docx fájlt az importáláshoz.",
+    /** Shown when a non-.docx file is chosen client-side. */
+    wrongTypeError: "Csak .docx fájlt lehet importálni.",
+  },
   /** Új könyv wizard (`wizon` prototype modal). */
   wizard: {
     dialogTitle: "Új könyv létrehozása",

@@ -9,6 +9,7 @@ from app.api.v1.codex import router as codex_router
 from app.api.v1.codex_progressions import router as codex_progressions_router
 from app.api.v1.codex_relations import router as codex_relations_router
 from app.api.v1.exports import router as exports_router
+from app.api.v1.imports import router as imports_router
 from app.api.v1.locations import router as locations_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.revisions import router as revisions_router
@@ -41,3 +42,4 @@ api_router.include_router(snippets_router)
 api_router.include_router(style_guide_router)
 api_router.include_router(revisions_router)
 api_router.include_router(exports_router)
+api_router.include_router(imports_router)
