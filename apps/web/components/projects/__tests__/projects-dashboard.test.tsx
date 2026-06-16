@@ -100,4 +100,53 @@ describe("ProjectsDashboard", () => {
       within(dialog).getByText(hu.wizard.dialogTitle),
     ).toBeInTheDocument();
   });
+
+  it("opens the restore dialog from the restore quick action (Feature #5)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProjectsDashboard />);
+    await screen.findAllByText("A Fárosz őrzője");
+
+    await user.click(
+      screen.getByRole("button", { name: hu.backup.restoreAction }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(hu.backup.restoreTitle),
+    ).toBeInTheDocument();
+  });
+
+  it("exports a project backup from the card actions menu (Feature #5)", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:woa");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    let backupHit = false;
+    server.use(
+      http.get(`${base}/projects/:projectId/backup`, () => {
+        backupHit = true;
+        return HttpResponse.json(
+          { version: 1, project: { title: "x" } },
+          {
+            headers: {
+              "Content-Disposition": 'attachment; filename="x-backup.json"',
+            },
+          },
+        );
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<ProjectsDashboard />);
+    await screen.findAllByText("A Fárosz őrzője");
+
+    // Open the first per-card actions menu, then click "Exportálás (JSON)".
+    const menuButtons = screen.getAllByRole("button", {
+      name: hu.backup.menuAria,
+    });
+    await user.click(menuButtons[0]);
+    await user.click(await screen.findByText(hu.backup.exportAction));
+
+    await waitFor(() => expect(backupHit).toBe(true));
+    vi.restoreAllMocks();
+  });
 });

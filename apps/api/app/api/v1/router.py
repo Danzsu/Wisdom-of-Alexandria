@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.backups import router as backups_router
 from app.api.v1.beats import router as beats_router
 from app.api.v1.books import router as books_router
 from app.api.v1.chapters import router as chapters_router
@@ -45,3 +46,4 @@ api_router.include_router(style_guide_router)
 api_router.include_router(revisions_router)
 api_router.include_router(exports_router)
 api_router.include_router(imports_router)
+api_router.include_router(backups_router)

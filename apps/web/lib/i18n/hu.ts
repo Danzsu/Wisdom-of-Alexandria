@@ -1149,6 +1149,34 @@ export const hu = {
     /** Shown when a non-.docx file is chosen client-side. */
     wrongTypeError: "Csak .docx fájlt lehet importálni.",
   },
+  /** Project JSON backup / restore (Feature #5). */
+  backup: {
+    /** Project-card menu / action labels. */
+    exportAction: "Exportálás (JSON)",
+    restoreAction: "Visszaállítás (JSON)",
+    /** aria-label for the per-card actions menu trigger. */
+    menuAria: "Projekt műveletek",
+    /** Toast while the backup is being prepared/downloaded. */
+    exporting: "Biztonsági mentés készítése…",
+    exportSuccess: "A biztonsági mentés letöltődött.",
+    exportError: "A biztonsági mentés sikertelen",
+    /** Restore dialog. */
+    restoreTitle: "Projekt visszaállítása",
+    restoreDescription:
+      "Tölts fel egy korábban exportált .json mentést — az Alexandria új projektként állítja vissza a teljes tartalmat (a meglévő projektek érintetlenek maradnak).",
+    fileLabel: "Mentésfájl (.json)",
+    submit: "Visszaállítás",
+    cancel: "Mégse",
+    restoring: "Visszaállítás folyamatban…",
+    /** Success toast: the restored project's title. */
+    restoreSuccess: (title: string): string =>
+      `Visszaállítva: „${title}”.`,
+    restoreError: "A visszaállítás sikertelen",
+    /** Shown when the user submits without choosing a file. */
+    noFileError: "Válassz ki egy .json mentésfájlt a visszaállításhoz.",
+    /** Shown when a non-.json file is chosen client-side. */
+    wrongTypeError: "Csak .json mentésfájlt lehet visszaállítani.",
+  },
   /** Új könyv wizard (`wizon` prototype modal). */
   wizard: {
     dialogTitle: "Új könyv létrehozása",

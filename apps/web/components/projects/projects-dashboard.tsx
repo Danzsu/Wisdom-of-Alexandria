@@ -10,11 +10,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   ChevronDown,
+  Download,
   FileUp,
   Library,
+  MoreVertical,
   Plus,
   Search,
   Sparkles,
+  Upload,
   Wand2,
   X,
 } from "lucide-react";
@@ -30,13 +33,18 @@ import {
   toast,
 } from "@/components/kit";
 import { BrandStar } from "@/components/kit/brand-star";
-import { useProjects, useResolveFirstBookId } from "@/lib/api/hooks";
+import {
+  useExportBackup,
+  useProjects,
+  useResolveFirstBookId,
+} from "@/lib/api/hooks";
 import type { ProjectRead } from "@/lib/api/types";
 import { useNavTo } from "@/lib/use-nav-to";
 import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { NewBookWizard } from "./new-book-wizard";
 import { ImportDocxDialog } from "./import-docx-dialog";
+import { RestoreBackupDialog } from "./restore-backup-dialog";
 
 const ONBOARD_KEY = "woa-onboard-dismissed";
 type SortKey = "recent" | "title";
@@ -48,7 +56,29 @@ export function ProjectsDashboard() {
   const resolveFirstBookId = useResolveFirstBookId();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const projectsQuery = useProjects();
+  const exportBackup = useExportBackup();
+
+  /**
+   * Download a project's JSON backup. Shows a progress toast, then surfaces
+   * success or the server's error detail — never swallowed. The mutation is
+   * read-only on the server so there is no cache to invalidate.
+   */
+  const onExportBackup = useCallback(
+    (projectId: string) => {
+      toast.info(hu.backup.exporting);
+      exportBackup
+        .mutateAsync(projectId)
+        .then(() => toast.success(hu.backup.exportSuccess))
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          toast.error(`${hu.backup.exportError}: ${message}`);
+        });
+    },
+    [exportBackup],
+  );
 
   /**
    * Open a project at its real BOOK route. A project owns many books, so its own
@@ -90,6 +120,7 @@ export function ProjectsDashboard() {
         <QuickActions
           onNewBook={() => setWizardOpen(true)}
           onImport={() => setImportOpen(true)}
+          onRestore={() => setRestoreOpen(true)}
         />
 
         <DailySpark />
@@ -100,11 +131,13 @@ export function ProjectsDashboard() {
           query={projectsQuery}
           onNewProject={() => setWizardOpen(true)}
           onOpenProject={openProject}
+          onExportBackup={onExportBackup}
         />
       </div>
 
       <NewBookWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       <ImportDocxDialog open={importOpen} onOpenChange={setImportOpen} />
+      <RestoreBackupDialog open={restoreOpen} onOpenChange={setRestoreOpen} />
     </div>
   );
 }
@@ -229,9 +262,11 @@ function WelcomeHero() {
 function QuickActions({
   onNewBook,
   onImport,
+  onRestore,
 }: {
   onNewBook: () => void;
   onImport: () => void;
+  onRestore: () => void;
 }) {
   const actions: {
     key: string;
@@ -274,10 +309,17 @@ function QuickActions({
       // fabricated "demo" book id. A real global Prompt Library route is future.
       onClick: () => toast.info(hu.projects.promptLibraryToast),
     },
+    {
+      key: "restore",
+      icon: Upload,
+      label: hu.backup.restoreAction,
+      primary: false,
+      onClick: onRestore,
+    },
   ];
 
   return (
-    <div className="woa-stagger mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+    <div className="woa-stagger mb-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
       {actions.map((a) => (
         <button
           key={a.key}
@@ -460,10 +502,12 @@ function AllProjectsSection({
   query,
   onNewProject,
   onOpenProject,
+  onExportBackup,
 }: {
   query: ReturnType<typeof useProjects>;
   onNewProject: () => void;
   onOpenProject: (projectId: string) => void;
+  onExportBackup: (projectId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -541,6 +585,7 @@ function AllProjectsSection({
               variant={i % 2 === 0 ? "gold" : "blueGrey"}
               view={view}
               onClick={() => onOpenProject(p.id)}
+              onExportBackup={() => onExportBackup(p.id)}
             />
           ))}
           {view === "grid" ? (
@@ -618,16 +663,51 @@ function GroupDropdown({
   );
 }
 
+/**
+ * Per-card actions menu (Feature #5). Rendered as a SIBLING of the card button
+ * (not nested inside it — nesting interactive elements is invalid) and overlaid
+ * in the top-right corner. Currently offers "Exportálás (JSON)"; more per-project
+ * actions can land here later.
+ */
+function ProjectCardMenu({ onExportBackup }: { onExportBackup: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="absolute right-2 top-2 z-10">
+      <PopoverMenu open={open} onOpenChange={setOpen}>
+        <PopoverMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={hu.backup.menuAria}
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface/80 text-text-muted shadow-card backdrop-blur transition-colors hover:bg-surface hover:text-text"
+          >
+            <Icon icon={MoreVertical} size={15} />
+          </button>
+        </PopoverMenuTrigger>
+        <PopoverMenuContent align="end">
+          <MenuRow onSelect={onExportBackup}>
+            <span className="flex items-center gap-2">
+              <Icon icon={Download} size={14} />
+              {hu.backup.exportAction}
+            </span>
+          </MenuRow>
+        </PopoverMenuContent>
+      </PopoverMenu>
+    </div>
+  );
+}
+
 function ProjectCard({
   project,
   variant,
   view,
   onClick,
+  onExportBackup,
 }: {
   project: ProjectRead;
   variant: "gold" | "blueGrey";
   view: ViewKey;
   onClick: () => void;
+  onExportBackup: () => void;
 }) {
   const coverStyle = {
     background:
@@ -644,63 +724,69 @@ function ProjectCard({
 
   if (view === "list") {
     return (
-      <button
-        type="button"
-        data-press=""
-        onClick={onClick}
-        className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
-      >
-        <span
-          className="flex h-12 w-9 flex-none items-end justify-center rounded-md border border-accent pb-1"
-          style={coverStyle}
+      <div className="relative">
+        <button
+          type="button"
+          data-press=""
+          onClick={onClick}
+          className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-3 pr-10 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
         >
-          <Icon icon={BookOpen} size={14} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-semibold text-text">
-            {project.title}
+          <span
+            className="flex h-12 w-9 flex-none items-end justify-center rounded-md border border-accent pb-1"
+            style={coverStyle}
+          >
+            <Icon icon={BookOpen} size={14} />
           </span>
-          <span className="block truncate text-[12px] text-text-muted">
-            {project.description ?? ""}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-semibold text-text">
+              {project.title}
+            </span>
+            <span className="block truncate text-[12px] text-text-muted">
+              {project.description ?? ""}
+            </span>
+            <span className="mt-0.5 block truncate text-[11px] tabular-nums text-text-muted">
+              {counts}
+            </span>
           </span>
-          <span className="mt-0.5 block truncate text-[11px] tabular-nums text-text-muted">
-            {counts}
-          </span>
-        </span>
-      </button>
+        </button>
+        <ProjectCardMenu onExportBackup={onExportBackup} />
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      data-press=""
-      onClick={onClick}
-      className="overflow-hidden rounded-[14px] border border-border bg-surface p-0 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
-    >
-      <span
-        className="flex h-[88px] items-end justify-center border-b border-border pb-3"
-        style={coverStyle}
+    <div className="relative">
+      <button
+        type="button"
+        data-press=""
+        onClick={onClick}
+        className="block w-full overflow-hidden rounded-[14px] border border-border bg-surface p-0 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
       >
-        <Icon icon={BookOpen} size={22} />
-      </span>
-      <span className="block p-3">
-        <span className="block text-[14px] font-semibold text-text">
-          {project.title}
+        <span
+          className="flex h-[88px] items-end justify-center border-b border-border pb-3"
+          style={coverStyle}
+        >
+          <Icon icon={BookOpen} size={22} />
         </span>
-        {project.description ? (
-          <span className="mt-0.5 block text-[12px] text-text-muted">
-            {project.description}
+        <span className="block p-3">
+          <span className="block text-[14px] font-semibold text-text">
+            {project.title}
           </span>
-        ) : null}
-        <span className="mt-2 block text-[11px] tabular-nums text-text-muted">
-          {counts}
+          {project.description ? (
+            <span className="mt-0.5 block text-[12px] text-text-muted">
+              {project.description}
+            </span>
+          ) : null}
+          <span className="mt-2 block text-[11px] tabular-nums text-text-muted">
+            {counts}
+          </span>
+          <span className="mt-0.5 block text-[11px] tabular-nums text-text-faint">
+            {meta}
+          </span>
         </span>
-        <span className="mt-0.5 block text-[11px] tabular-nums text-text-faint">
-          {meta}
-        </span>
-      </span>
-    </button>
+      </button>
+      <ProjectCardMenu onExportBackup={onExportBackup} />
+    </div>
   );
 }
 

@@ -800,6 +800,72 @@ export const handlers = [
     },
   ),
 
+  /* ---- Project JSON backup / restore (Feature #5) ---- */
+  // GET backup: returns the JSON envelope with a download Content-Disposition.
+  http.get(`${base}/projects/:projectId/backup`, ({ params }) => {
+    const envelope = {
+      version: 1,
+      exported_at: "2026-06-16T00:00:00+00:00",
+      project: {
+        id: String(params.projectId),
+        title: "Mentett projekt",
+        description: null,
+        language: "hu",
+      },
+      series: [],
+      books: [],
+      chapters: [],
+      scenes: [],
+      beats: [],
+      codex_entries: [],
+      characters: [],
+      locations: [],
+      worldbuilding_entries: [],
+      snippets: [],
+      style_guides: [],
+      codex_relations: [],
+      codex_progressions: [],
+    };
+    return HttpResponse.json(envelope, {
+      headers: {
+        "Content-Disposition":
+          'attachment; filename="mentett_projekt-backup.json"',
+      },
+    });
+  }),
+  // POST restore: multipart .json upload → new project summary (201).
+  http.post(`${base}/projects/restore`, async ({ request }) => {
+    // Read the multipart body; a backup whose embedded title is "BAD" simulates
+    // a 422 (malformed/unsupported), exercising the error path.
+    const body = await request.text();
+    if (body.includes('"version": 999') || body.includes('"version":999')) {
+      return HttpResponse.json(
+        { detail: "Unsupported backup version: 999 (this server supports version 1)." },
+        { status: 422 },
+      );
+    }
+    return HttpResponse.json(
+      {
+        project_id: "restored-project-1",
+        title: "Visszaállított projekt",
+        series_count: 1,
+        book_count: 2,
+        chapter_count: 1,
+        scene_count: 1,
+        beat_count: 1,
+        codex_entry_count: 1,
+        character_count: 1,
+        location_count: 0,
+        worldbuilding_count: 0,
+        snippet_count: 0,
+        style_guide_count: 0,
+        codex_relation_count: 1,
+        codex_progression_count: 1,
+      },
+      { status: 201 },
+    );
+  }),
+
   /* ---- Chapters (book-scoped, full CRUD + reorder — M7) ---- */
   http.get(`${base}/books/:bookId/chapters`, ({ params }) =>
     HttpResponse.json(planStore.listChapters(String(params.bookId))),

@@ -30,6 +30,11 @@ import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks, updateBook } from "./books";
 import { importDocx, type BookImportSummary } from "./imports";
 import {
+  exportBackup,
+  restoreBackup,
+  type RestoreSummary,
+} from "./backups";
+import {
   createChapter,
   deleteChapter,
   listChapters,
@@ -227,6 +232,39 @@ export function useImportDocx(): UseMutationResult<
       await queryClient.invalidateQueries({
         queryKey: queryKeys.projectBooks(projectId),
       });
+    },
+  });
+}
+
+/**
+ * Export a project's JSON backup and trigger the browser download (Feature #5).
+ * Resolves with the filename used. Read-only on the server — no cache
+ * invalidation. Errors propagate via the mutation's `error` (the `ApiError`
+ * carries the server's 404/5xx detail) — never swallowed.
+ */
+export function useExportBackup(): UseMutationResult<string, Error, string> {
+  return useMutation({
+    mutationFn: (projectId: string) => exportBackup(projectId),
+  });
+}
+
+/**
+ * Restore a JSON backup file into a brand-new project (Feature #5). Returns the
+ * restore summary (new project id + counts). On success the project list is
+ * invalidated so the restored project appears. Errors propagate via the
+ * mutation's `error` (the `ApiError` carries the 400/413/422 detail) — never
+ * swallowed.
+ */
+export function useRestoreBackup(): UseMutationResult<
+  RestoreSummary,
+  Error,
+  File
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => restoreBackup(file),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
     },
   });
 }
