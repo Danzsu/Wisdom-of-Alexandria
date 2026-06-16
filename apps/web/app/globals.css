@@ -262,10 +262,7 @@ select:focus-visible,
 @keyframes woaToastPop {
   0% {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
-  }
-  60% {
-    transform: translateY(-3px) scale(1.01);
+    transform: translateY(16px) scale(0.97);
   }
   100% {
     opacity: 1;
@@ -295,6 +292,18 @@ select:focus-visible,
   }
   50% {
     opacity: 0.35;
+  }
+}
+
+/* Calm "AI is working" breathing pulse — opacity only (no scale/bounce), slow
+   and understated so the persistent indicator never feels frantic. */
+@keyframes woaPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
   }
 }
 
@@ -554,6 +563,24 @@ select:focus-visible,
 /* First-line paragraph indent toggle. */
 .woa-manuscript-article[data-indent="on"] .woa-manuscript-prose p {
   text-indent: 1.6em;
+}
+
+/* ----------------------------------------------------------------------------
+   Focus-paragraph mode (iA Writer style). When the article carries
+   data-focus-para="on", every direct top-level block in the editor dims to 0.35
+   EXCEPT the block holding the cursor (FocusParagraph adds .woa-focus-active to
+   it as a ProseMirror node decoration). Opacity-only — never layout — so it
+   stays cheap per keystroke. The transition is suppressed under reduced motion
+   by the global block below.
+   -------------------------------------------------------------------------- */
+.woa-manuscript-article[data-focus-para="on"] .woa-manuscript-prose > * {
+  opacity: 0.35;
+  transition: opacity 0.18s ease-out;
+}
+.woa-manuscript-article[data-focus-para="on"]
+  .woa-manuscript-prose
+  > .woa-focus-active {
+  opacity: 1;
 }
 
 /* Plan Board drag-over highlights (verbatim from the prototype, lines 62-63).

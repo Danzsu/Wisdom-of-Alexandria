@@ -24,6 +24,23 @@ describe("AIResultCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("carries a non-stripe AI identity (full tint + ring, no left bar)", () => {
+    const { container } = render(
+      <AIResultCard label="Átírás" body="Szelene meg sem rezzent." />,
+    );
+    const body = screen.getByText("Szelene meg sem rezzent.");
+    // The card root is the styled wrapper around the body.
+    const card = body.closest("div.rounded-xl");
+    expect(card).not.toBeNull();
+    const cls = card?.className ?? "";
+    // AI read comes from the full treatment, not a side-stripe.
+    expect(cls).toContain("bg-ai-muted");
+    expect(cls).toContain("ring-ai/20");
+    expect(cls).not.toMatch(/border-l-(?:\[|ai|accent)/);
+    // The leading AI marker (BrandStar sparkle) is still present.
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
   it("fires accept / reject / copy / star callbacks", async () => {
     const onAccept = vi.fn();
     const onReject = vi.fn();

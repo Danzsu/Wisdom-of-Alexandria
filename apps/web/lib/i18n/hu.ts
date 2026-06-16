@@ -144,6 +144,13 @@ export const hu = {
     wordCount: (n: string) => `${n} szó`,
     /** Suffix on the model badge for local (Ollama) inference. */
     modelLocalSuffix: "— lokális",
+    /** Persistent AI-job indicator (running pill + failed-count attention). */
+    aiWorking: "AI dolgozik",
+    aiWorkingAria: (n: number) =>
+      n === 1 ? "1 AI feladat fut" : `${n} AI feladat fut`,
+    aiFailed: (n: number) => (n === 1 ? "1 sikertelen" : `${n} sikertelen`),
+    aiFailedAria: (n: number) =>
+      n === 1 ? "1 sikertelen AI feladat" : `${n} sikertelen AI feladat`,
   },
   /** Write View (`Write View` prototype screen + in-app writechrome). */
   write: {
@@ -202,6 +209,8 @@ export const hu = {
     // Toolbar icon buttons.
     focusAria: "Fókusz mód",
     focusTitle: "Fókusz mód (zavarmentes írás)",
+    focusParaAria: "Bekezdés-fókusz",
+    focusParaTitle: "Bekezdés-fókusz (a környező szöveg elhalványul)",
     commentAria: "Megjegyzés",
     commentTitle: "Megjegyzés a kijelöléshez",
     insertImageAria: "Kép helye",
@@ -971,6 +980,34 @@ export const hu = {
     create: "Létrehozás",
     actionExport: "Exportálás…",
     actionTheme: "Téma váltása",
+    /** Command-palette row that opens the keyboard-shortcuts overlay. */
+    actionShortcuts: "Billentyűparancsok",
+  },
+  /**
+   * Keyboard-shortcuts help overlay (opened with `?` or from the command
+   * palette). Shortcuts are grouped by area; key labels are platform-aware
+   * (⌘ on Mac, Ctrl on Windows/Linux) at render time.
+   */
+  shortcuts: {
+    /** Dialog title + trigger affordance. */
+    title: "Billentyűparancsok",
+    triggerAria: "Billentyűparancsok megnyitása",
+    /** Screen-reader-only dialog description (Radix Dialog requires one). */
+    description:
+      "A billentyűparancsok listája területenként csoportosítva. Esc bezár.",
+    /** Group headings. */
+    groupGeneral: "Általános",
+    groupEditor: "Szerkesztő",
+    groupAi: "AI",
+    /** Action descriptions. */
+    commandPalette: "Parancspaletta",
+    showShortcuts: "Billentyűparancsok",
+    closeExitFocus: "Bezárás / kilépés a fókusz módból",
+    slashMenu: "Parancsmenü a szerkesztőben",
+    bold: "Félkövér",
+    italic: "Dőlt",
+    aiRewrite: "Kijelölés átírása",
+    aiContinue: "Folytatás írása",
   },
   toast: {
     comingSoon: "Hamarosan",

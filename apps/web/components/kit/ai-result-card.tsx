@@ -41,12 +41,14 @@ export interface AIResultCardProps {
 }
 
 /**
- * Presentational AI result card — the human-in-the-loop contract surface. A 1px
- * border with a 3px AI left edge, a faint top gradient bar (accent→ai), a
- * BrandStar sparkle + "{label} eredménye" eyebrow + version badge, the context
- * chip row, the generated body in Literata, and an Elfogad / Elvet + Copy / Star
- * footer. Holds no AI logic; all actions are caller callbacks. The disclaimer
- * states that the AI never writes to the manuscript without approval.
+ * Presentational AI result card — the human-in-the-loop contract surface. A full
+ * AI treatment (soft `bg-ai-muted` tint + a `ring-ai/20` ring, no side-stripe),
+ * a faint top gradient bar (accent→ai), a BrandStar sparkle + "{label} eredménye"
+ * eyebrow + version badge, the context chip row, the generated body in Literata,
+ * and an Elfogad / Elvet + Copy / Star footer. The AI identity reads from the
+ * full-card tint + the leading sparkle, not a left bar. Holds no AI logic; all
+ * actions are caller callbacks. The disclaimer states that the AI never writes
+ * to the manuscript without approval.
  */
 export function AIResultCard({
   label,
@@ -66,7 +68,7 @@ export function AIResultCard({
     <div className="flex flex-col gap-2">
       <div
         className={cn(
-          "overflow-hidden rounded-xl border border-border border-l-[3px] border-l-ai bg-surface shadow-card",
+          "overflow-hidden rounded-xl border border-ai/20 bg-ai-muted shadow-card ring-1 ring-ai/20",
           "[animation:woaReveal_.25s_cubic-bezier(.22,1,.36,1)]",
           className,
         )}

@@ -78,6 +78,11 @@ interface EditorState {
   /* ---- Modes ---- */
   /** Distraction-free focus mode (hides shell chrome). */
   focusOn: boolean;
+  /**
+   * Focus-paragraph mode (iA Writer style): dims every paragraph except the one
+   * containing the cursor. Independent of {@link focusOn} (which hides chrome).
+   */
+  focusParaOn: boolean;
   /** Clean-write / AI-free mode: hides AI affordances, shows plain format bar. */
   aiFreeOn: boolean;
 
@@ -117,6 +122,8 @@ interface EditorState {
 
   /* ---- Mode actions ---- */
   toggleFocus: () => void;
+  /** Toggle focus-paragraph (cursor-paragraph) dimming. */
+  toggleFocusPara: () => void;
   setAiFree: (on: boolean) => void;
 
   /* ---- Signal actions ---- */
@@ -162,6 +169,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   docIndent: false,
 
   focusOn: false,
+  focusParaOn: false,
   aiFreeOn: false,
 
   saveState: "saved",
@@ -185,6 +193,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleIndent: () => set((s) => ({ docIndent: !s.docIndent })),
 
   toggleFocus: () => set((s) => ({ focusOn: !s.focusOn })),
+  toggleFocusPara: () => set((s) => ({ focusParaOn: !s.focusParaOn })),
   setAiFree: (on) => set({ aiFreeOn: on }),
 
   setSaveState: (state) => set({ saveState: state }),

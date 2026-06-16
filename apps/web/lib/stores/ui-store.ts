@@ -15,6 +15,8 @@ interface UIState {
   openMenu: MenuId | null;
   /** Whether the command palette overlay is open. */
   commandOpen: boolean;
+  /** Whether the keyboard-shortcuts help overlay is open. */
+  shortcutsOpen: boolean;
   /** Transient flag driving the navigation sparkfield. */
   sparkActive: boolean;
 
@@ -31,6 +33,11 @@ interface UIState {
   closeCommand: () => void;
   /** Toggle the command palette open/closed. */
   toggleCommand: () => void;
+
+  /** Open the keyboard-shortcuts overlay. */
+  openShortcuts: () => void;
+  /** Close the keyboard-shortcuts overlay. */
+  closeShortcuts: () => void;
 
   /** Fire the sparkfield; it auto-clears after `SPARK_DURATION_MS`. */
   triggerSpark: () => void;
@@ -52,6 +59,7 @@ let sparkTimer: ReturnType<typeof setTimeout> | null = null;
 export const useUIStore = create<UIState>((set, get) => ({
   openMenu: null,
   commandOpen: false,
+  shortcutsOpen: false,
   sparkActive: false,
 
   setMenu: (menu) => set({ openMenu: menu }),
@@ -66,6 +74,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       commandOpen: !state.commandOpen,
       openMenu: null,
     })),
+
+  // Opening the shortcuts overlay closes any open menu / the command palette so
+  // only one overlay is visible at a time.
+  openShortcuts: () =>
+    set({ shortcutsOpen: true, commandOpen: false, openMenu: null }),
+  closeShortcuts: () => set({ shortcutsOpen: false }),
 
   triggerSpark: () => {
     if (sparkTimer !== null) {

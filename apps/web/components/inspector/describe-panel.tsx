@@ -74,7 +74,7 @@ export function DescribePanel({ onBack }: Readonly<{ onBack: () => void }>) {
       </div>
 
       {selectionText.trim().length > 0 ? (
-        <div className="rounded-r-[10px] rounded-l-none border-l-2 border-accent bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft">
+        <div className="rounded-[10px] border border-border bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft">
           {`„${selectionText}"`}
         </div>
       ) : (
@@ -178,7 +178,7 @@ function ChannelRow({
       </button>
 
       {open ? (
-        <div className="flex flex-col gap-3 border-l-[3px] border-l-ai bg-ai-muted px-3 py-3">
+        <div className="flex flex-col gap-3 border-t border-ai/20 bg-ai-muted px-3 py-3">
           {describeMutation.isPending ? (
             <div className="flex items-center gap-2">
               <Spinner size={13} />

@@ -91,6 +91,22 @@ export function countFailedJobs(
 }
 
 /**
+ * Count the ACTIVE jobs in a list — pending OR running. Drives the persistent
+ * "AI dolgozik" indicator. Returns 0 for an empty/undefined list so the
+ * indicator hides honestly (nothing in flight → nothing shown).
+ */
+export function countActiveJobs(
+  jobs: readonly GenerationJobRead[] | undefined,
+): number {
+  if (!jobs) return 0;
+  return jobs.reduce(
+    (n, job) =>
+      job.status === "running" || job.status === "pending" ? n + 1 : n,
+    0,
+  );
+}
+
+/**
  * The number of FAILED jobs for a book — the nav warning-badge count. Built on
  * {@link useJobs} (shared cache + poll), so the badge stays in sync with the
  * screen. Returns 0 while loading or on error (the badge hides honestly rather
@@ -99,6 +115,16 @@ export function countFailedJobs(
 export function useFailedJobCount(bookId: string | undefined): number {
   const { data } = useJobs(bookId);
   return countFailedJobs(data);
+}
+
+/**
+ * The number of ACTIVE (pending/running) jobs for a book — drives the persistent
+ * "AI dolgozik" working indicator. Built on {@link useJobs} (shared cache +
+ * poll). Returns 0 while loading or on error so the indicator hides honestly.
+ */
+export function useActiveJobCount(bookId: string | undefined): number {
+  const { data } = useJobs(bookId);
+  return countActiveJobs(data);
 }
 
 /**

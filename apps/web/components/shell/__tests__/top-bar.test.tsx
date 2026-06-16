@@ -31,6 +31,14 @@ vi.mock("@/components/inspector/use-inspector-models", () => ({
   }),
 }));
 
+// The TopBar mounts the persistent AiJobIndicator (B1 hooks → useJobs/useQuery).
+// Stub the counts so the bar renders without a live QueryClient; idle by default
+// means the indicator renders nothing, matching the existing assertions.
+vi.mock("@/lib/api/ai-hooks", () => ({
+  useActiveJobCount: () => 0,
+  useFailedJobCount: () => 0,
+}));
+
 import { TopBar } from "../top-bar";
 
 function renderTopBar(props: Partial<Parameters<typeof TopBar>[0]> = {}) {

@@ -13,3 +13,4 @@ export {
 export { BeatCard, type BeatCardOptions } from "./beat-card";
 export { BEAT_STUB_PREVIEW } from "./beat-card-view";
 export { SuggestionInsert, FLASH_DURATION_MS } from "./suggestion-insert";
+export { FocusParagraph, FOCUS_ACTIVE_CLASS } from "./focus-paragraph";

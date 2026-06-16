@@ -11,6 +11,7 @@ import {
   ManuscriptTable,
   BeatCard,
   SuggestionInsert,
+  FocusParagraph,
 } from "./extensions";
 import {
   useEditorStore,
@@ -106,6 +107,7 @@ export function ManuscriptEditor({
   const fmSpacing = useEditorStore((s) => s.fmSpacing);
   const msWidth = useEditorStore((s) => s.msWidth);
   const docIndent = useEditorStore((s) => s.docIndent);
+  const focusParaOn = useEditorStore((s) => s.focusParaOn);
 
   // Latest scene content kept in a ref so the seed effect can read it WITHOUT
   // depending on it (a post-save echo into `initialContent` must not re-trigger
@@ -131,6 +133,7 @@ export function ManuscriptEditor({
         onDiscard: onBeatDiscard,
       }),
       SuggestionInsert,
+      FocusParagraph,
     ],
     content: textToDoc(initialContent),
     editorProps: {
@@ -204,6 +207,7 @@ export function ManuscriptEditor({
       <article
         data-testid="manuscript-article"
         data-indent={docIndent ? "on" : "off"}
+        data-focus-para={focusParaOn ? "on" : "off"}
         style={articleStyle}
         className="woa-manuscript-article mx-auto rounded-2xl border border-border bg-surface-soft py-[clamp(28px,4vw,48px)] px-[clamp(22px,5vw,64px)] shadow-panel [hyphens:auto]"
       >

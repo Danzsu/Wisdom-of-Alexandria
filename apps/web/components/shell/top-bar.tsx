@@ -13,6 +13,7 @@ import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { UserMenu } from "./user-menu";
 import { ProjectSwitcher } from "./project-switcher";
+import { AiJobIndicator } from "./ai-job-indicator";
 
 export interface TopBarProps {
   /** Whether the current route is inside a book (shows switcher + share). */
@@ -81,6 +82,10 @@ export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
 
       {/* Right cluster */}
       <div className="flex items-center gap-1.5">
+        {/* Persistent, calm AI-job indicator (running pulse / failed count /
+            hidden when idle). Scoped to the active book. */}
+        <AiJobIndicator bookId={bookId} />
+
         <span className="flex h-5 items-center rounded-full bg-ai-muted px-2 text-[10px] font-semibold text-ai-text">
           {activeModel}
         </span>

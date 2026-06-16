@@ -59,6 +59,22 @@ describe("AiToolbar", () => {
     expect(useEditorStore.getState().focusOn).toBe(true);
   });
 
+  it("toggles focus-paragraph mode in the store (independent of focus mode)", async () => {
+    const user = userEvent.setup();
+    render(
+      <Providers>
+        <AiToolbar editor={null} onAction={vi.fn()} />
+      </Providers>,
+    );
+    expect(useEditorStore.getState().focusParaOn).toBe(false);
+    await user.click(
+      screen.getByRole("button", { name: "Bekezdés-fókusz" }),
+    );
+    expect(useEditorStore.getState().focusParaOn).toBe(true);
+    // Independent: chrome-hiding focus mode is untouched.
+    expect(useEditorStore.getState().focusOn).toBe(false);
+  });
+
   it("Format menu mutates the editor-store (font / size / width)", async () => {
     const user = userEvent.setup();
     render(

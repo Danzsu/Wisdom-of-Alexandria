@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Table as TableIcon,
   Maximize,
+  Pilcrow,
   MoreHorizontal,
   Check,
 } from "lucide-react";
@@ -73,6 +74,8 @@ export interface AiToolbarProps {
 export function AiToolbar({ editor, onAction }: AiToolbarProps) {
   const focusOn = useEditorStore((s) => s.focusOn);
   const toggleFocus = useEditorStore((s) => s.toggleFocus);
+  const focusParaOn = useEditorStore((s) => s.focusParaOn);
+  const toggleFocusPara = useEditorStore((s) => s.toggleFocusPara);
   const wordCount = useEditorStore((s) => s.wordCount);
   const saveState = useEditorStore((s) => s.saveState);
 
@@ -174,6 +177,21 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
         )}
       >
         <Icon icon={Maximize} size={15} />
+      </button>
+
+      <button
+        type="button"
+        aria-label={hu.write.focusParaAria}
+        aria-pressed={focusParaOn}
+        title={hu.write.focusParaTitle}
+        data-state={focusParaOn ? "on" : "off"}
+        onClick={toggleFocusPara}
+        className={cn(
+          "flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-transparent text-text-muted transition-colors hover:border-accent hover:bg-accent-muted hover:text-accent-text",
+          focusParaOn && "border-accent bg-accent-muted text-accent-text",
+        )}
+      >
+        <Icon icon={Pilcrow} size={15} />
       </button>
 
       <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />

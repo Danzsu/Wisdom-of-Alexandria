@@ -71,7 +71,7 @@ export function AiTab() {
           {hu.inspector.selectedTextLabel}
         </p>
         {hasSelection ? (
-          <div className="rounded-r-[10px] rounded-l-none border-l-2 border-accent bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft">
+          <div className="rounded-[10px] border border-border bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft">
             {`„${selectionText}"`}
           </div>
         ) : (

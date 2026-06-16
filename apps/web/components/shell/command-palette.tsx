@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTheme } from "next-themes";
-import { Search, SearchX, PenLine, Download, Moon, Plus } from "lucide-react";
+import {
+  Search,
+  SearchX,
+  PenLine,
+  Download,
+  Moon,
+  Plus,
+  Keyboard,
+} from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { Avatar } from "@/components/kit/avatar";
 import { cn } from "@/lib/utils";
@@ -33,6 +41,9 @@ function ResultLeading({ result }: { result: CommandResult }) {
   if (result.action === "theme") {
     return <Icon icon={Moon} size={14} className="text-accent" />;
   }
+  if (result.action === "shortcuts") {
+    return <Icon icon={Keyboard} size={14} className="text-accent" />;
+  }
   if (result.action === "export" || result.href?.includes("/export")) {
     return <Icon icon={Download} size={14} className="text-accent" />;
   }
@@ -50,6 +61,7 @@ function ResultLeading({ result }: { result: CommandResult }) {
 export function CommandPalette() {
   const commandOpen = useUIStore((s) => s.commandOpen);
   const closeCommand = useUIStore((s) => s.closeCommand);
+  const openShortcuts = useUIStore((s) => s.openShortcuts);
   const navTo = useNavTo();
   const { resolvedTheme, setTheme } = useTheme();
   const [query, setQuery] = useState("");
@@ -112,6 +124,12 @@ export function CommandPalette() {
     if (result.action === "theme") {
       setTheme(resolvedTheme === "dark" ? "light" : "dark");
       closeCommand();
+      setQuery("");
+      return;
+    }
+    if (result.action === "shortcuts") {
+      // openShortcuts closes the palette itself (single-overlay invariant).
+      openShortcuts();
       setQuery("");
       return;
     }

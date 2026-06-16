@@ -4,16 +4,16 @@ import { hu } from "@/lib/i18n/hu";
 
 /**
  * The loading card shown while an AI generation is in flight (request→response;
- * token streaming is V1). Mirrors the prototype's generating card: a 1px border
- * with a 3px AI left edge, a faint accent→ai gradient bar, a spinner + status
- * line and an indeterminate progress bar.
+ * token streaming is V1). Matches the AIResultCard's full AI treatment: a soft
+ * `bg-ai-muted` tint + `ring-ai/20` ring (no side-stripe), a faint accent→ai
+ * gradient bar, a spinner + status line and an indeterminate progress bar.
  */
 export function GeneratingCard() {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="overflow-hidden rounded-xl border border-border border-l-[3px] border-l-ai bg-surface shadow-card"
+      className="overflow-hidden rounded-xl border border-ai/20 bg-ai-muted shadow-card ring-1 ring-ai/20"
     >
       <div
         className="h-0.5 opacity-65"

@@ -12,6 +12,8 @@ import { StatusBar } from "./status-bar";
 import { Sparkfield } from "./sparkfield";
 import { CommandPalette } from "./command-palette";
 import { CommandPaletteHotkey } from "./command-palette-hotkey";
+import { ShortcutsOverlay } from "./shortcuts-overlay";
+import { ShortcutsOverlayHotkey } from "./shortcuts-overlay-hotkey";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
 import { AiGenerationProvider } from "@/components/inspector/ai-generation-context";
 
@@ -105,6 +107,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sparkfield />
       <CommandPalette />
       <CommandPaletteHotkey />
+      <ShortcutsOverlay />
+      <ShortcutsOverlayHotkey />
     </div>
   );
 }

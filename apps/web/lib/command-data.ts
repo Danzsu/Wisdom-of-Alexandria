@@ -16,7 +16,7 @@ export interface CommandResult {
   /** Destination route for navigable results. */
   href?: string;
   /** Non-navigable action kind (handled by the palette). */
-  action?: "export" | "theme";
+  action?: "export" | "theme" | "shortcuts";
 }
 
 /** Static placeholder results (verbatim copy from the prototype). */
@@ -46,6 +46,12 @@ export const COMMAND_RESULTS: CommandResult[] = [
     group: "actions",
     label: "Téma váltása",
     action: "theme",
+  },
+  {
+    id: "action-shortcuts",
+    group: "actions",
+    label: "Billentyűparancsok",
+    action: "shortcuts",
   },
 ];
 
