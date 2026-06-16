@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   X,
   ChevronRight,
@@ -17,6 +18,7 @@ import { Icon } from "@/components/kit/icon";
 import { Spinner } from "@/components/kit/spinner";
 import { toast } from "@/components/kit/toast";
 import { hu } from "@/lib/i18n/hu";
+import { useCalmMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/lib/stores/editor-store";
 import {
@@ -116,6 +118,7 @@ function ChannelRow({
   const describeMutation = useDescribe();
   const projectIdQuery = useBookProjectId(bookId);
   const snippetMutation = useCreateSnippet();
+  const motionConf = useCalmMotion();
 
   const toggle = () => {
     const next = !open;
@@ -177,40 +180,54 @@ function ChannelRow({
         />
       </button>
 
-      {open ? (
-        <div className="flex flex-col gap-3 border-t border-ai/20 bg-ai-muted px-3 py-3">
-          {describeMutation.isPending ? (
-            <div className="flex items-center gap-2">
-              <Spinner size={13} />
-              <span className="text-[12px] text-text-muted">
-                {hu.inspector.channelGenerating}
-              </span>
-            </div>
-          ) : null}
+      {/* AnimatePresence wraps the expanded content so each channel's
+          alternatives reveal in a calm staggered sequence (and tidy up on
+          collapse). Reduced motion → the no-op variants render instantly. */}
+      <AnimatePresence initial={false}>
+        {open ? (
+          <div className="flex flex-col gap-3 border-t border-ai/20 bg-ai-muted px-3 py-3">
+            {describeMutation.isPending ? (
+              <div className="flex items-center gap-2">
+                <Spinner size={13} />
+                <span className="text-[12px] text-text-muted">
+                  {hu.inspector.channelGenerating}
+                </span>
+              </div>
+            ) : null}
 
-          {describeMutation.isError ? (
-            <p className="m-0 text-[12px] text-danger-text" role="alert">
-              {hu.inspector.channelError}: {describeMutation.error.message}
-            </p>
-          ) : null}
-
-          {alternatives?.map((text) => (
-            <div key={text}>
-              <p className="m-0 mb-1.5 font-serif text-[13px] leading-[1.6] text-text-soft">
-                {text}
+            {describeMutation.isError ? (
+              <p className="m-0 text-[12px] text-danger-text" role="alert">
+                {hu.inspector.channelError}: {describeMutation.error.message}
               </p>
-              <button
-                type="button"
-                onClick={() => saveSnippet(text)}
-                className="flex h-6 items-center gap-1.5 rounded-md bg-transparent px-2 text-[11px] text-text-muted hover:bg-surface hover:text-accent-text"
+            ) : null}
+
+            {alternatives ? (
+              <motion.div
+                className="flex flex-col gap-3"
+                variants={motionConf.staggerContainer}
+                initial="hidden"
+                animate="visible"
               >
-                <Icon icon={Star} size={11} />
-                {hu.inspector.saveSnippet}
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+                {alternatives.map((text) => (
+                  <motion.div key={text} variants={motionConf.staggerChild}>
+                    <p className="m-0 mb-1.5 font-serif text-[13px] leading-[1.6] text-text-soft">
+                      {text}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => saveSnippet(text)}
+                      className="flex h-6 items-center gap-1.5 rounded-md bg-transparent px-2 text-[11px] text-text-muted hover:bg-surface hover:text-accent-text"
+                    >
+                      <Icon icon={Star} size={11} />
+                      {hu.inspector.saveSnippet}
+                    </button>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : null}
+          </div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

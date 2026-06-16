@@ -1,9 +1,11 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { GripVertical, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { Icon } from "@/components/kit/icon";
 import { cn } from "@/lib/utils";
+import { useCalmMotion } from "@/lib/motion";
 import { hu } from "@/lib/i18n/hu";
 import { sceneStatusPresentation } from "@/lib/scene-status";
 import { SceneKebab } from "./scene-kebab";
@@ -21,6 +23,8 @@ const DENSITY_PADDING: Record<PlanDensity, string> = {
 export interface SceneCardProps {
   scene: PlanScene;
   density: PlanDensity;
+  /** Position within its chapter column — drives the capped mount stagger. */
+  index?: number;
   onOpen: () => void;
   onChangePov: () => void;
   onDuplicate: () => void;
@@ -39,12 +43,14 @@ export interface SceneCardProps {
 export function SceneCard({
   scene,
   density,
+  index = 0,
   onOpen,
   onChangePov,
   onDuplicate,
   onArchive,
   onDelete,
 }: SceneCardProps) {
+  const motionConf = useCalmMotion();
   const {
     attributes,
     listeners,
@@ -69,20 +75,33 @@ export function SceneCard({
   const padding = DENSITY_PADDING[density];
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: dndTransformToCss(transform),
-        transition,
-        opacity: isDragging ? 0.5 : undefined,
-      }}
-      className={cn(
-        "flex flex-col gap-2 rounded-xl border border-border bg-surface shadow-card",
-        padding,
-        isOver && "woa-scene-over",
-      )}
+    // Outer wrapper owns the SHORT mount fade-up (transform/opacity only); the
+    // inner dnd-kit node owns the drag transform — kept on separate elements so
+    // FM and dnd-kit never write `transform` to the same node (which would fight
+    // and break dragging). No FM `layout` here for the same reason. The mount
+    // animation is suppressed (`initial={false}`) while dragging so a reorder
+    // never replays the entrance. Reduced motion → zero delay / instant.
+    <motion.div
+      initial={
+        isDragging ? false : { opacity: 0, transform: "translateY(8px)" }
+      }
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
+      transition={{ ...motionConf.transition, delay: motionConf.childDelay(index) }}
     >
-      <div className="flex items-center gap-1.5">
+      <div
+        ref={setNodeRef}
+        style={{
+          transform: dndTransformToCss(transform),
+          transition,
+          opacity: isDragging ? 0.5 : undefined,
+        }}
+        className={cn(
+          "flex flex-col gap-2 rounded-xl border border-border bg-surface shadow-card",
+          padding,
+          isOver && "woa-scene-over",
+        )}
+      >
+        <div className="flex items-center gap-1.5">
         <button
           type="button"
           ref={setActivatorNodeRef}
@@ -140,21 +159,22 @@ export function SceneCard({
         </p>
       ) : null}
 
-      {showPov && scene.pov.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {scene.pov.map((badge) => (
-            <span
-              key={badge.label}
-              className={cn(
-                "flex h-[19px] items-center rounded-full px-2 text-[11px] font-semibold",
-                povBadgeClass(badge.slot),
-              )}
-            >
-              {badge.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
+        {showPov && scene.pov.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {scene.pov.map((badge) => (
+              <span
+                key={badge.label}
+                className={cn(
+                  "flex h-[19px] items-center rounded-full px-2 text-[11px] font-semibold",
+                  povBadgeClass(badge.slot),
+                )}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
   );
 }

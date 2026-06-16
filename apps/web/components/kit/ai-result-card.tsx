@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
 import { Check, Copy, Star, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCalmMotion } from "@/lib/motion";
 import { hu } from "@/lib/i18n/hu";
 import { Icon } from "./icon";
 import { IconButton } from "./icon-button";
@@ -64,12 +66,19 @@ export function AIResultCard({
   disclaimer = "Az AI sosem ír a kéziratba jóváhagyás nélkül.",
   className,
 }: AIResultCardProps) {
+  // FM reveal/exit replaces the hardcoded woaReveal CSS so the card enters on
+  // generation and exits cleanly on accept/reject (orchestrated by the parent's
+  // AnimatePresence). Reduced motion → no-op variants render the final state.
+  const motionConf = useCalmMotion();
   return (
     <div className="flex flex-col gap-2">
-      <div
+      <motion.div
+        variants={motionConf.fadeInUp}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
         className={cn(
           "overflow-hidden rounded-xl border border-ai/20 bg-ai-muted shadow-card ring-1 ring-ai/20",
-          "[animation:woaReveal_.25s_cubic-bezier(.22,1,.36,1)]",
           className,
         )}
       >
@@ -141,7 +150,7 @@ export function AIResultCard({
             </IconButton>
           </div>
         </div>
-      </div>
+      </motion.div>
       <p className="m-0 text-center text-[11px] text-text-muted">{disclaimer}</p>
     </div>
   );

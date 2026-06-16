@@ -1,5 +1,9 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useCalmMotion } from "@/lib/motion";
 import { StatusDot } from "./status-dot";
 
 /** A run of unchanged text. */
@@ -41,17 +45,15 @@ export function DiffAddition({ children }: { children: ReactNode }) {
   );
 }
 
-/** Render a segment list, wrapping deletions/additions in the styled spans. */
-function renderSegments(segments: DiffSegment[]): ReactNode {
-  return segments.map((segment, index) => {
-    if (segment.type === "deletion") {
-      return <DiffDeletion key={index}>{segment.text}</DiffDeletion>;
-    }
-    if (segment.type === "addition") {
-      return <DiffAddition key={index}>{segment.text}</DiffAddition>;
-    }
-    return <span key={index}>{segment.text}</span>;
-  });
+/** Render one segment, wrapping deletions/additions in the styled spans. */
+function renderSegment(segment: DiffSegment, index: number): ReactNode {
+  if (segment.type === "deletion") {
+    return <DiffDeletion key={index}>{segment.text}</DiffDeletion>;
+  }
+  if (segment.type === "addition") {
+    return <DiffAddition key={index}>{segment.text}</DiffAddition>;
+  }
+  return <span key={index}>{segment.text}</span>;
 }
 
 export interface DiffPaneProps {
@@ -84,6 +86,7 @@ function Pane({
   segments: DiffSegment[];
   borderRight?: boolean;
 }) {
+  const motionConf = useCalmMotion();
   return (
     <div
       className={cn(
@@ -102,9 +105,31 @@ function Pane({
           {label}
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-[22px] py-5 font-serif text-[14px] leading-[1.75] text-text">
-        {renderSegments(segments)}
-      </div>
+      {/* Stagger container: the changed (add/deletion) segments fade/slide in
+          subtly in sequence; unchanged runs render flat so the body reads as
+          prose. Reduced motion → the no-op child variant renders everything
+          instantly. Each segment is a span-level motion node so inline flow is
+          preserved (transform/opacity only — never layout). */}
+      <motion.div
+        className="min-h-0 flex-1 overflow-y-auto px-[22px] py-5 font-serif text-[14px] leading-[1.75] text-text"
+        variants={motionConf.staggerContainer}
+        initial="hidden"
+        animate="visible"
+      >
+        {segments.map((segment, index) =>
+          segment.type === "equal" ? (
+            renderSegment(segment, index)
+          ) : (
+            <motion.span
+              key={index}
+              className="inline"
+              variants={motionConf.staggerChild}
+            >
+              {renderSegment(segment, index)}
+            </motion.span>
+          ),
+        )}
+      </motion.div>
     </div>
   );
 }

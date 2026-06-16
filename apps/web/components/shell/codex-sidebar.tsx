@@ -23,6 +23,7 @@
  *     resolved `BookRead.series_id`.
  */
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { Filter, Plus, Search } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { BookSpineCard } from "@/components/kit/book-spine-card";
@@ -36,6 +37,7 @@ import { useResolvedBook } from "@/lib/api/export-hooks";
 import { countMentions, mentionNeedles } from "@/lib/api/codex";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { useCalmMotion } from "@/lib/motion";
 import { hu } from "@/lib/i18n/hu";
 import { CodexEntryAvatar, entryTypeOrder } from "@/components/codex/codex-meta";
 import { useCodexSelection } from "@/components/codex/use-codex-selection";
@@ -127,6 +129,11 @@ export function CodexSidebar() {
 
   const isError = codex.isError || projectIdQuery.isError;
   const isLoading = projectIdQuery.isLoading || codex.isLoading;
+
+  const motionConf = useCalmMotion();
+  // A flat counter across groups so the capped mount stagger continues smoothly
+  // from one type section into the next (instead of restarting per group).
+  let rowIndex = 0;
 
   return (
     <nav
@@ -308,10 +315,18 @@ export function CodexSidebar() {
                   entry.content?.trim() ||
                   (entry.aliases.length > 0 ? entry.aliases.join(", ") : "");
                 const mentions = mentionsById.get(entry.id) ?? 0;
+                // Capped mount fade-up (transform/opacity only). The flat
+                // rowIndex keeps the stagger continuous across type groups and
+                // caps it so a big Codex isn't slow; reduced motion → 0 delay.
+                const delay = motionConf.childDelay(rowIndex);
+                rowIndex += 1;
                 return (
-                  <button
+                  <motion.button
                     key={entry.id}
                     type="button"
+                    initial={{ opacity: 0, transform: "translateY(8px)" }}
+                    animate={{ opacity: 1, transform: "translateY(0px)" }}
+                    transition={{ ...motionConf.transition, delay }}
                     aria-pressed={selectedId === entry.id}
                     onClick={() => select(entry.id)}
                     className={cn(
@@ -340,7 +355,7 @@ export function CodexSidebar() {
                         {mentions}
                       </span>
                     ) : null}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>

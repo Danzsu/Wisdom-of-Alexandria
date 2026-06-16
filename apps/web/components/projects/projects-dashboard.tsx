@@ -7,6 +7,7 @@
  * The "Új könyv" / "Új projekt" affordances open the New-book wizard.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
   BookOpen,
   ChevronDown,
@@ -40,6 +41,7 @@ import {
 } from "@/lib/api/hooks";
 import type { ProjectRead } from "@/lib/api/types";
 import { useNavTo } from "@/lib/use-nav-to";
+import { useCalmMotion } from "@/lib/motion";
 import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 import { NewBookWizard } from "./new-book-wizard";
@@ -513,6 +515,7 @@ function AllProjectsSection({
   const [sort, setSort] = useState<SortKey>("recent");
   const [group, setGroup] = useState<GroupKey>("none");
   const [view, setView] = useState<ViewKey>("grid");
+  const motionConf = useCalmMotion();
 
   const filtered = useMemo(() => {
     const data = query.data ?? [];
@@ -574,19 +577,32 @@ function AllProjectsSection({
         <div
           className={
             view === "grid"
-              ? "woa-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-              : "woa-stagger flex flex-col gap-2"
+              ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              : "flex flex-col gap-2"
           }
         >
           {filtered.map((p, i) => (
-            <ProjectCard
+            // Short, capped mount fade-up per card (transform/opacity only),
+            // replacing the no-op `woa-stagger` marker class with real, reduced-
+            // motion-safe orchestration. The wrapper is itself the grid/flex item
+            // (one child: the card), so layout is unchanged.
+            <motion.div
               key={p.id}
-              project={p}
-              variant={i % 2 === 0 ? "gold" : "blueGrey"}
-              view={view}
-              onClick={() => onOpenProject(p.id)}
-              onExportBackup={() => onExportBackup(p.id)}
-            />
+              initial={{ opacity: 0, transform: "translateY(8px)" }}
+              animate={{ opacity: 1, transform: "translateY(0px)" }}
+              transition={{
+                ...motionConf.transition,
+                delay: motionConf.childDelay(i),
+              }}
+            >
+              <ProjectCard
+                project={p}
+                variant={i % 2 === 0 ? "gold" : "blueGrey"}
+                view={view}
+                onClick={() => onOpenProject(p.id)}
+                onExportBackup={() => onExportBackup(p.id)}
+              />
+            </motion.div>
           ))}
           {view === "grid" ? (
             <AddProjectTile onClick={onNewProject} />

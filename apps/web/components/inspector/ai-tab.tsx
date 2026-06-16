@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import {
   RotateCcw,
   Eye,
@@ -148,20 +149,25 @@ export function AiTab() {
         </p>
       ) : null}
 
-      {gen.pending && !gen.isGenerating ? (
-        <AIResultCard
-          label={hu.inspector.resultLabel[gen.pending.action] ?? hu.inspector.tabAi}
-          version={gen.pending.version || undefined}
-          model={gen.pending.model}
-          contextEntities={gen.pending.contextEntities}
-          body={gen.pending.content}
-          busy={gen.isAccepting}
-          onAccept={gen.accept}
-          onReject={gen.reject}
-          onCopy={gen.copy}
-          onStar={gen.star}
-        />
-      ) : null}
+      {/* AnimatePresence lets the result card play its FM exit on accept/reject
+          before unmount; without a wrapping presence the card would just vanish.
+          Reduced motion → the card's no-op variants make exit instant. */}
+      <AnimatePresence>
+        {gen.pending && !gen.isGenerating ? (
+          <AIResultCard
+            label={hu.inspector.resultLabel[gen.pending.action] ?? hu.inspector.tabAi}
+            version={gen.pending.version || undefined}
+            model={gen.pending.model}
+            contextEntities={gen.pending.contextEntities}
+            body={gen.pending.content}
+            busy={gen.isAccepting}
+            onAccept={gen.accept}
+            onReject={gen.reject}
+            onCopy={gen.copy}
+            onStar={gen.star}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {!gen.pending && !gen.isGenerating ? (
         <p className="m-0 text-center text-[11px] text-text-muted">

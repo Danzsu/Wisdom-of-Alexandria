@@ -90,10 +90,11 @@ export function ChapterColumn({
           items={chapter.scenes.map((s) => s.id)}
           strategy={verticalListSortingStrategy}
         >
-          {chapter.scenes.map((scene) => (
+          {chapter.scenes.map((scene, index) => (
             <SceneCard
               key={scene.id}
               scene={scene}
+              index={index}
               density={density}
               onOpen={() => onOpenScene(scene.id)}
               onChangePov={onChangePov}
