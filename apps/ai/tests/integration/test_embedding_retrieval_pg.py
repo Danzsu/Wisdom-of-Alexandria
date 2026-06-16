@@ -14,6 +14,7 @@ import pytest
 from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.embedding import Embedding
 from alexandria_core.models.project import Project
+from alexandria_core.models.series import Series
 
 from app.services.embedding_service import EmbeddingService
 from app.services.model_router import ModelRouter
@@ -123,3 +124,104 @@ async def test_retrieve_respects_project_scope(db_session):
     results = await svc.retrieve(db_session, p1, "q", embedding_model=EMBED_MODEL, k=5)
 
     assert {r.entity_id for r in results} == {p1_id}
+
+
+# ── series scope on retrieve (B3b) ─────────────────────────────────────────────
+
+
+async def _make_series(db, project_id: uuid.UUID, title: str) -> uuid.UUID:
+    series = Series(project_id=project_id, title=title)
+    db.add(series)
+    await db.flush()
+    await db.commit()
+    return series.id
+
+
+async def _seed_codex_embedding_series(
+    db, project_id: uuid.UUID, *, title: str, lead: float, series_id: uuid.UUID | None
+) -> uuid.UUID:
+    entry = CodexEntry(
+        project_id=project_id,
+        series_id=series_id,
+        title=title,
+        content=title,
+        ai_visible=True,
+    )
+    db.add(entry)
+    await db.flush()
+    db.add(
+        Embedding(
+            project_id=project_id,
+            series_id=series_id,
+            entity_type="codex",
+            entity_id=entry.id,
+            content_hash=f"h-{title}",
+            embedding=_vec(lead=lead),
+            model_name=EMBED_MODEL,
+            dim=DIM,
+        )
+    )
+    await db.commit()
+    return entry.id
+
+
+async def test_retrieve_active_series_includes_global_and_series_excludes_other(
+    db_session,
+):
+    """active_series_id=A → returns project-global (NULL) + series-A; EXCLUDES
+    series-B."""
+    project_id = await _make_project(db_session)
+    series_a = await _make_series(db_session, project_id, "A")
+    series_b = await _make_series(db_session, project_id, "B")
+
+    global_id = await _seed_codex_embedding_series(
+        db_session, project_id, title="Globalis", lead=1.0, series_id=None
+    )
+    a_id = await _seed_codex_embedding_series(
+        db_session, project_id, title="A-kodex", lead=1.0, series_id=series_a
+    )
+    b_id = await _seed_codex_embedding_series(
+        db_session, project_id, title="B-kodex", lead=1.0, series_id=series_b
+    )
+
+    svc = EmbeddingService(router=_query_router(_vec(lead=1.0)))
+    results = await svc.retrieve(
+        db_session,
+        project_id,
+        "q",
+        embedding_model=EMBED_MODEL,
+        k=10,
+        active_series_id=series_a,
+    )
+
+    ids = {r.entity_id for r in results}
+    assert global_id in ids
+    assert a_id in ids
+    assert b_id not in ids  # other series excluded
+
+
+async def test_retrieve_no_active_series_returns_only_global(db_session):
+    """active_series_id=None (book not in a series) → only project-global rows."""
+    project_id = await _make_project(db_session)
+    series_a = await _make_series(db_session, project_id, "A")
+
+    global_id = await _seed_codex_embedding_series(
+        db_session, project_id, title="Globalis", lead=1.0, series_id=None
+    )
+    a_id = await _seed_codex_embedding_series(
+        db_session, project_id, title="A-kodex", lead=1.0, series_id=series_a
+    )
+
+    svc = EmbeddingService(router=_query_router(_vec(lead=1.0)))
+    results = await svc.retrieve(
+        db_session,
+        project_id,
+        "q",
+        embedding_model=EMBED_MODEL,
+        k=10,
+        active_series_id=None,
+    )
+
+    ids = {r.entity_id for r in results}
+    assert ids == {global_id}
+    assert a_id not in ids

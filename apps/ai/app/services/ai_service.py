@@ -174,29 +174,52 @@ class AIService:
 
     # ── RAG helpers ───────────────────────────────────────────────────────────
 
-    async def _resolve_project_id(
+    async def _resolve_scope(
         self, db: AsyncSession, scene_id: uuid.UUID | None
-    ) -> uuid.UUID | None:
-        """Resolve a scene's project (scene→chapter→book→project).
+    ) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+        """Resolve a scene's ``(project_id, series_id)`` (scene→chapter→book).
 
-        Returns ``None`` when there is no ``scene_id`` or it cannot be resolved
-        (deleted scene/chapter, or a scene with no chapter) — the caller then
-        skips RAG gracefully.
+        ``project_id`` is the book's project; ``series_id`` is the owning book's
+        series scope (NULL when the book is not in a series → project-global RAG
+        only). Returns ``(None, None)`` when there is no ``scene_id`` or it cannot
+        be resolved (deleted scene/chapter, or a scene with no chapter) — the
+        caller then skips RAG gracefully. One query for both, so resolving the
+        active series adds no extra round-trip.
         """
         if scene_id is None:
-            return None
+            return None, None
         from alexandria_core.models.book import Book
 
-        project_id = (
+        row = (
             await db.execute(
-                select(Book.project_id)
+                select(Book.project_id, Book.series_id)
                 .select_from(Scene)
                 .join(Chapter, Scene.chapter_id == Chapter.id)
                 .join(Book, Chapter.book_id == Book.id)
                 .where(Scene.id == scene_id)
             )
-        ).scalar_one_or_none()
+        ).one_or_none()
+        if row is None:
+            return None, None
+        return row[0], row[1]
+
+    async def _resolve_project_id(
+        self, db: AsyncSession, scene_id: uuid.UUID | None
+    ) -> uuid.UUID | None:
+        """Resolve a scene's project (scene→chapter→book→project), or ``None``."""
+        project_id, _ = await self._resolve_scope(db, scene_id)
         return project_id
+
+    async def _resolve_series_id(
+        self, db: AsyncSession, scene_id: uuid.UUID | None
+    ) -> uuid.UUID | None:
+        """Resolve the active series of a scene's book, or ``None`` (project-global).
+
+        ``None`` means the book is not in a series (or the scene is unresolvable)
+        — retrieval then sees only project-global embeddings, which is correct.
+        """
+        _, series_id = await self._resolve_scope(db, scene_id)
+        return series_id
 
     async def _load_scene_content(
         self, db: AsyncSession, scene_id: uuid.UUID
@@ -223,9 +246,11 @@ class AIService:
     ) -> tuple[str, list[RetrievedItem]]:
         """Build the ``{context}`` string + retrieved entities for a generation.
 
-        Resolves the project from ``scene_id``, makes sure the index is fresh
-        (bounded ``sync_project``) and retrieves the top-k nearest entries for
-        ``query``. Returns ``("", [])`` — i.e. degrades to no context — when:
+        Resolves the project AND active series from ``scene_id``, makes sure the
+        index is fresh (bounded ``sync_project``) and retrieves the top-k nearest
+        entries for ``query``, scoped to project-global + the book's series (never
+        another series). Returns ``("", [])`` — i.e. degrades to no context —
+        when:
 
         - there is no resolvable project (no/invalid ``scene_id``), or
         - no provider declares an embedding model (RAG unconfigured), or
@@ -238,7 +263,7 @@ class AIService:
         """
         if not query.strip():
             return "", []
-        project_id = await self._resolve_project_id(db, scene_id)
+        project_id, active_series_id = await self._resolve_scope(db, scene_id)
         if project_id is None:
             logger.debug("RAG skipped: no resolvable project for scene_id=%s", scene_id)
             return "", []
@@ -248,11 +273,19 @@ class AIService:
             logger.debug("RAG skipped: no embedding model configured")
             return "", []
         try:
+            # sync_project still indexes the WHOLE project (the index is
+            # project-wide); only RETRIEVAL is series-scoped via active_series_id
+            # (global OR the book's series — never another series).
             await self.embeddings.sync_project(
                 db, project_id, embedding_model=model, max_items=RAG_SYNC_MAX_ITEMS
             )
             items = await self.embeddings.retrieve(
-                db, project_id, query, embedding_model=model, k=RAG_TOP_K
+                db,
+                project_id,
+                query,
+                embedding_model=model,
+                k=RAG_TOP_K,
+                active_series_id=active_series_id,
             )
         except Exception as e:  # noqa: BLE001 — degrade, don't crash the write
             # Roll back so the generation's own commits run on a clean session.

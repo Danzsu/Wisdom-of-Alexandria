@@ -91,8 +91,14 @@ def _service(router=None, loader=None, svc=None, emb=None):
 
 
 def _patch_resolve(service, project_id, scene_content="A jelenet szövege."):
-    """Patch the project-resolution + scene-content loaders so the service runs
-    without a real DB (mock_db). Returns the patched service."""
+    """Patch the scope-resolution + scene-content loaders so the service runs
+    without a real DB (mock_db). Returns the patched service.
+
+    ``_rag_context`` resolves ``(project_id, active_series_id)`` via
+    ``_resolve_scope`` in one query — patch that (no series here → active series
+    None). ``_resolve_project_id`` is also patched for any direct callers.
+    """
+    service._resolve_scope = AsyncMock(return_value=(project_id, None))
     service._resolve_project_id = AsyncMock(return_value=project_id)
     service._load_scene_content = AsyncMock(return_value=scene_content)
     return service

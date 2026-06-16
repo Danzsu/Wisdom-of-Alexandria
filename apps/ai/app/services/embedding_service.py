@@ -71,6 +71,9 @@ class _Indexable:
     label: str
     text: str
     book_id: uuid.UUID | None = None
+    # Series scope (B3b): codex from ``CodexEntry.series_id``; scene/chapter from
+    # the owning book's ``series_id``; project-global entities leave it NULL.
+    series_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -150,8 +153,12 @@ class EmbeddingService:
         for r in rows:
             text = _join(r.title, r.role, r.content)
             if text:
+                # Codex carries its own series scope (NULL = project-global).
                 items.append(
-                    _Indexable("codex", r.id, r.title or "Kódex", text)
+                    _Indexable(
+                        "codex", r.id, r.title or "Kódex", text,
+                        series_id=r.series_id,
+                    )
                 )
 
         # Characters.
@@ -219,44 +226,46 @@ class EmbeddingService:
                 )
 
         # Scenes (approved, post-HITL content + summary). Book-scoped: resolve the
-        # owning book via chapter for provenance.
+        # owning book via chapter for provenance + the book's series scope.
+        from alexandria_core.models.book import Book
+
         scene_rows = (
             await db.execute(
-                select(Scene, Chapter.book_id)
+                select(Scene, Chapter.book_id, Book.series_id)
                 .join(Chapter, Scene.chapter_id == Chapter.id)
-                .where(Chapter.book_id.in_(self._project_book_ids_subq(project_id)))
+                .join(Book, Chapter.book_id == Book.id)
+                .where(Book.project_id == project_id)
             )
         ).all()
-        for scene, book_id in scene_rows:
+        for scene, book_id, series_id in scene_rows:
             text = _join(scene.title, scene.content, scene.summary)
             if text:
                 items.append(
-                    _Indexable("scene", scene.id, scene.title or "Jelenet", text, book_id)
+                    _Indexable(
+                        "scene", scene.id, scene.title or "Jelenet", text,
+                        book_id, series_id,
+                    )
                 )
 
-        # Chapters (summary).
+        # Chapters (summary). Series scope = the owning book's series.
         chapter_rows = (
             await db.execute(
-                select(Chapter).where(
-                    Chapter.book_id.in_(self._project_book_ids_subq(project_id))
-                )
+                select(Chapter, Book.series_id)
+                .join(Book, Chapter.book_id == Book.id)
+                .where(Book.project_id == project_id)
             )
-        ).scalars().all()
-        for ch in chapter_rows:
+        ).all()
+        for ch, series_id in chapter_rows:
             text = _join(ch.title, ch.summary)
             if text:
                 items.append(
-                    _Indexable("chapter", ch.id, ch.title or "Fejezet", text, ch.book_id)
+                    _Indexable(
+                        "chapter", ch.id, ch.title or "Fejezet", text,
+                        ch.book_id, series_id,
+                    )
                 )
 
         return items
-
-    @staticmethod
-    def _project_book_ids_subq(project_id: uuid.UUID):
-        """Scalar subquery of book ids for the project (manuscript scoping)."""
-        from alexandria_core.models.book import Book
-
-        return select(Book.id).where(Book.project_id == project_id).scalar_subquery()
 
     # ── Sync ─────────────────────────────────────────────────────────────────
 
@@ -308,8 +317,19 @@ class EmbeddingService:
             row = existing.get((it.entity_type, it.entity_id))
             content_hash = _hash(it.text)
             if row is not None and row.content_hash == content_hash and row.embedding is not None:
-                # Hash-cache hit: identical content already embedded → skip.
-                result.skipped += 1
+                # Hash-cache hit: identical content already embedded → no
+                # re-embed. BUT scope can change without the text changing (e.g. a
+                # codex entry moved to another series, or a book reassigned to a
+                # series): reconcile the denormalized scope columns in place so a
+                # stale ``series_id``/``book_id`` never persists and leak/exclude
+                # the entry from the wrong series at query time. This is a cheap
+                # metadata UPDATE (no embedding call), counted as `updated`.
+                if row.series_id != it.series_id or row.book_id != it.book_id:
+                    row.series_id = it.series_id
+                    row.book_id = it.book_id
+                    result.updated += 1
+                else:
+                    result.skipped += 1
                 continue
             if len(to_embed) >= max_items:
                 result.capped = True
@@ -341,6 +361,7 @@ class EmbeddingService:
                         Embedding(
                             project_id=project_id,
                             book_id=it.book_id,
+                            series_id=it.series_id,
                             entity_type=it.entity_type,
                             entity_id=it.entity_id,
                             content_hash=content_hash,
@@ -356,6 +377,7 @@ class EmbeddingService:
                     row.model_name = embedding_model
                     row.dim = len(vec) or dim
                     row.book_id = it.book_id
+                    row.series_id = it.series_id
                     result.updated += 1
 
         await db.commit()
@@ -371,6 +393,7 @@ class EmbeddingService:
         *,
         embedding_model: str,
         k: int = 5,
+        active_series_id: uuid.UUID | None = None,
     ) -> list[RetrievedItem]:
         """Return the ``k`` most cosine-similar project entries to ``query``.
 
@@ -380,12 +403,25 @@ class EmbeddingService:
         rows, so a card hidden after indexing (but before the next sync) never
         leaks into context.
 
+        Series scope (B3b): ``active_series_id`` is the series of the generation's
+        book (resolved by the caller). The filter is
+        ``series_id IS NULL OR series_id == active_series_id`` — i.e.
+        project-global rows (``series_id`` NULL) PLUS the active series' rows,
+        EXCLUDING every other series' codex and other series' books' manuscript.
+        When ``active_series_id`` is ``None`` (the book is not in a series), only
+        the project-global rows match — which is the correct behaviour.
+
         ``cosine_distance`` (``<=>``) is PostgreSQL-only; this query is exercised
         by the ``@pytest.mark.postgres`` ordering tests.
         """
         if not query.strip() or k <= 0:
             return []
         query_vec = (await self.router.embed([query], model=embedding_model, db=db))[0]
+
+        # Series filter: global (NULL) OR the active series; never other series.
+        series_filter = Embedding.series_id.is_(None)
+        if active_series_id is not None:
+            series_filter = series_filter | (Embedding.series_id == active_series_id)
 
         # Over-fetch a little so defensive ai_visible filtering still leaves k.
         rows = (
@@ -395,6 +431,7 @@ class EmbeddingService:
                     cosine_distance(Embedding.embedding, query_vec).label("distance"),
                 )
                 .where(Embedding.project_id == project_id)
+                .where(series_filter)
                 .where(Embedding.embedding.is_not(None))
                 .order_by(cosine_distance(Embedding.embedding, query_vec))
                 .limit(k * 4)

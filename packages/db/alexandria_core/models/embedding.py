@@ -28,6 +28,15 @@ class Embedding(UUIDPrimaryKey, Timestamps, Base):
     Project-scoped entities (codex/character/location/worldbuilding/styleguide)
     leave ``book_id`` NULL.
 
+    Scoping (B3b): RAG is additionally **SERIES**-aware. ``series_id`` is NULLABLE
+    — NULL = project-global (every book sees it), set = series-scoped (only books
+    in that series retrieve it). It mirrors the source's series scope: codex from
+    ``CodexEntry.series_id``; scene/chapter from the owning book's ``series_id``;
+    project-global entities (character/location/worldbuilding/styleguide) stay
+    NULL. Retrieval filters ``series_id IS NULL OR series_id == <active series>``,
+    so other series' codex + other series' books' manuscript never leak in. The
+    project-wide index is unchanged — only the QUERY is series-scoped.
+
     The ``embedding`` column is a dialect-aware ``Vector``: a real
     ``vector(1536)`` column on PostgreSQL (cosine-distance ANN search) and a
     ``JSON`` array on the SQLite test database, so the model loads under
@@ -51,6 +60,19 @@ class Embedding(UUIDPrimaryKey, Timestamps, Base):
     book_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("books.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # Series scope (B3b): NULL = project-global (visible to every book), set =
+    # series-scoped (only books in that series may retrieve it). Mirrors the
+    # source entity's series scope — codex from ``CodexEntry.series_id``, and
+    # scene/chapter from the owning book's ``series_id``; project-global entities
+    # (character/location/worldbuilding/styleguide) leave it NULL. SET NULL on a
+    # series delete so the embedding falls back to project-global scope rather
+    # than vanishing. Retrieval filters on ``series_id IS NULL OR == active``.
+    series_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("series.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

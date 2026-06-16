@@ -116,6 +116,90 @@ async def test_resolve_project_id_none_for_missing_scene(db_session):
     assert await svc._resolve_project_id(db_session, None) is None
 
 
+# ── active-series resolution (B3b) ──────────────────────────────────────────────
+
+
+async def _make_scene_in_series(db: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    """project→series→book(series)→chapter→scene; return (scene_id, series_id)."""
+    from alexandria_core.models.series import Series
+
+    project = Project(title="Sorozatos projekt")
+    db.add(project)
+    await db.flush()
+    series = Series(project_id=project.id, title="Sorozat")
+    db.add(series)
+    await db.flush()
+    book = Book(project_id=project.id, title="Kötet", series_id=series.id)
+    db.add(book)
+    await db.flush()
+    chapter = Chapter(book_id=book.id, title="Fejezet")
+    db.add(chapter)
+    await db.flush()
+    scene = Scene(chapter_id=chapter.id, title="Jelenet", content="Szöveg.")
+    db.add(scene)
+    await db.commit()
+    return scene.id, series.id
+
+
+@pytest.mark.integration
+async def test_resolve_series_id_from_scene_in_series(db_session):
+    scene_id, series_id = await _make_scene_in_series(db_session)
+    svc = AIService(embeddings=_embeddings_returning(SNIPPET))
+    assert await svc._resolve_series_id(db_session, scene_id) == series_id
+
+
+@pytest.mark.integration
+async def test_resolve_series_id_none_when_book_not_in_series(db_session):
+    """A scene whose book has no series → active series is None (global-only)."""
+    scene_id, _ = await _make_scene(db_session)
+    svc = AIService(embeddings=_embeddings_returning(SNIPPET))
+    assert await svc._resolve_series_id(db_session, scene_id) is None
+    assert await svc._resolve_series_id(db_session, uuid.uuid4()) is None
+    assert await svc._resolve_series_id(db_session, None) is None
+
+
+@pytest.mark.integration
+async def test_rag_context_passes_active_series_to_retrieve(db_session):
+    """_rag_context resolves the book's series and forwards it to retrieve()."""
+    scene_id, series_id = await _make_scene_in_series(db_session)
+    emb = _embeddings_returning(SNIPPET)
+    svc = AIService(
+        router=_capturing_router(),
+        loader=prompt_loader,
+        svc=revision_service,
+        embeddings=emb,
+    )
+    await svc.rewrite(
+        db_session,
+        selected_text="x",
+        instruction="y",
+        scene_id=scene_id,
+        model="ollama/llama3.2",
+    )
+    # retrieve() was called with the resolved active_series_id.
+    assert emb.retrieve.await_args.kwargs["active_series_id"] == series_id
+
+
+@pytest.mark.integration
+async def test_rag_context_active_series_none_for_book_without_series(db_session):
+    scene_id, _ = await _make_scene(db_session)
+    emb = _embeddings_returning(SNIPPET)
+    svc = AIService(
+        router=_capturing_router(),
+        loader=prompt_loader,
+        svc=revision_service,
+        embeddings=emb,
+    )
+    await svc.rewrite(
+        db_session,
+        selected_text="x",
+        instruction="y",
+        scene_id=scene_id,
+        model="ollama/llama3.2",
+    )
+    assert emb.retrieve.await_args.kwargs["active_series_id"] is None
+
+
 # ── {context} injection into the built prompt ──────────────────────────────────
 
 
