@@ -50,6 +50,12 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
+      # pandoc powers the DOCX/EPUB export conversion. Installing it here unskips
+      # the @pytest.mark.pandoc round-trip test (it skips locally where pandoc is
+      # absent) so the real md->docx/epub conversion is exercised in CI.
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
       - name: Install workspace (with dev deps)
         run: uv sync
 

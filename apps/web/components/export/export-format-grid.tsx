@@ -28,13 +28,13 @@ const FORMAT_CARDS: FormatCardDef[] = [
     id: "docx",
     label: hu.exportScreen.fmtDocx,
     hint: hu.exportScreen.fmtDocxHint,
-    real: false,
+    real: true,
   },
   {
     id: "epub",
     label: hu.exportScreen.fmtEpub,
     hint: hu.exportScreen.fmtEpubHint,
-    real: false,
+    real: true,
     audioBadge: true,
   },
   {

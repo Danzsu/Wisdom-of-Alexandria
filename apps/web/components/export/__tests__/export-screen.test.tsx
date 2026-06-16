@@ -182,7 +182,40 @@ describe("ExportScreen", () => {
     expect(called).toBe(0);
   });
 
-  it("non-Markdown formats are stubbed (no export call) and show the coming badge", async () => {
+  it("DOCX export sends format=docx and downloads the converted file", async () => {
+    const seen: { format: string | null }[] = [];
+    const docxBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        seen.push({ format: new URL(request.url).searchParams.get("format") });
+        return new HttpResponse(docxBytes, {
+          status: 200,
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition":
+              'attachment; filename="a_farosz_orzoje.docx"',
+          },
+        });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(`Teljes könyv — ${FAROSZ_BOOK.title}`);
+
+    await user.click(screen.getByRole("button", { name: /DOCX/ }));
+    await user.click(screen.getByRole("button", { name: "Exportálás" }));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]).toEqual({ format: "docx" });
+    expect(
+      await screen.findByText("Exportálva: a_farosz_orzoje.docx"),
+    ).toBeInTheDocument();
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+  });
+
+  it("still-stubbed formats (PDF) show the coming toast and make no export call", async () => {
     let called = 0;
     server.use(
       http.post(`${base}/books/:bookId/exports`, () => {
@@ -195,13 +228,12 @@ describe("ExportScreen", () => {
     renderScreen();
     await screen.findByText(`Teljes könyv — ${FAROSZ_BOOK.title}`);
 
-    // DOCX card carries a "hamarosan" badge.
-    const docxCard = screen.getByRole("button", { name: /DOCX/ });
-    await user.click(docxCard);
+    // PDF card carries a "hamarosan" badge (still a stub).
+    await user.click(screen.getByRole("button", { name: /PDF/ }));
     await user.click(screen.getByRole("button", { name: "Exportálás" }));
 
     expect(
-      await screen.findByText("A(z) DOCX export a V1-ben érkezik"),
+      await screen.findByText("A(z) PDF export a V1-ben érkezik"),
     ).toBeInTheDocument();
     expect(called).toBe(0);
   });

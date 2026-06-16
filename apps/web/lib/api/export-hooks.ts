@@ -2,7 +2,8 @@
 
 /**
  * TanStack Query hooks for the M8 Export screen: resolving the book (for the
- * title + filename) and the Markdown-export mutation that downloads the file.
+ * title + filename) and the export mutation that downloads the file (Markdown
+ * native; DOCX/EPUB converted server-side via pandoc).
  *
  * Errors propagate via Query's `error` / `isError` (never swallowed). The
  * browser download is done with a Blob + object URL that is ALWAYS revoked
@@ -16,9 +17,10 @@ import {
 } from "@tanstack/react-query";
 import { resolveBookById } from "./books";
 import {
-  exportBookMarkdown,
+  exportBook,
+  type ExportFormatId,
+  type ExportResult,
   type ExportScope,
-  type MarkdownExport,
 } from "./exports";
 import type { BookRead } from "./types";
 
@@ -44,20 +46,16 @@ export function useResolvedBook(
 }
 
 /**
- * Trigger a browser download of a text document via a Blob + object URL. The
- * object URL is created, clicked, then ALWAYS revoked in a `finally` so it is
- * released even if appending/clicking throws — no leaked object URLs.
+ * Trigger a browser download of a Blob via an object URL. The object URL is
+ * created, clicked, then ALWAYS revoked in a `finally` so it is released even if
+ * appending/clicking throws — no leaked object URLs. Works for text (Markdown)
+ * and binary (DOCX/EPUB) blobs alike.
  *
  * Guarded for SSR (`document` undefined) — a no-op there; the export action is
  * only ever invoked from a client event handler.
  */
-export function downloadTextFile(
-  content: string,
-  filename: string,
-  mimeType = "text/markdown;charset=utf-8",
-): void {
+export function downloadBlob(blob: Blob, filename: string): void {
   if (typeof document === "undefined") return;
-  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement("a");
@@ -72,8 +70,8 @@ export function downloadTextFile(
   }
 }
 
-/** Input for the Markdown export mutation. */
-export interface ExportMarkdownInput {
+/** Input for the export mutation. */
+export interface ExportInput {
   bookId: string;
   /**
    * Scope-appropriate title (book / chapter / scene) — used only for the
@@ -82,27 +80,37 @@ export interface ExportMarkdownInput {
   title: string;
   /** Export tartomány. Defaults to whole-book. */
   scope?: ExportScope;
+  /** Output format (md / docx / epub). Defaults to Markdown. */
+  format?: ExportFormatId;
   /** Chapter / scene id — REQUIRED (and only used) when scope ≠ book. */
   targetId?: string;
 }
 
 /**
- * Export a book / chapter / scene as Markdown and download it. The mutation
- * fetches the document (real backend endpoint, scope + target_id forwarded),
- * then triggers the browser download with the resolved filename (server
- * `Content-Disposition` honored; otherwise the ASCII-fold fallback). Returns the
- * {@link MarkdownExport} so callers can assert/inspect. Errors propagate via the
- * mutation's `error` (the page shows an error toast).
+ * Export a book / chapter / scene in the chosen format and download it. The
+ * mutation fetches the document (real backend endpoint, scope + format +
+ * target_id forwarded), then triggers the browser download with the resolved
+ * filename (server `Content-Disposition` honored; otherwise the ASCII-fold
+ * fallback with the format extension). Returns the {@link ExportResult} so
+ * callers can assert/inspect. Errors propagate via the mutation's `error` (the
+ * page shows an error toast) — pandoc-missing (503) / conversion-failure (502)
+ * surface their actionable `detail` message.
  */
-export function useExportMarkdown(): UseMutationResult<
-  MarkdownExport,
+export function useExportDocument(): UseMutationResult<
+  ExportResult,
   Error,
-  ExportMarkdownInput
+  ExportInput
 > {
   return useMutation({
-    mutationFn: async ({ bookId, title, scope, targetId }: ExportMarkdownInput) => {
-      const result = await exportBookMarkdown(bookId, title, { scope, targetId });
-      downloadTextFile(result.content, result.filename);
+    mutationFn: async ({
+      bookId,
+      title,
+      scope,
+      format,
+      targetId,
+    }: ExportInput) => {
+      const result = await exportBook(bookId, title, { scope, format, targetId });
+      downloadBlob(result.blob, result.filename);
       return result;
     },
   });

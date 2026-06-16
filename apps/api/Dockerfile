@@ -5,6 +5,13 @@ FROM python:3.12-slim
 # (alexandria-db). A context scoped to apps/api could not reach packages/db.
 WORKDIR /workspace
 
+# Install pandoc (DOCX/EPUB export converts Markdown via the pandoc CLI). Done
+# as root, before the USER switch, so the binary is on PATH for appuser at
+# runtime. Clean apt lists to keep the image lean.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pandoc \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv
 RUN pip install uv
 

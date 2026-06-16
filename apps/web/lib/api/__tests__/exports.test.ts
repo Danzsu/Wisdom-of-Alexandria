@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { AI_BASE_URL, API_BASE_URL, ApiError } from "@/lib/api/client";
-import { exportBookMarkdown } from "@/lib/api/exports";
-import { downloadTextFile } from "@/lib/api/export-hooks";
+import { exportBook } from "@/lib/api/exports";
+import { downloadBlob } from "@/lib/api/export-hooks";
 import { rewrite } from "@/lib/api/ai";
 import {
   DEFAULT_MAX_TOKENS,
@@ -20,14 +20,21 @@ const aiBase = `${AI_BASE_URL}/api/v1`;
 describe("lib/api/exports", () => {
   afterEach(() => server.resetHandlers());
 
-  it("POSTs to /books/{id}/exports and returns content + the server filename", async () => {
-    const seen: { method: string; bookId: string; scope: string | null }[] = [];
+  it("POSTs to /books/{id}/exports and returns the blob + the server filename", async () => {
+    const seen: {
+      method: string;
+      bookId: string;
+      scope: string | null;
+      format: string | null;
+    }[] = [];
     server.use(
       http.post(`${base}/books/:bookId/exports`, ({ request, params }) => {
+        const url = new URL(request.url);
         seen.push({
           method: request.method,
           bookId: String(params.bookId),
-          scope: new URL(request.url).searchParams.get("scope"),
+          scope: url.searchParams.get("scope"),
+          format: url.searchParams.get("format"),
         });
         return new HttpResponse("# A Fárosz őrzője\n", {
           status: 200,
@@ -39,15 +46,71 @@ describe("lib/api/exports", () => {
       }),
     );
 
-    const result = await exportBookMarkdown(FAROSZ_BOOK.id, FAROSZ_BOOK.title);
+    const result = await exportBook(FAROSZ_BOOK.id, FAROSZ_BOOK.title);
 
-    // Defaults to whole-book scope (no target_id).
+    // Defaults to whole-book scope + md format (no target_id).
     expect(seen).toEqual([
-      { method: "POST", bookId: FAROSZ_BOOK.id, scope: "book" },
+      { method: "POST", bookId: FAROSZ_BOOK.id, scope: "book", format: "md" },
     ]);
-    expect(result.content).toContain("# A Fárosz őrzője");
+    expect(await result.blob.text()).toContain("# A Fárosz őrzője");
     // Honors the server-supplied ASCII filename.
     expect(result.filename).toBe("a_farosz_orzoje.md");
+  });
+
+  it("forwards format=docx and tags the blob with the docx MIME + .docx name", async () => {
+    let url: URL | null = null;
+    // A tiny ZIP-magic byte payload stands in for a real docx.
+    const docxBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]);
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        url = new URL(request.url);
+        return new HttpResponse(docxBytes, {
+          status: 200,
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition": 'attachment; filename="a_farosz_orzoje.docx"',
+          },
+        });
+      }),
+    );
+
+    const result = await exportBook(FAROSZ_BOOK.id, FAROSZ_BOOK.title, {
+      format: "docx",
+    });
+
+    expect(url!.searchParams.get("format")).toBe("docx");
+    expect(result.filename).toBe("a_farosz_orzoje.docx");
+    expect(result.blob.type).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    // The binary bytes round-trip intact (ZIP magic preserved).
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    expect(Array.from(bytes.slice(0, 2))).toEqual([0x50, 0x4b]);
+  });
+
+  it("forwards format=epub and the epub MIME, building the .epub fallback name", async () => {
+    let url: URL | null = null;
+    const epubBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        url = new URL(request.url);
+        // No Content-Disposition -> client builds the name with the .epub ext.
+        return new HttpResponse(epubBytes, {
+          status: 200,
+          headers: { "Content-Type": "application/epub+zip" },
+        });
+      }),
+    );
+
+    const result = await exportBook(FAROSZ_BOOK.id, "A Fárosz őrzője", {
+      format: "epub",
+    });
+
+    expect(url!.searchParams.get("format")).toBe("epub");
+    expect(result.blob.type).toBe("application/epub+zip");
+    // Client-side fallback name carries the epub extension.
+    expect(result.filename).toBe("a_farosz_orzoje.epub");
   });
 
   it("forwards scope=chapter + target_id for a chapter export", async () => {
@@ -65,7 +128,7 @@ describe("lib/api/exports", () => {
       }),
     );
 
-    const result = await exportBookMarkdown(FAROSZ_BOOK.id, "Prológus", {
+    const result = await exportBook(FAROSZ_BOOK.id, "Prológus", {
       scope: "chapter",
       targetId: "c1111111-1111-1111-1111-111111111111",
     });
@@ -87,7 +150,7 @@ describe("lib/api/exports", () => {
       }),
     );
 
-    await exportBookMarkdown(FAROSZ_BOOK.id, "Reggel", {
+    await exportBook(FAROSZ_BOOK.id, "Reggel", {
       scope: "scene",
       targetId: "5ce11111-1111-1111-1111-111111111111",
     });
@@ -109,7 +172,7 @@ describe("lib/api/exports", () => {
       ),
     );
 
-    const result = await exportBookMarkdown(FAROSZ_BOOK.id, "A Fárosz őrzője");
+    const result = await exportBook(FAROSZ_BOOK.id, "A Fárosz őrzője");
     // Built client-side via the Hungarian slugify util.
     expect(result.filename).toBe("a_farosz_orzoje.md");
   });
@@ -120,13 +183,25 @@ describe("lib/api/exports", () => {
         HttpResponse.json({ detail: "Book not found" }, { status: 404 }),
       ),
     );
+    await expect(exportBook("unknown", "x")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("surfaces the pandoc-missing 503 detail as an ApiError (no swallow)", async () => {
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, () =>
+        HttpResponse.json(
+          { detail: "DOCX/EPUB export requires pandoc; not available." },
+          { status: 503 },
+        ),
+      ),
+    );
     await expect(
-      exportBookMarkdown("unknown", "x"),
-    ).rejects.toBeInstanceOf(ApiError);
+      exportBook(FAROSZ_BOOK.id, "x", { format: "docx" }),
+    ).rejects.toMatchObject({ status: 503 });
   });
 });
 
-describe("downloadTextFile", () => {
+describe("downloadBlob", () => {
   it("creates + revokes the object URL (no leak) and clicks an anchor", () => {
     const createSpy = vi
       .spyOn(URL, "createObjectURL")
@@ -138,7 +213,7 @@ describe("downloadTextFile", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    downloadTextFile("# hello\n", "out.md");
+    downloadBlob(new Blob(["# hello\n"], { type: "text/markdown" }), "out.md");
 
     expect(createSpy).toHaveBeenCalledTimes(1);
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -163,7 +238,9 @@ describe("downloadTextFile", () => {
         throw new Error("click boom");
       });
 
-    expect(() => downloadTextFile("x", "out.md")).toThrow("click boom");
+    expect(() =>
+      downloadBlob(new Blob(["x"]), "out.md"),
+    ).toThrow("click boom");
     // Cleanup still ran despite the throw.
     expect(revokeSpy).toHaveBeenCalledWith("blob:woa-throw");
 

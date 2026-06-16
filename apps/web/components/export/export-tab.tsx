@@ -19,11 +19,27 @@ import {
 import { Spinner } from "@/components/kit/spinner";
 import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
-import { markdownFilename } from "@/lib/slugify";
-import { useExportMarkdown } from "@/lib/api/export-hooks";
+import { exportFilename } from "@/lib/slugify";
+import { useExportDocument } from "@/lib/api/export-hooks";
 import { useBookTree, type ChapterWithScenes } from "@/lib/api/hooks";
-import type { ExportScope } from "@/lib/api/exports";
+import type { ExportFormatId, ExportScope } from "@/lib/api/exports";
 import { ExportFormatGrid, type ExportFormat } from "./export-format-grid";
+
+/** Map a UI format card id to the backend `format` query value. */
+const FORMAT_TO_API: Partial<Record<ExportFormat, ExportFormatId>> = {
+  markdown: "md",
+  docx: "docx",
+  epub: "epub",
+};
+
+/** The file extension shown in the filename preview, per UI format. */
+const FORMAT_EXTENSION: Record<ExportFormat, string> = {
+  markdown: "md",
+  docx: "docx",
+  epub: "epub",
+  pdf: "pdf",
+  txt: "txt",
+};
 
 export interface ExportTabProps {
   bookId: string;
@@ -45,7 +61,7 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
   const [sceneTargetId, setSceneTargetId] = useState<string | null>(null);
   const [audioOpen, setAudioOpen] = useState(false);
 
-  const exportMutation = useExportMarkdown();
+  const exportMutation = useExportDocument();
   const tree = useBookTree(bookId);
 
   // Resolve the currently-selected target (for the filename preview + the
@@ -73,14 +89,17 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
     targetTitle = selectedScene?.title ?? title;
   }
 
-  const filename = markdownFilename(targetTitle);
+  const filename = exportFilename(targetTitle, FORMAT_EXTENSION[format]);
+  // The backend `format` value, or undefined for the not-yet-wired stub formats.
+  const apiFormat = FORMAT_TO_API[format];
   // For non-book scopes a target MUST be chosen before exporting.
   const needsTarget = scope !== "book";
   const exportDisabled =
     exportMutation.isPending || (needsTarget && !targetId);
 
   function handleExport() {
-    if (format !== "markdown") {
+    if (!apiFormat) {
+      // pdf / txt are not wired yet — honest stub toast.
       toast.info(hu.exportScreen.formatStubToast(formatDisplayName(format)));
       return;
     }
@@ -89,7 +108,7 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
       return;
     }
     exportMutation.mutate(
-      { bookId, title: targetTitle, scope, targetId },
+      { bookId, title: targetTitle, scope, format: apiFormat, targetId },
       {
         onSuccess: (result) => {
           toast.success(hu.exportScreen.exportSuccess(result.filename));

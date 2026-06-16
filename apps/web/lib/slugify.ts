@@ -66,13 +66,26 @@ export function slugify(input: string): string {
 }
 
 /**
- * Build the Markdown export filename for a book title. Folds the title to an
- * ASCII slug and appends `.md`; falls back to `export.md` when the title folds
+ * Build an export filename for a title + extension. Folds the title to an ASCII
+ * slug and appends `.<ext>`; falls back to `export.<ext>` when the title folds
  * to an empty slug (e.g. a title made entirely of stripped characters).
+ *
+ * Used as the CLIENT-SIDE fallback for the download name when the server omits
+ * a `Content-Disposition` (and for the live filename preview). The extension is
+ * the format's file extension (`md` / `docx` / `epub`).
+ */
+export function exportFilename(title: string, extension: string): string {
+  const slug = slugify(title);
+  return `${slug.length > 0 ? slug : "export"}.${extension}`;
+}
+
+/**
+ * Build the Markdown export filename for a book title (thin wrapper over
+ * {@link exportFilename} for the `.md` case). Retained for callers that only
+ * deal with Markdown (e.g. the filename preview default).
  */
 export function markdownFilename(title: string): string {
-  const slug = slugify(title);
-  return `${slug.length > 0 ? slug : "export"}.md`;
+  return exportFilename(title, "md");
 }
 
 /**

@@ -2,6 +2,11 @@ import uuid
 
 from httpx import AsyncClient
 
+DOCX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+EPUB_MEDIA_TYPE = "application/epub+zip"
+
 
 async def _build_book(client, auth_headers):
     """Build a complete book with 2 chapters, each with 2 scenes."""
@@ -194,3 +199,201 @@ async def test_export_chapter_scope_unknown_target_is_404(client: AsyncClient, a
         headers=auth_headers,
     )
     assert resp.status_code == 404
+
+
+# --- Format (#2a): md (native) / docx / epub via pandoc -------------------- #
+#
+# These mock the pandoc util at the endpoint's import boundary so they run WITH
+# OR WITHOUT pandoc installed. The real md->docx/epub conversion is covered by
+# the pandoc-gated round-trip in tests/unit/test_pandoc.py (skips locally).
+
+
+async def test_export_format_md_is_default_and_unchanged(
+    client: AsyncClient, auth_headers: dict
+):
+    """format omitted == native Markdown (existing behaviour, text body)."""
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "text/markdown" in resp.headers["content-type"]
+    assert "Az elveszett királyság" in resp.text
+
+
+async def test_export_format_md_explicit_unchanged(
+    client: AsyncClient, auth_headers: dict
+):
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=md", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "text/markdown" in resp.headers["content-type"]
+    assert "Prológus" in resp.text
+
+
+async def test_export_format_docx_media_type_and_filename(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """format=docx -> docx media type + .docx filename; pandoc gets the Markdown."""
+    seen = {}
+
+    def fake_convert(markdown, target, *, title=None):
+        seen["markdown"] = markdown
+        seen["target"] = target
+        seen["title"] = title
+        return b"PKfake-docx"
+
+    monkeypatch.setattr(
+        "app.api.v1.exports.convert_markdown", fake_convert
+    )
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=docx", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == DOCX_MEDIA_TYPE
+    assert ".docx" in resp.headers.get("content-disposition", "")
+    assert resp.content == b"PKfake-docx"
+    # The endpoint reused the native Markdown generator + passed the book title.
+    assert seen["target"] == "docx"
+    assert "Az elveszett királyság" in seen["markdown"]
+    assert seen["title"] == "Az elveszett királyság"
+
+
+async def test_export_format_epub_media_type_and_filename(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    def fake_convert(markdown, target, *, title=None):
+        return b"PKfake-epub"
+
+    monkeypatch.setattr(
+        "app.api.v1.exports.convert_markdown", fake_convert
+    )
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == EPUB_MEDIA_TYPE
+    assert ".epub" in resp.headers.get("content-disposition", "")
+    assert resp.content == b"PKfake-epub"
+
+
+async def test_export_docx_chapter_scope_uses_chapter_title(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    seen = {}
+
+    def fake_convert(markdown, target, *, title=None):
+        seen["title"] = title
+        seen["markdown"] = markdown
+        return b"PKch"
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", fake_convert)
+
+    book_id, ch1_id, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?scope=chapter&target_id={ch1_id}&format=docx",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == DOCX_MEDIA_TYPE
+    assert seen["title"] == "Prológus"
+    assert "Prológus" in seen["markdown"]
+    assert "Az indulás" not in seen["markdown"]
+
+
+async def test_export_docx_pandoc_missing_is_503(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """pandoc not installed -> 503 actionable error (not 500, not empty body)."""
+    from app.services.pandoc import PandocUnavailableError
+
+    def boom(markdown, target, *, title=None):
+        raise PandocUnavailableError(
+            "DOCX/EPUB export requires pandoc; not available on this server."
+        )
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", boom)
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=docx", headers=auth_headers
+    )
+    assert resp.status_code == 503
+    assert "pandoc" in resp.json()["detail"].lower()
+
+
+async def test_export_epub_pandoc_failure_is_502_sanitized(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """pandoc non-zero exit -> 502 with a sanitized message (no raw traceback)."""
+    from app.services.pandoc import PandocConversionError
+
+    def boom(markdown, target, *, title=None):
+        raise PandocConversionError(
+            "pandoc failed to produce EPUB: <path> bad input"
+        )
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", boom)
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 502
+    assert "pandoc" in resp.json()["detail"].lower()
+
+
+async def test_export_docx_chapter_wrong_book_is_404_before_pandoc(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """Ownership (IDOR) is enforced for docx too: convert is never reached."""
+    called = {"n": 0}
+
+    def fake_convert(markdown, target, *, title=None):
+        called["n"] += 1
+        return b"PK"
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", fake_convert)
+
+    _, ch_a, _ = await _build_book(client, auth_headers)
+    book_b, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_b}/exports?scope=chapter&target_id={ch_a}&format=docx",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+    assert called["n"] == 0
+
+
+async def test_export_scene_wrong_book_is_404_for_epub(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.v1.exports.convert_markdown",
+        lambda markdown, target, *, title=None: b"PK",
+    )
+    _, ch_a, _ = await _build_book(client, auth_headers)
+    book_b, _, _ = await _build_book(client, auth_headers)
+    scenes = (
+        await client.get(f"/api/v1/chapters/{ch_a}/scenes", headers=auth_headers)
+    ).json()
+    resp = await client.post(
+        f"/api/v1/books/{book_b}/exports?scope=scene&target_id={scenes[0]['id']}&format=epub",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_export_invalid_format_is_422(client: AsyncClient, auth_headers: dict):
+    """An unknown format value is rejected by the Literal query validation."""
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=rtf", headers=auth_headers
+    )
+    assert resp.status_code == 422
