@@ -14,6 +14,10 @@ import { CommandPalette } from "./command-palette";
 import { CommandPaletteHotkey } from "./command-palette-hotkey";
 import { ShortcutsOverlay } from "./shortcuts-overlay";
 import { ShortcutsOverlayHotkey } from "./shortcuts-overlay-hotkey";
+import {
+  HowItWorks,
+  HowItWorksFirstRun,
+} from "@/components/onboarding/how-it-works";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
 import { AiGenerationProvider } from "@/components/inspector/ai-generation-context";
 
@@ -109,6 +113,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CommandPaletteHotkey />
       <ShortcutsOverlay />
       <ShortcutsOverlayHotkey />
+      <HowItWorks />
+      <HowItWorksFirstRun />
     </div>
   );
 }

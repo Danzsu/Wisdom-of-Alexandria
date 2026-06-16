@@ -17,6 +17,8 @@ interface UIState {
   commandOpen: boolean;
   /** Whether the keyboard-shortcuts help overlay is open. */
   shortcutsOpen: boolean;
+  /** Whether the "Hogyan működik" onboarding scroll-narrative is open. */
+  howItWorksOpen: boolean;
   /** Transient flag driving the navigation sparkfield. */
   sparkActive: boolean;
 
@@ -39,6 +41,11 @@ interface UIState {
   /** Close the keyboard-shortcuts overlay. */
   closeShortcuts: () => void;
 
+  /** Open the "Hogyan működik" onboarding narrative. */
+  openHowItWorks: () => void;
+  /** Close the "Hogyan működik" onboarding narrative. */
+  closeHowItWorks: () => void;
+
   /** Fire the sparkfield; it auto-clears after `SPARK_DURATION_MS`. */
   triggerSpark: () => void;
   /** Clear the sparkfield (called by the auto-clear timer / on unmount). */
@@ -60,6 +67,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   openMenu: null,
   commandOpen: false,
   shortcutsOpen: false,
+  howItWorksOpen: false,
   sparkActive: false,
 
   setMenu: (menu) => set({ openMenu: menu }),
@@ -80,6 +88,17 @@ export const useUIStore = create<UIState>((set, get) => ({
   openShortcuts: () =>
     set({ shortcutsOpen: true, commandOpen: false, openMenu: null }),
   closeShortcuts: () => set({ shortcutsOpen: false }),
+
+  // Opening the onboarding narrative closes the other single-instance overlays
+  // so only one is visible at a time (same invariant as the shortcuts overlay).
+  openHowItWorks: () =>
+    set({
+      howItWorksOpen: true,
+      shortcutsOpen: false,
+      commandOpen: false,
+      openMenu: null,
+    }),
+  closeHowItWorks: () => set({ howItWorksOpen: false }),
 
   triggerSpark: () => {
     if (sparkTimer !== null) {

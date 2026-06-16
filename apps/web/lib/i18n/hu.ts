@@ -982,6 +982,56 @@ export const hu = {
     actionTheme: "Téma váltása",
     /** Command-palette row that opens the keyboard-shortcuts overlay. */
     actionShortcuts: "Billentyűparancsok",
+    /** Command-palette row that re-opens the "how it works" onboarding narrative. */
+    actionHowItWorks: "Hogyan működik",
+  },
+  /**
+   * First-run "Hogyan működik" (how it works) scroll-narrative. Teaches the core
+   * loop in four calm panels. Shown once (localStorage-gated), always skippable,
+   * and re-openable from the command palette. Under reduced motion the panels
+   * render as a plain static stack — the copy below is the a11y baseline.
+   */
+  howItWorks: {
+    /** Dialog accessible name + heading. */
+    title: "Hogyan működik az Alexandria",
+    /** Screen-reader-only dialog description (Radix Dialog requires one). */
+    description:
+      "Négy lépésben bemutatjuk az Alexandria alapfolyamatát: Codex, tervezés, AI-javaslat és jóváhagyás. Görgetéssel haladhatsz, vagy bármikor kihagyhatod.",
+    /** Eyebrow above the title. */
+    eyebrow: "Üdvözlünk",
+    /** Skip / dismiss-forever button (writes the localStorage flag). */
+    skip: "Kihagyás",
+    /** Aria for the skip button. */
+    skipAria: "Bevezető kihagyása és bezárása",
+    /** Close button (writes the flag too — both routes dismiss permanently). */
+    close: "Bezárás",
+    /** Aria for the close button. */
+    closeAria: "Bezárás",
+    /** Hint that scrolling advances the panels (hidden under reduced motion). */
+    scrollHint: "Görgess a folytatáshoz",
+    /** Step counter prefix, e.g. "1 / 4". */
+    panels: [
+      {
+        kicker: "1. lépés",
+        title: "Codex",
+        body: "A világod — karakterek, helyszínek, lore — egy kereshető tudásbázis, ami táplálja az AI-t.",
+      },
+      {
+        kicker: "2. lépés",
+        title: "Tervezés",
+        body: "Fejezetek, jelenetek és beat-ek: a Plan Boardon rendezed el a történetet.",
+      },
+      {
+        kicker: "3. lépés",
+        title: "AI-javaslat",
+        body: "Az AI a Codex-kontextusból átír, folytat vagy jelenetet generál — sosem közvetlenül a kéziratba.",
+      },
+      {
+        kicker: "4. lépés",
+        title: "Jóváhagyás",
+        body: "Minden AI-szöveg Revízióként érkezik; te döntesz: Elfogad vagy Elvet. A te hangod marad.",
+      },
+    ],
   },
   /**
    * Keyboard-shortcuts help overlay (opened with `?` or from the command

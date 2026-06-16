@@ -33,7 +33,7 @@ describe("CommandPalette", () => {
     push.mockClear();
     setThemeMock.mockClear();
     pathname = "/konyv/demo/terv";
-    useUIStore.setState({ openMenu: null, commandOpen: false, sparkActive: false });
+    useUIStore.setState({ openMenu: null, commandOpen: false, sparkActive: false, howItWorksOpen: false });
   });
 
   afterEach(() => {
@@ -96,6 +96,15 @@ describe("CommandPalette", () => {
     const themeRow = await screen.findByText("Téma váltása");
     await userEvent.click(themeRow);
     expect(setThemeMock).toHaveBeenCalledWith("dark");
+    expect(useUIStore.getState().commandOpen).toBe(false);
+  });
+
+  it("the 'Hogyan működik' action opens the onboarding narrative and closes the palette", async () => {
+    renderPalette();
+    useUIStore.getState().openCommand();
+    const row = await screen.findByText("Hogyan működik");
+    await userEvent.click(row);
+    expect(useUIStore.getState().howItWorksOpen).toBe(true);
     expect(useUIStore.getState().commandOpen).toBe(false);
   });
 

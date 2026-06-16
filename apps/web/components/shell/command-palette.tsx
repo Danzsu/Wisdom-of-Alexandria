@@ -11,6 +11,7 @@ import {
   Moon,
   Plus,
   Keyboard,
+  Compass,
 } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { Avatar } from "@/components/kit/avatar";
@@ -44,6 +45,9 @@ function ResultLeading({ result }: { result: CommandResult }) {
   if (result.action === "shortcuts") {
     return <Icon icon={Keyboard} size={14} className="text-accent" />;
   }
+  if (result.action === "howItWorks") {
+    return <Icon icon={Compass} size={14} className="text-accent" />;
+  }
   if (result.action === "export" || result.href?.includes("/export")) {
     return <Icon icon={Download} size={14} className="text-accent" />;
   }
@@ -62,6 +66,7 @@ export function CommandPalette() {
   const commandOpen = useUIStore((s) => s.commandOpen);
   const closeCommand = useUIStore((s) => s.closeCommand);
   const openShortcuts = useUIStore((s) => s.openShortcuts);
+  const openHowItWorks = useUIStore((s) => s.openHowItWorks);
   const navTo = useNavTo();
   const { resolvedTheme, setTheme } = useTheme();
   const [query, setQuery] = useState("");
@@ -130,6 +135,12 @@ export function CommandPalette() {
     if (result.action === "shortcuts") {
       // openShortcuts closes the palette itself (single-overlay invariant).
       openShortcuts();
+      setQuery("");
+      return;
+    }
+    if (result.action === "howItWorks") {
+      // openHowItWorks closes the palette itself (single-overlay invariant).
+      openHowItWorks();
       setQuery("");
       return;
     }

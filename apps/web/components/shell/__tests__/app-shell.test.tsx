@@ -22,6 +22,7 @@ vi.mock("next-themes", () => ({
 }));
 
 import { AppShell } from "../app-shell";
+import { HOW_IT_WORKS_KEY } from "@/components/onboarding/how-it-works";
 
 function renderShell() {
   // ChapterTree + StatusBar now fetch via TanStack Query, so the shell needs a
@@ -39,8 +40,16 @@ describe("AppShell sidebar derivation", () => {
   beforeEach(() => {
     push.mockClear();
     params = { bookId: "demo" };
-    useUIStore.setState({ openMenu: null, commandOpen: false, sparkActive: false });
+    useUIStore.setState({
+      openMenu: null,
+      commandOpen: false,
+      sparkActive: false,
+      howItWorksOpen: false,
+    });
     useEditorStore.setState({ focusOn: false });
+    // Mark the onboarding narrative as already seen so the first-run trigger
+    // doesn't auto-open its overlay during these shell-layout assertions.
+    window.localStorage.setItem(HOW_IT_WORKS_KEY, "1");
   });
 
   afterEach(() => {

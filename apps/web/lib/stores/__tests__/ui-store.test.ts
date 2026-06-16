@@ -6,6 +6,8 @@ function resetStore() {
   useUIStore.setState({
     openMenu: null,
     commandOpen: false,
+    shortcutsOpen: false,
+    howItWorksOpen: false,
     sparkActive: false,
   });
 }
@@ -74,6 +76,26 @@ describe("useUIStore", () => {
       expect(useUIStore.getState().openMenu).toBeNull();
       useUIStore.getState().toggleCommand();
       expect(useUIStore.getState().commandOpen).toBe(false);
+    });
+  });
+
+  describe("how-it-works onboarding", () => {
+    it("opens and closes", () => {
+      useUIStore.getState().openHowItWorks();
+      expect(useUIStore.getState().howItWorksOpen).toBe(true);
+      useUIStore.getState().closeHowItWorks();
+      expect(useUIStore.getState().howItWorksOpen).toBe(false);
+    });
+
+    it("opening it closes the other single-instance overlays + menus", () => {
+      useUIStore.getState().setMenu("tools");
+      useUIStore.getState().openCommand();
+      useUIStore.getState().openShortcuts();
+      useUIStore.getState().openHowItWorks();
+      expect(useUIStore.getState().howItWorksOpen).toBe(true);
+      expect(useUIStore.getState().shortcutsOpen).toBe(false);
+      expect(useUIStore.getState().commandOpen).toBe(false);
+      expect(useUIStore.getState().openMenu).toBeNull();
     });
   });
 
