@@ -1,0 +1,7 @@
+# The OpenAPI-generated contract artifacts are produced with LF by
+# openapi-typescript / Python json. Pin LF so the CI freshness check
+# (`git diff --exit-code packages/shared`) is never tripped by EOL
+# normalization across platforms.
+openapi/*.json text eol=lf
+src/api.ts     text eol=lf
+src/ai.ts      text eol=lf

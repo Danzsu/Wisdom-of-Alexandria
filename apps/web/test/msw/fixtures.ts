@@ -469,6 +469,7 @@ export const PROVIDER_GEMINI: ProviderRead = {
   has_key: true,
   base_url: null,
   default_model: "gemini-2.0-flash",
+  embedding_model: "text-embedding-004",
   enabled: true,
   created_at: NOW,
   updated_at: NOW,
@@ -483,6 +484,7 @@ export const PROVIDER_OLLAMA: ProviderRead = {
   has_key: false,
   base_url: "http://localhost:11434",
   default_model: "llama3.2",
+  embedding_model: null,
   enabled: true,
   created_at: NOW,
   updated_at: NOW,
@@ -511,6 +513,9 @@ export function makeProvider(body: ProviderCreate): ProviderRead {
     has_key: hasKey,
     base_url: body.base_url ?? null,
     default_model: body.default_model ?? null,
+    // The FE provider create form does not expose embedding_model yet; the
+    // backend echoes the stored value (null until set), so mirror that here.
+    embedding_model: null,
     enabled: body.enabled ?? true,
     created_at: NOW,
     updated_at: NOW,

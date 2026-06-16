@@ -128,6 +128,48 @@ jobs:
         run: corepack pnpm -C apps/web test
 
   # ---------------------------------------------------------------------------
+  # Shared-types freshness: the committed OpenAPI-generated types in
+  # `packages/shared` are the FE↔BE contract. Re-run the generation pipeline
+  # (per-app OpenAPI dump + openapi-typescript) against the current backend and
+  # FAIL if the checked-in artifacts are stale — this is the automated drift
+  # detection that replaced the interim fixture drift-guard. Needs BOTH uv (the
+  # two FastAPI OpenAPI dumps) and node/pnpm (openapi-typescript).
+  # ---------------------------------------------------------------------------
+  shared-types:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install workspace (Python, with dev deps)
+        run: uv sync
+
+      - name: Install workspace (Node)
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Regenerate shared types from the backend OpenAPI
+        run: bash scripts/gen-shared-types.sh
+
+      # Fails if the regenerated types/JSON differ from the committed copies,
+      # i.e. the backend schema drifted and `packages/shared` was not refreshed.
+      - name: Verify committed shared types are fresh
+        run: git diff --exit-code -- packages/shared/openapi packages/shared/src
+
+  # ---------------------------------------------------------------------------
   # TODO (future milestones — intentionally NOT implemented in C0):
   #
   #   e2e:

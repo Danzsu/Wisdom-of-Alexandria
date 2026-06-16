@@ -11,6 +11,20 @@
  * - `apps/api/app/schemas/snippet.py`      (SnippetCreate / SnippetRead)
  */
 import { z } from "zod";
+import type {
+  AIContextEntity as GenAIContextEntity,
+  AIDescribeResult as GenAIDescribeResult,
+  AIResult as GenAIResult,
+  ContinuityResult as GenContinuityResult,
+  ContinuityWarning as GenContinuityWarning,
+  Expect,
+  GenerationJobRead as GenGenerationJobRead,
+  MatchesContract,
+  ModelInfo as GenModelInfo,
+  ModelsResponse as GenModelsResponse,
+  RevisionRead as GenRevisionRead,
+  SnippetRead as GenSnippetRead,
+} from "@alexandria/shared";
 
 const idString = z.string().min(1);
 
@@ -286,3 +300,45 @@ export const DESCRIBE_CHANNELS = [
   "Metaforák",
 ] as const;
 export type DescribeChannel = (typeof DESCRIBE_CHANNELS)[number];
+
+/* ---------------------------------------------------------------------------
+ * FE↔BE contract ties (Feature #4). Each schema's inferred shape is bound to
+ * the OpenAPI-generated backend type from `@alexandria/shared` (these come from
+ * the `apps/ai` OpenAPI, except SnippetRead which lives on `apps/api`). A field
+ * add/remove/rename — or an incompatible type drift — on either side fails
+ * `tsc`. The FE intentionally narrows some free-string backend fields to unions
+ * (`ModelInfo.kind`); the tie tolerates that narrowing (a union is assignable
+ * to its widening) while still pinning the key set. Compile-time only; the Zod
+ * schemas above stay the runtime validators. (Replaces the fixture drift-guard.)
+ * ------------------------------------------------------------------------- */
+// One exported tuple binds every AI/Revision/Snippet schema to its generated
+// counterpart. `Expect<…>` forces each `MatchesContract` to be `true`; a drift
+// flips one element to `false`, violating `extends true` → `tsc` error.
+// Exported so it counts as used (no dead-code lint warning).
+export type AIContractTies = [
+  Expect<MatchesContract<z.infer<typeof revisionReadSchema>, GenRevisionRead>>,
+  Expect<
+    MatchesContract<
+      z.infer<typeof generationJobReadSchema>,
+      GenGenerationJobRead
+    >
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof aiContextEntitySchema>, GenAIContextEntity>
+  >,
+  Expect<MatchesContract<z.infer<typeof aiResultSchema>, GenAIResult>>,
+  Expect<
+    MatchesContract<z.infer<typeof aiDescribeResultSchema>, GenAIDescribeResult>
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof continuityWarningSchema>, GenContinuityWarning>
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof continuityResultSchema>, GenContinuityResult>
+  >,
+  Expect<MatchesContract<z.infer<typeof modelInfoSchema>, GenModelInfo>>,
+  Expect<
+    MatchesContract<z.infer<typeof modelsResponseSchema>, GenModelsResponse>
+  >,
+  Expect<MatchesContract<z.infer<typeof snippetReadSchema>, GenSnippetRead>>,
+];

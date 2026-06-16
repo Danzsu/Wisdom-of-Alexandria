@@ -27,6 +27,11 @@
  * `baseUrl: AI_BASE_URL` override. The same JWT is accepted by both services.
  */
 import { z } from "zod";
+import type {
+  Expect,
+  MatchesContract,
+  ProviderRead as GenProviderRead,
+} from "@alexandria/shared";
 import { AI_BASE_URL, apiFetch } from "./client";
 
 /* ---------------------------------------------------------------------------
@@ -82,6 +87,10 @@ export const providerReadSchema = z.object({
   has_key: z.boolean(),
   base_url: z.string().nullable(),
   default_model: z.string().nullable(),
+  // The embedding model used for RAG indexing (B2a). Like the other model
+  // slots it is a free, nullable string on the wire; not all providers expose
+  // embeddings, so `null` is the common case.
+  embedding_model: z.string().nullable(),
   enabled: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -149,6 +158,23 @@ export type ProviderModelsResponse = z.infer<
 
 /** Array schema for the list endpoint. */
 export const providerListSchema = z.array(providerReadSchema);
+
+/* ---------------------------------------------------------------------------
+ * FE↔BE contract tie (Feature #4). `providerReadSchema`'s inferred shape is
+ * bound to the OpenAPI-generated `ProviderRead` (apps/ai) from
+ * `@alexandria/shared`. The FE narrows `type` to the {@link PROVIDER_TYPES}
+ * union (the backend types it as a free string); the tie tolerates that
+ * narrowing while pinning the key set, so a field add/remove/rename on the
+ * backend fails `tsc`. Compile-time only; the Zod schema stays the runtime
+ * validator. (Replaces the fixture drift-guard.)
+ *
+ * NOTE: binding this tie surfaced a REAL drift the old fixture-guard missed —
+ * the backend `ProviderRead` gained `embedding_model` (B2a) but this schema had
+ * not; `SameKeys` failed until the field was added above.
+ * ------------------------------------------------------------------------- */
+export type ProviderContractTies = [
+  Expect<MatchesContract<z.infer<typeof providerReadSchema>, GenProviderRead>>,
+];
 
 /* ---------------------------------------------------------------------------
  * Endpoint functions (each validates the response with Zod — drift throws).

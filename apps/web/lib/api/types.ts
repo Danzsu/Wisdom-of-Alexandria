@@ -10,6 +10,17 @@
  * to `packages/shared` is a later cleanup (per the M3 spec).
  */
 import { z } from "zod";
+import type {
+  BeatRead as GenBeatRead,
+  BookRead as GenBookRead,
+  ChapterRead as GenChapterRead,
+  CodexEntryRead as GenCodexEntryRead,
+  Expect,
+  MatchesContract,
+  ProjectRead as GenProjectRead,
+  SceneRead as GenSceneRead,
+  SeriesRead as GenSeriesRead,
+} from "@alexandria/shared";
 
 /* ---------------------------------------------------------------------------
  * Project — mirrors app/schemas/project.py
@@ -366,3 +377,29 @@ export const bookListSchema = z.array(bookReadSchema);
 export const chapterListSchema = z.array(chapterReadSchema);
 export const sceneListSchema = z.array(sceneReadSchema);
 export const codexEntryListSchema = z.array(codexEntryReadSchema);
+
+/* ---------------------------------------------------------------------------
+ * FE↔BE contract ties (Feature #4). Each Read schema's inferred shape is bound
+ * to the OpenAPI-generated backend type from `@alexandria/shared` (the single
+ * source of truth). A field add/remove/rename — or an incompatible type drift —
+ * on EITHER side breaks the matching `Expect<MatchesContract<…>>` and fails
+ * `tsc`/`type-check`. These are compile-time only (erased at build); the Zod
+ * schemas above remain the runtime validators. See the helper docs in
+ * `@alexandria/shared`. (Replaces the retired fixture drift-guard.)
+ * ------------------------------------------------------------------------- */
+// One exported tuple binds every Read schema to its generated counterpart.
+// `Expect<…>` forces each `MatchesContract` to be `true`; a drift makes one
+// element `false`, violating the `extends true` bound → `tsc` error. Exported
+// so it counts as used (no dead-code lint warning) and is importable as the
+// documented contract surface for this module.
+export type CoreContractTies = [
+  Expect<MatchesContract<z.infer<typeof projectReadSchema>, GenProjectRead>>,
+  Expect<MatchesContract<z.infer<typeof seriesReadSchema>, GenSeriesRead>>,
+  Expect<MatchesContract<z.infer<typeof bookReadSchema>, GenBookRead>>,
+  Expect<MatchesContract<z.infer<typeof chapterReadSchema>, GenChapterRead>>,
+  Expect<MatchesContract<z.infer<typeof sceneReadSchema>, GenSceneRead>>,
+  Expect<MatchesContract<z.infer<typeof beatReadSchema>, GenBeatRead>>,
+  Expect<
+    MatchesContract<z.infer<typeof codexEntryReadSchema>, GenCodexEntryRead>
+  >,
+];
