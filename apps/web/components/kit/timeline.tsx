@@ -4,9 +4,13 @@ import { cn } from "@/lib/utils";
 
 /**
  * Vertical 2px spine, absolutely positioned at the left of a timeline column.
- * Place inside a `relative` container that wraps the timeline nodes.
+ * Place inside a `relative` container that wraps the timeline nodes. Forwards any
+ * extra attributes (e.g. `data-*` hooks the timeline screen's GSAP draw targets).
  */
-export function TimelineSpine({ className }: { className?: string }) {
+export function TimelineSpine({
+  className,
+  ...props
+}: HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
       aria-hidden="true"
@@ -14,6 +18,7 @@ export function TimelineSpine({ className }: { className?: string }) {
         "pointer-events-none absolute left-[7px] top-1.5 bottom-1.5 w-0.5 bg-border",
         className,
       )}
+      {...props}
     />
   );
 }

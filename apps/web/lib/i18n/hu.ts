@@ -683,6 +683,45 @@ export const hu = {
     graphAriaLabel: "Kapcsolatháló",
   },
   /**
+   * Idősor (chapter/scene timeline, UX-3b). A vertical reading-order timeline of
+   * the book's chapters → scenes, coloured by POV + status. Copy is original.
+   */
+  timeline: {
+    /** Screen states. */
+    loading: "Idővonal betöltése…",
+    error: "Nem sikerült betölteni az idővonalat",
+    /** Retry button on the error state. */
+    retry: "Újrapróbálkozás",
+    /** Empty state (no chapters/scenes yet). */
+    emptyTitle: "Még nincs jelenet az idővonalon",
+    emptyHint:
+      "Ahogy fejezeteket és jeleneteket adsz a könyvhöz, itt rajzolódik ki a történet íve — olvasási sorrendben, nézőpont és státusz szerint színezve.",
+    emptyCta: "Ugrás a Tervhez",
+    /** Toolbar. */
+    title: "Idősor",
+    sceneCount: (n: number) => (n === 1 ? "1 jelenet" : `${n} jelenet`),
+    chapterCount: (n: number) => (n === 1 ? "1 fejezet" : `${n} fejezet`),
+    /** Per-chapter scene-count suffix in a section header. */
+    chapterScenes: (n: number) => (n === 1 ? "1 jelenet" : `${n} jelenet`),
+    /** Word-count suffix on a scene node. */
+    sceneWords: (n: number) => `${n} szó`,
+    /** Status pill labels (scene status → human label). */
+    statusDraft: "Vázlat",
+    statusInProgress: "Folyamatban",
+    statusComplete: "Kész",
+    statusArchived: "Archivált",
+    /** POV marker fallback when a scene has no POV character set. */
+    povUnset: "Nincs nézőpont",
+    /** POV prefix for a resolved character name (used in title/aria). */
+    povLabel: (name: string) => `Nézőpont: ${name}`,
+    /** A scene with no own summary. */
+    noSummary: "Nincs összefoglaló.",
+    /** Accessible name for a scene row (title + open hint). */
+    openSceneAria: (title: string) => `${title} — megnyitás írásra`,
+    /** Region landmark label for the timeline list. */
+    listAriaLabel: "Történet idősor",
+  },
+  /**
    * Plan Board (`Alexandria App.dc.html` showplan ~line 817). Mode pills, view
    * toggle (Rács / Mátrix / Vázlat), density toggle, the SceneCard, act/chapter
    * headers, the bottom action bar. Copy is verbatim from the prototype.
@@ -1178,8 +1217,6 @@ export const hu = {
     cselekmenyszalakHint: "A Cselekményszálak az M10-ben érkezik.",
     hangokLabel: "Hangkönyvtár",
     hangokHint: "A Hangkönyvtár az M11-ben (V2) érkezik.",
-    idosorLabel: "Idősor",
-    idosorHint: "Az Idősor az M10-ben érkezik.",
     promptokLabel: "Prompt Library",
     promptokHint: "A Prompt Library az M10-ben érkezik.",
   },

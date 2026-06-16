@@ -358,6 +358,8 @@ export interface BookTreeResult {
   isError: boolean;
   /** The first error encountered across the chapter / scene queries, if any. */
   error: Error | null;
+  /** Refetch the chapters list + every per-chapter scene query (retry path). */
+  refetch: () => void;
 }
 
 /**
@@ -391,6 +393,14 @@ export function useBookTree(bookId: string | undefined): BookTreeResult {
     isLoading: chaptersQuery.isLoading || (chapters.length > 0 && scenesLoading),
     isError: chaptersQuery.isError || sceneQueries.some((q) => q.isError),
     error: chaptersQuery.error ?? (sceneError as Error | null),
+    refetch: () => {
+      // Refetch the chapters list and every settled per-chapter scene query.
+      // Floating promises are intentional — the queries surface their own
+      // loading/error state; errors are never swallowed (they re-populate
+      // `isError`/`error`).
+      void chaptersQuery.refetch();
+      for (const q of sceneQueries) void q.refetch();
+    },
   };
 }
 
