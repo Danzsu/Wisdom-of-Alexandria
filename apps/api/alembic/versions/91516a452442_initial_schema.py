@@ -43,13 +43,35 @@ depends_on: str | Sequence[str] | None = None
 
 # Tables introduced by LATER revisions — excluded from the initial schema so the
 # migration that owns each one creates it exactly once.
-_TABLES_ADDED_LATER = {"providers", "embeddings"}
+_TABLES_ADDED_LATER = {"providers", "embeddings", "series"}
 
 # Columns added by LATER revisions to base tables — dropped from the in-memory
 # copy here so the owning ALTER migration adds them exactly once.
 _COLUMNS_ADDED_LATER = {
-    "codex_entries": {"aliases", "role"},  # -> a1c4d7e9f2b3
+    # aliases/role -> a1c4d7e9f2b3 ; series_id -> c3a1b2c3d4e5
+    "codex_entries": {"aliases", "role", "series_id"},
+    "books": {"series_id"},  # -> c3a1b2c3d4e5
 }
+
+
+def _drop_later_column(copied, col_name: str) -> None:
+    """Remove a later-added column (its FK and any index) from the copy.
+
+    Dropped first so ``create_all`` does not emit, for a column the owning later
+    revision creates (e.g. ``series_id`` -> the later-owned ``series`` table):
+      - a dangling FK to an excluded table, or
+      - a ``CREATE INDEX`` over a column that no longer exists here.
+    """
+    if col_name not in copied.columns:
+        return
+    col = copied.columns[col_name]
+    # Drop any index that references this column (e.g. ix_books_series_id).
+    for index in {idx for idx in copied.indexes if col_name in idx.columns.keys()}:
+        copied.indexes.discard(index)
+    for fk in set(col.foreign_keys):
+        copied.constraints.discard(fk.constraint)
+        copied.foreign_keys.discard(fk)
+    copied._columns.remove(col)
 
 
 def _base_metadata() -> MetaData:
@@ -63,8 +85,7 @@ def _base_metadata() -> MetaData:
             continue
         copied = table.to_metadata(base)
         for col_name in _COLUMNS_ADDED_LATER.get(table.name, set()):
-            if col_name in copied.columns:
-                copied._columns.remove(copied.columns[col_name])
+            _drop_later_column(copied, col_name)
     return base
 
 

@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "ai_comments",
     "providers",
     "embeddings",
+    "series",
 }
 
 
@@ -35,11 +36,11 @@ def test_all_tables_in_metadata():
     )
 
 
-def test_metadata_has_18_tables():
-    """Verify that exactly 18 tables are registered."""
+def test_metadata_has_19_tables():
+    """Verify that exactly 19 tables are registered."""
     # Models are already registered via the module-level import above.
-    assert len(Base.metadata.tables) == 18, (
-        f"Expected 18 tables, got {len(Base.metadata.tables)}"
+    assert len(Base.metadata.tables) == 19, (
+        f"Expected 19 tables, got {len(Base.metadata.tables)}"
     )
 
 

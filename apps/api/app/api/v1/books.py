@@ -7,6 +7,7 @@ from app.core.deps import get_current_user, get_db
 from app.schemas.book import BookCreate, BookRead, BookUpdate
 from app.services.crud_book import create_book, delete_book, get_book, list_books, update_book
 from app.services.crud_project import get_project
+from app.services.crud_series import SeriesScopeError
 
 router = APIRouter(prefix="/projects/{project_id}/books", tags=["books"])
 
@@ -26,7 +27,12 @@ async def create(
     _: str = Depends(get_current_user),
 ) -> BookRead:
     await _get_project_or_404(project_id, db)
-    return await create_book(db, project_id, data)
+    try:
+        return await create_book(db, project_id, data)
+    except SeriesScopeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.get("", response_model=list[BookRead])
@@ -65,7 +71,12 @@ async def update(
     book = await get_book(db, project_id, book_id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
-    return await update_book(db, book, data)
+    try:
+        return await update_book(db, book, data)
+    except SeriesScopeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)

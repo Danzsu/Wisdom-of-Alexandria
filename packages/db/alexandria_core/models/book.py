@@ -12,6 +12,14 @@ class Book(UUIDPrimaryKey, Timestamps, Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
+    # Optional sub-universe grouping. SET NULL on series delete: removing a
+    # series must NOT delete its books — they fall back to project-only scope.
+    series_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("series.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     synopsis: Mapped[str | None] = mapped_column(Text, nullable=True)

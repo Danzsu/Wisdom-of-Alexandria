@@ -14,6 +14,15 @@ class CodexEntry(UUIDPrimaryKey, Timestamps, Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
+    # Optional series scope. NULL = project-global (visible everywhere in the
+    # project); set = scoped to that series only. SET NULL on series delete so a
+    # scoped entry falls back to project-global rather than being deleted.
+    series_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("series.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     entry_type: Mapped[str] = mapped_column(
         String(100), nullable=False, default="custom"

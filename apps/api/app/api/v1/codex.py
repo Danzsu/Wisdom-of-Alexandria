@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
@@ -13,6 +13,7 @@ from app.services.crud_codex_entry import (
     update_codex_entry,
 )
 from app.services.crud_project import get_project
+from app.services.crud_series import SeriesScopeError
 
 router = APIRouter(prefix="/projects/{project_id}/codex", tags=["codex"])
 
@@ -32,17 +33,31 @@ async def create(
     _: str = Depends(get_current_user),
 ) -> CodexEntryRead:
     await _get_project_or_404(project_id, db)
-    return await create_codex_entry(db, project_id, data)
+    try:
+        return await create_codex_entry(db, project_id, data)
+    except SeriesScopeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.get("", response_model=list[CodexEntryRead])
 async def list_all(
     project_id: uuid.UUID,
+    series_id: uuid.UUID | None = Query(
+        None,
+        description=(
+            "Optional series scope filter. When given, returns project-global "
+            "entries (series_id IS NULL) PLUS entries scoped to this series, and "
+            "EXCLUDES entries scoped to any other series. Omit to return all "
+            "entries in the project."
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> list[CodexEntryRead]:
     await _get_project_or_404(project_id, db)
-    return await list_codex_entries(db, project_id)
+    return await list_codex_entries(db, project_id, series_id)
 
 
 @router.get("/{entry_id}", response_model=CodexEntryRead)
@@ -71,7 +86,12 @@ async def update(
     entry = await get_codex_entry(db, project_id, entry_id)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Codex entry not found")
-    return await update_codex_entry(db, entry, data)
+    try:
+        return await update_codex_entry(db, entry, data)
+    except SeriesScopeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -14,6 +14,7 @@ from alexandria_core.models.project import Project  # noqa: F401
 from alexandria_core.models.provider import Provider  # noqa: F401
 from alexandria_core.models.revision import Revision  # noqa: F401
 from alexandria_core.models.scene import Scene, SceneStatus  # noqa: F401
+from alexandria_core.models.series import Series  # noqa: F401
 from alexandria_core.models.snippet import Snippet  # noqa: F401
 from alexandria_core.models.style_guide import StyleGuide  # noqa: F401
 from alexandria_core.models.worldbuilding_entry import WorldbuildingEntry  # noqa: F401

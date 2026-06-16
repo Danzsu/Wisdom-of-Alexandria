@@ -16,6 +16,9 @@ class Project(UUIDPrimaryKey, Timestamps, Base):
     books: Mapped[list["Book"]] = relationship(
         "Book", back_populates="project", cascade="all, delete-orphan"
     )
+    series: Mapped[list["Series"]] = relationship(
+        "Series", back_populates="project", cascade="all, delete-orphan"
+    )
     characters: Mapped[list["Character"]] = relationship(
         "Character", back_populates="project", cascade="all, delete-orphan"
     )

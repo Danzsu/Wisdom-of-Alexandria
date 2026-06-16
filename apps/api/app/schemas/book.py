@@ -12,6 +12,9 @@ class BookCreate(BaseModel):
     language: str = Field(default="hu", max_length=10)
     word_count_target: int | None = None
     order_index: int = 0
+    # Optional sub-universe grouping (a Series under the same project). None =
+    # the book belongs to no series. Validated same-project at the service layer.
+    series_id: uuid.UUID | None = None
 
 
 class BookUpdate(BaseModel):
@@ -22,6 +25,9 @@ class BookUpdate(BaseModel):
     language: str | None = Field(default=None, max_length=10)
     word_count_target: int | None = None
     order_index: int | None = None
+    # Assign/clear the book's series. Send null to clear (back to project-only).
+    # Set must reference a Series in the SAME project (else rejected).
+    series_id: uuid.UUID | None = None
 
 
 class BookRead(BaseModel):
@@ -29,6 +35,7 @@ class BookRead(BaseModel):
 
     id: uuid.UUID
     project_id: uuid.UUID
+    series_id: uuid.UUID | None = None
     title: str
     description: str | None
     synopsis: str | None

@@ -12,6 +12,10 @@ class CodexEntryCreate(BaseModel):
     role: str | None = Field(default=None, max_length=100)
     ai_visible: bool = True
     tags: list[str] = Field(default_factory=list)
+    # Optional series scope. None = project-global (visible everywhere in the
+    # project); set = scoped to that series only. Validated same-project at the
+    # service layer.
+    series_id: uuid.UUID | None = None
 
 
 class CodexEntryUpdate(BaseModel):
@@ -22,6 +26,9 @@ class CodexEntryUpdate(BaseModel):
     role: str | None = Field(default=None, max_length=100)
     ai_visible: bool | None = None
     tags: list[str] | None = None
+    # Assign/clear the entry's series scope. Send null to clear (back to
+    # project-global). Set must reference a Series in the SAME project.
+    series_id: uuid.UUID | None = None
 
 
 class CodexEntryRead(BaseModel):
@@ -29,6 +36,7 @@ class CodexEntryRead(BaseModel):
 
     id: uuid.UUID
     project_id: uuid.UUID
+    series_id: uuid.UUID | None = None
     title: str
     entry_type: str
     content: str | None
