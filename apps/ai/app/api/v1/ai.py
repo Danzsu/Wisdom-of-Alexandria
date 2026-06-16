@@ -140,6 +140,13 @@ class SummarizeRequest(BaseModel):
     max_tokens: int | None = _MaxTokensField
 
 
+class ContinuityRequest(BaseModel):
+    scene_id: uuid.UUID
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
 class IndexRequest(BaseModel):
     # Optional body form of project_id; the query param takes precedence.
     project_id: uuid.UUID | None = None
@@ -184,6 +191,33 @@ class IndexResult(BaseModel):
     capped: bool
     # True when RAG is unconfigured (no embedding provider) so nothing was done.
     skipped_no_provider: bool = False
+
+
+class ContinuityWarning(BaseModel):
+    """One structured continuity finding (B3).
+
+    ``severity`` is one of info/warning/error (validated + clamped service-side,
+    but kept a free ``str`` on the wire so a future severity still renders).
+    ``message`` is the Hungarian description; ``entity`` is the affected Codex
+    entity name, or ``None``.
+    """
+
+    severity: str
+    message: str
+    entity: str | None = None
+
+
+class ContinuityResult(BaseModel):
+    """Continuity-check response (B3). NO revision — this is analysis.
+
+    ``warnings`` is empty when no issues were found (a positive "all clear").
+    ``context_entities`` lists the codex entries RAG grounded the check on (empty
+    when RAG was skipped / unconfigured — the check then ran on the scene text
+    alone).
+    """
+
+    warnings: list[ContinuityWarning] = Field(default_factory=list)
+    context_entities: list[ContextEntity] = Field(default_factory=list)
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -306,6 +340,45 @@ async def generate_scene(
         return AIResult(
             revision=RevisionRead.model_validate(revision),
             job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/continuity", response_model=ContinuityResult)
+async def continuity(
+    data: ContinuityRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: AIService = Depends(get_ai_service),
+) -> ContinuityResult:
+    """Continuity-check a scene against the project codex (B3).
+
+    Returns STRUCTURED warnings (severity / message / entity) — analysis, not
+    generated content, so there is NO revision. An empty ``warnings`` list is a
+    positive "no issues found" result.
+
+    Degradation contract (no 500 for either case):
+    - RAG/embeddings unconfigured → the check still runs on the scene text alone
+      (empty ``context_entities``).
+    - ``scene_id`` resolves to no scene / empty content → an empty result
+      (``warnings: []``, ``context_entities: []``), NOT a 404. The UI shows the
+      positive "no issues" state; there is simply nothing to check.
+    """
+    try:
+        warnings, _job, context_entities = await svc.check_continuity(
+            db,
+            scene_id=data.scene_id,
+            model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        return ContinuityResult(
+            warnings=[ContinuityWarning(**w) for w in warnings],
             context_entities=[ContextEntity(**c) for c in context_entities],
         )
     except Exception as e:

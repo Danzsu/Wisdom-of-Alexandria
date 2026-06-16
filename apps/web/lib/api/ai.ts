@@ -16,6 +16,7 @@
  *     POST /ai/describe                        → AIDescribeResult
  *     POST /ai/generate-scene                  → AIResult
  *     POST /ai/write-continue                  → AIResult
+ *     POST /ai/continuity                      → ContinuityResult
  *     POST /ai/scenes/{scene_id}/summarize     → AIResult
  *   Domain service (:8000):
  *     POST /revisions/{revision_id}/approve    → RevisionRead
@@ -32,12 +33,14 @@ import { currentGenerationParams } from "@/lib/stores/generation-settings-store"
 import {
   aiDescribeResultSchema,
   aiResultSchema,
+  continuityResultSchema,
   modelsResponseSchema,
   revisionReadSchema,
   snippetCreateSchema,
   snippetReadSchema,
   type AIDescribeResult,
   type AIResult,
+  type ContinuityResult,
   type DescribeRequest,
   type GenerateSceneRequest,
   type ModelsResponse,
@@ -120,6 +123,25 @@ export async function writeContinue(
     baseUrl: AI_BASE_URL,
   });
   return aiResultSchema.parse(data);
+}
+
+/**
+ * Continuity-check a scene (B3). Returns STRUCTURED warnings (severity / message
+ * / entity) — analysis, not generated content, so there is NO revision and
+ * NOTHING is ever written to the manuscript. An empty `warnings` list is the
+ * positive "no issues found" state. Generation params are intentionally NOT
+ * attached: the body is `{scene_id, model?}` (the check has a fixed task).
+ */
+export async function checkContinuity(
+  sceneId: string,
+  model?: string | null,
+): Promise<ContinuityResult> {
+  const data = await apiFetch<unknown>("/ai/continuity", {
+    method: "POST",
+    body: { scene_id: sceneId, model: model ?? null },
+    baseUrl: AI_BASE_URL,
+  });
+  return continuityResultSchema.parse(data);
 }
 
 /* ---------------------------------------------------------------------------

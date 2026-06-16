@@ -18,6 +18,7 @@ import {
 } from "@tanstack/react-query";
 import {
   approveRevision,
+  checkContinuity,
   createSnippet,
   describe,
   generateScene,
@@ -30,6 +31,7 @@ import { listJobs } from "./jobs";
 import type {
   AIDescribeResult,
   AIResult,
+  ContinuityResult,
   DescribeRequest,
   GenerateSceneRequest,
   GenerationJobRead,
@@ -160,6 +162,29 @@ export function useWriteContinue(): UseMutationResult<
 > {
   return useMutation({
     mutationFn: (input: WriteContinueRequest) => writeContinue(input),
+  });
+}
+
+/** Input for the continuity-check mutation (the active scene id + optional model). */
+export interface CheckContinuityInput {
+  sceneId: string;
+  model?: string | null;
+}
+
+/**
+ * Run a continuity check over a scene (B3). Resolves to structured warnings
+ * (severity / message / entity) — analysis only, NEVER a manuscript write. The
+ * Warnings tab fires this; errors surface via Query's `error` / `isError`
+ * (never swallowed).
+ */
+export function useCheckContinuity(): UseMutationResult<
+  ContinuityResult,
+  Error,
+  CheckContinuityInput
+> {
+  return useMutation({
+    mutationFn: ({ sceneId, model }: CheckContinuityInput) =>
+      checkContinuity(sceneId, model),
   });
 }
 

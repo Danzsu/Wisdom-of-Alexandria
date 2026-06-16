@@ -54,6 +54,14 @@ def _make_ai_service_mock():
     svc.write_continue.return_value = (rev, job, [])
     svc.generate_scene.return_value = (rev, job, [])
     svc.summarize.return_value = (rev, job)
+    # check_continuity returns (warnings, job, context_entities) — NO revision.
+    svc.check_continuity.return_value = (
+        [
+            {"severity": "warning", "message": "Folytonossági eltérés.", "entity": "Szelene"},
+        ],
+        _mock_job(job_type="continuity"),
+        [],
+    )
     return svc
 
 
@@ -346,7 +354,91 @@ async def test_all_ai_endpoints_require_auth(client: AsyncClient, mock_ai_svc):
         ("POST", "/api/v1/ai/generate-scene", {"beats": ["x"]}),
         ("POST", f"/api/v1/ai/scenes/{scene_id}/summarize", {"content": "x"}),
         ("POST", f"/api/v1/ai/chapters/{chapter_id}/summarize", {"content": "x"}),
+        ("POST", "/api/v1/ai/continuity", {"scene_id": scene_id}),
     ]
     for method, url, body in endpoints:
         resp = await client.request(method, url, json=body)
         assert resp.status_code == 401, f"{method} {url} should 401 without auth"
+
+
+# ── Continuity check (B3) ──────────────────────────────────────────────────────
+
+
+async def test_continuity_returns_structured_warnings(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    scene_id = str(uuid.uuid4())
+    resp = await client.post(
+        "/api/v1/ai/continuity",
+        json={"scene_id": scene_id},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "warnings" in data
+    assert "context_entities" in data
+    assert len(data["warnings"]) == 1
+    w = data["warnings"][0]
+    assert w["severity"] == "warning"
+    assert w["message"] == "Folytonossági eltérés."
+    assert w["entity"] == "Szelene"
+    # NO revision in the continuity contract (analysis, not generated content).
+    assert "revision" not in data
+    mock_ai_svc.check_continuity.assert_called_once()
+    assert mock_ai_svc.check_continuity.call_args.kwargs["scene_id"] == uuid.UUID(scene_id)
+
+
+async def test_continuity_empty_no_issues(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    mock_ai_svc.check_continuity.return_value = ([], _mock_job("continuity"), [])
+    resp = await client.post(
+        "/api/v1/ai/continuity",
+        json={"scene_id": str(uuid.uuid4())},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["warnings"] == []
+
+
+async def test_continuity_requires_auth(client: AsyncClient, mock_ai_svc):
+    resp = await client.post(
+        "/api/v1/ai/continuity", json={"scene_id": str(uuid.uuid4())}
+    )
+    assert resp.status_code == 401
+
+
+async def test_continuity_requires_scene_id(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post("/api/v1/ai/continuity", json={}, headers=auth_headers)
+    assert resp.status_code == 422
+
+
+async def test_continuity_ai_error_returns_502_sanitized(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    raw = "Traceback (most recent call last):\n  File ...\n" + ("z" * 5000)
+    mock_ai_svc.check_continuity.side_effect = Exception(raw)
+    resp = await client.post(
+        "/api/v1/ai/continuity",
+        json={"scene_id": str(uuid.uuid4())},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert detail.startswith("AI generation failed: ")
+    assert "\n" not in detail
+    assert len(detail) <= len("AI generation failed: ") + 300
+
+
+async def test_continuity_forwards_model(
+    client: AsyncClient, auth_headers: dict, mock_ai_svc
+):
+    resp = await client.post(
+        "/api/v1/ai/continuity",
+        json={"scene_id": str(uuid.uuid4()), "model": "ollama/llama3.2"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert mock_ai_svc.check_continuity.call_args.kwargs["model"] == "ollama/llama3.2"

@@ -20,6 +20,7 @@ import {
   makeAiResult,
   makeChapter,
   makeCodexEntry,
+  makeContinuityResult,
   makeDescribeResult,
   makeProvider,
   makeRevision,
@@ -944,6 +945,14 @@ export const handlers = [
     ];
     return HttpResponse.json(makeDescribeResult(channels, model));
   }),
+
+  /* ---- Continuity check (B3 — structured warnings, no revision). On the AI
+   * service base (`aiBase`). Returns the mixed-severity fixture by default;
+   * tests override this handler to exercise the empty / error / malformed
+   * paths. ---- */
+  http.post(`${aiBase}/ai/continuity`, () =>
+    HttpResponse.json(makeContinuityResult()),
+  ),
 
   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
    * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional

@@ -1,4 +1,6 @@
+import json
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -23,6 +25,90 @@ logger = logging.getLogger(__name__)
 
 DESCRIBE_CHANNELS = ["Látás", "Hang", "Tapintás", "Szag", "Íz", "Metaforák"]
 PROMPT_VERSION = "1.0"
+
+# Continuity warning severities. An out-of-range value from the model is clamped
+# to CONTINUITY_DEFAULT_SEVERITY rather than dropped (the finding still matters).
+CONTINUITY_SEVERITIES = ("info", "warning", "error")
+CONTINUITY_DEFAULT_SEVERITY = "warning"
+
+# A lenient "first JSON array" extractor for the tier-2 parse fallback (when the
+# model wraps the array in prose or a ```json fence). Non-greedy, DOTALL so it
+# spans newlines.
+_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+
+def _coerce_warning(raw: Any) -> dict[str, Any] | None:
+    """Validate/clamp one raw warning into the API contract shape, or drop it.
+
+    - ``message`` is REQUIRED (a non-empty string) — a warning without it is
+      meaningless, so it is dropped (returns ``None``).
+    - ``severity`` is clamped to one of {info, warning, error}; anything else
+      (or missing) becomes ``CONTINUITY_DEFAULT_SEVERITY`` — never dropped for a
+      bad severity alone.
+    - ``entity`` is optional; coerced to a trimmed string or ``None``.
+    """
+    if not isinstance(raw, dict):
+        return None
+    message = raw.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return None
+    severity = raw.get("severity")
+    if not isinstance(severity, str) or severity not in CONTINUITY_SEVERITIES:
+        severity = CONTINUITY_DEFAULT_SEVERITY
+    entity = raw.get("entity")
+    if isinstance(entity, str):
+        entity = entity.strip() or None
+    else:
+        entity = None
+    return {"severity": severity, "message": message.strip(), "entity": entity}
+
+
+def _parse_continuity(content: str) -> list[dict[str, Any]] | None:
+    """Parse a continuity LLM response into a list of warning dicts.
+
+    Robust, two-tier parse:
+      1. ``json.loads`` the whole response; accept it only if it is a list.
+      2. If that fails (or isn't a list), extract the first ``[...]`` block via a
+         lenient regex and ``json.loads`` that.
+
+    Returns the validated/clamped warning list on success, or ``None`` when the
+    response is genuinely unparseable as a warning array — the CALLER then
+    degrades gracefully (a single visible warning + a logged WARNING). Returning
+    ``None`` (vs an empty list) is deliberate: ``[]`` means "parsed fine, no
+    issues found", whereas ``None`` means "could not parse" — the two must NOT be
+    conflated (an unparseable response must never look like a clean check).
+    """
+
+    def _validate_list(data: Any) -> list[dict[str, Any]] | None:
+        if not isinstance(data, list):
+            return None
+        out: list[dict[str, Any]] = []
+        for item in data:
+            coerced = _coerce_warning(item)
+            if coerced is not None:
+                out.append(coerced)
+        return out
+
+    # Tier 1: the whole response is JSON.
+    try:
+        parsed = _validate_list(json.loads(content))
+        if parsed is not None:
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Tier 2: extract the first [...] block and parse that.
+    match = _JSON_ARRAY_RE.search(content)
+    if match is not None:
+        try:
+            parsed = _validate_list(json.loads(match.group(0)))
+            if parsed is not None:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Tier 3 is the CALLER's responsibility (degrade to a visible warning).
+    return None
 
 # How many RAG snippets to inject per generation.
 RAG_TOP_K = 5
@@ -111,6 +197,22 @@ class AIService:
             )
         ).scalar_one_or_none()
         return project_id
+
+    async def _load_scene_content(
+        self, db: AsyncSession, scene_id: uuid.UUID
+    ) -> str | None:
+        """Return a scene's ``content`` (the text to continuity-check), or ``None``.
+
+        ``None`` when the scene does not exist OR has no/empty content — the
+        caller (``check_continuity``) treats that as "nothing to check" and
+        returns an empty result without an LLM call.
+        """
+        content = (
+            await db.execute(select(Scene.content).where(Scene.id == scene_id))
+        ).scalar_one_or_none()
+        if content is None or not content.strip():
+            return None
+        return content
 
     async def _rag_context(
         self,
@@ -447,6 +549,108 @@ class AIService:
             await db.rollback()
             await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
+
+    async def check_continuity(
+        self,
+        db: AsyncSession,
+        *,
+        scene_id: uuid.UUID,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[list[dict[str, Any]], GenerationJob | None, list[dict[str, str]]]:
+        """Continuity-check a scene against the project codex.
+
+        ANALYSIS, not generation: this creates a ``GenerationJob(job_type=
+        "continuity")`` and returns structured warnings, but NEVER a Revision
+        (there is no generated content to approve).
+
+        Flow:
+          1. Load the scene's ``content``. No scene / empty content → return an
+             empty result (no warnings, no job, no LLM call) — there is nothing
+             to check. This is the documented "bad/empty scene" contract.
+          2. RAG-retrieve the project codex context (reusing ``_rag_context``).
+             When RAG is unconfigured the check STILL runs with empty context —
+             it works on the scene text alone (graceful degradation, not a 500).
+          3. Run the continuity prompt and parse the response ROBUSTLY
+             (``_parse_continuity``: json → lenient-regex → ``None``). An
+             unparseable response DEGRADES to a single ``warning`` item (+ a
+             logged WARNING) — never a crash, never a silently-swallowed empty.
+          4. A real LLM/infra error fails the job + re-raises (NOT masked by the
+             parse fallback — only a *parse* failure degrades; an *infra* failure
+             is loud).
+
+        Returns ``(warnings, job, context_entities)``.
+        """
+        content = await self._load_scene_content(db, scene_id)
+        if content is None:
+            # Nothing to check — no scene/empty content. Empty result, no LLM
+            # call, no job. (Documented: the endpoint surfaces an empty result.)
+            logger.debug("Continuity skipped: no scene/content for scene_id=%s", scene_id)
+            return [], None, []
+
+        # Query the codex with the scene text itself (what the scene is about).
+        context, retrieved = await self._rag_context(
+            db, scene_id=scene_id, query=content
+        )
+
+        job = await self.svc.create_job(
+            db,
+            job_type="continuity",
+            scene_id=scene_id,
+            model_name=model,
+            prompt_version=PROMPT_VERSION,
+            input_data={"scene_id": str(scene_id)},
+        )
+        try:
+            system = self.loader.load_system("continuity_check")
+            user = self.loader.load_user(
+                "continuity_check",
+                codex_context=context,
+                content=content,
+            )
+            response = await self.router.complete(
+                messages=self.router.build_messages(system, user),
+                model=model,
+                db=db,
+                **_gen_overrides(temperature, max_tokens),
+            )
+        except Exception as e:
+            # A REAL LLM/infra error — roll back for a clean fail_job commit, then
+            # re-raise. This must NOT be masked by the parse fallback below: only
+            # an unparseable *response* degrades; an infra failure stays loud.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
+            raise
+
+        warnings = _parse_continuity(response.content)
+        if warnings is None:
+            # Tier-3 graceful degradation: the model answered, but we could not
+            # parse it as a warning array. Surface a SINGLE visible warning (the
+            # user sees the check ran but its output was unusable) and LOG it.
+            # NOT a crash, NOT a silently-swallowed empty list.
+            logger.warning(
+                "Continuity output could not be parsed for scene %s: %s",
+                scene_id,
+                safe_error(response.content),
+            )
+            warnings = [
+                {
+                    "severity": "warning",
+                    "message": (
+                        "A folytonosság-ellenőrzés eredménye nem volt feldolgozható. "
+                        "Próbáld újra, vagy ellenőrizd a szöveget kézzel."
+                    ),
+                    "entity": None,
+                }
+            ]
+
+        # complete_job runs on its own; a parse-degradation is still a COMPLETED
+        # analysis (the call succeeded, the output was just unusable).
+        await self.svc.complete_job(
+            db, job, output_data={"warning_count": len(warnings)}
+        )
+        return warnings, job, _context_entities(retrieved)
 
 
 ai_service = AIService()

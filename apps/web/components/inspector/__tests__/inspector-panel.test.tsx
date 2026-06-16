@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Providers } from "@/test/test-utils";
+import { hu } from "@/lib/i18n/hu";
 import { useEditorStore } from "@/lib/stores/editor-store";
 import { InspectorPanel } from "../inspector-panel";
 import { AiGenerationProvider } from "../ai-generation-context";
@@ -51,15 +52,16 @@ describe("InspectorPanel — tabs", () => {
     expect(screen.getByText(String(SCENE_ACTIVE.word_count))).toBeInTheDocument();
   });
 
-  it("Warnings tab renders an honest M10 empty state (no fake engine)", async () => {
+  it("Warnings tab renders the real continuity checker (B3)", async () => {
     const user = userEvent.setup();
     renderPanel();
     await user.click(screen.getByRole("tab", { name: "Figyelm." }));
 
+    // A scene is open (mocked params) → the idle prompt + the check trigger.
     expect(
-      screen.getByText("Nincs folytonossági figyelmeztetés"),
+      screen.getByRole("button", { name: hu.inspector.warningsCheck }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/M10-ben érkezik/)).toBeInTheDocument();
+    expect(screen.getByText(hu.inspector.warningsIdleTitle)).toBeInTheDocument();
   });
 
   it("Beatek tab lists the scene's beats from the real endpoint", async () => {

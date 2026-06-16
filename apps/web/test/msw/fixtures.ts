@@ -15,6 +15,8 @@ import type {
   AIContextEntity,
   AIDescribeResult,
   AIResult,
+  ContinuityResult,
+  ContinuityWarning,
   GenerationJobRead,
   ModelsResponse,
   RevisionRead,
@@ -344,6 +346,37 @@ export function makeDescribeResult(
     job: makeJob("describe", model),
     context_entities: [],
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Continuity check (B3) — mirror app/api/v1/ai.py (ContinuityResult).
+ *
+ * The default fixture carries TWO warnings of MIXED severity — one `error` WITH
+ * an affected entity, one `warning` with `entity: null` — so the Warnings-tab
+ * test can assert both the severity rendering and the entity chip. Pass a custom
+ * list (or `[]`) to exercise the no-issues / malformed paths.
+ * ------------------------------------------------------------------------- */
+
+/** Two mixed-severity warnings; the first names an entity, the second does not. */
+export const CONTINUITY_WARNINGS_FIXTURE: ContinuityWarning[] = [
+  {
+    severity: "error",
+    message: "Szelene a 2. fejezetben elutazik, de itt jelen van.",
+    entity: "Szelene",
+  },
+  {
+    severity: "warning",
+    message: "A jelenet napszaka nincs megadva.",
+    entity: null,
+  },
+];
+
+/** Build a `ContinuityResult` (warnings + grounded RAG context). */
+export function makeContinuityResult(
+  warnings: ContinuityWarning[] = CONTINUITY_WARNINGS_FIXTURE,
+  contextEntities: AIContextEntity[] = [],
+): ContinuityResult {
+  return { warnings, context_entities: contextEntities };
 }
 
 /** Build a `SnippetRead` echo for a POST /projects/{pid}/snippets body. */

@@ -135,6 +135,53 @@ export const aiDescribeResultSchema = z.object({
 export type AIDescribeResult = z.infer<typeof aiDescribeResultSchema>;
 
 /* ---------------------------------------------------------------------------
+ * Continuity check (B3) — mirrors app/api/v1/ai.py (ContinuityResult /
+ * ContinuityWarning). A continuity check is ANALYSIS, not generated content:
+ * the result carries no revision — only a list of structured warnings + the
+ * RAG context the check was grounded on.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The three continuity severities the backend writes. Kept here for the
+ * colour/icon/label maps in the UI; the wire schema below stays a tolerant
+ * `z.string()` so a future/unknown severity still parses and falls back to a
+ * neutral rendering rather than throwing (same discipline as the job status).
+ */
+export const CONTINUITY_SEVERITIES = ["info", "warning", "error"] as const;
+export type ContinuitySeverity = (typeof CONTINUITY_SEVERITIES)[number];
+
+/** Narrow an arbitrary severity string to a known one, or null (UI fallback). */
+export function asContinuitySeverity(value: string): ContinuitySeverity | null {
+  return (CONTINUITY_SEVERITIES as readonly string[]).includes(value)
+    ? (value as ContinuitySeverity)
+    : null;
+}
+
+/**
+ * One structured continuity finding. `severity` is tolerant (`z.string()`) so
+ * an unrecognised value still parses; `entity` is the affected Codex entity
+ * name or null. Mirrors the backend `ContinuityWarning`.
+ */
+export const continuityWarningSchema = z.object({
+  severity: z.string(),
+  message: z.string(),
+  entity: z.string().nullable().default(null),
+});
+export type ContinuityWarning = z.infer<typeof continuityWarningSchema>;
+
+/**
+ * Continuity-check result. `warnings: []` is the positive "no issues found"
+ * state. `context_entities` reuses the shared RAG-context shape (empty when RAG
+ * was skipped / unconfigured — the check then ran on the scene text alone).
+ * Both fields `.default([])` so an older/leaner response still parses.
+ */
+export const continuityResultSchema = z.object({
+  warnings: z.array(continuityWarningSchema).default([]),
+  context_entities: contextEntitiesField,
+});
+export type ContinuityResult = z.infer<typeof continuityResultSchema>;
+
+/* ---------------------------------------------------------------------------
  * Snippet — mirrors app/schemas/snippet.py (SnippetCreate / SnippetRead).
  * Snippets are project-scoped (`/projects/{project_id}/snippets`).
  * ------------------------------------------------------------------------- */

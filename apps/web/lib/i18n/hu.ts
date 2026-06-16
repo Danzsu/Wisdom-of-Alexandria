@@ -389,11 +389,33 @@ export const hu = {
     beatsDraft: "vázlat",
     beatsNew: "Új beat",
     beatsEmpty: "Ehhez a jelenethez még nincs beat.",
-    // Warnings tab (continuity is M10 — render an honest empty state).
+    // Warnings tab (B3 — real RAG-backed continuity check).
     warningsLabel: "Folytonosság",
-    warningsEmptyTitle: "Nincs folytonossági figyelmeztetés",
-    warningsEmptyHint:
-      "A folytonosság-ellenőrzés (RAG) az M10-ben érkezik. Itt jelennek majd meg a figyelmeztetések.",
+    /** The trigger button + its in-flight label. */
+    warningsCheck: "Folytonosság ellenőrzése",
+    warningsChecking: "Ellenőrzés folyamatban…",
+    /** Re-run label once a result is shown. */
+    warningsRecheck: "Újraellenőrzés",
+    /** Positive "no issues found" state (warnings: []). */
+    warningsNoIssuesTitle: "Nem találtam folytonossági problémát",
+    warningsNoIssuesHint:
+      "A jelenet összhangban van a Codexszel és önmagával. Szerkesztés után futtasd újra.",
+    /** Initial (pre-check) prompt. */
+    warningsIdleTitle: "Folytonosság-ellenőrzés",
+    warningsIdleHint:
+      "Vesd össze a jelenetet a Codexszel: karakter-, időrendi és logikai ellentmondások.",
+    /** No active scene to check (e.g. board view). */
+    warningsNoScene: "Nyiss meg egy jelenetet a folytonosság ellenőrzéséhez.",
+    /** Error state. */
+    warningsError: "A folytonosság-ellenőrzés sikertelen",
+    /** Result heading: "{n} figyelmeztetés". */
+    warningsFound: (n: number) => `${n} figyelmeztetés`,
+    /** Severity badge labels (info / warning / error). */
+    warningsSeverity: {
+      info: "Megjegyzés",
+      warning: "Figyelmeztetés",
+      error: "Hiba",
+    } as Record<string, string>,
     // Meta tab.
     metaLabel: "Jelenet metaadatok",
     metaStatus: "Státusz",

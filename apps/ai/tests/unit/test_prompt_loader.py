@@ -128,6 +128,47 @@ def test_all_6_templates_exist():
         assert path.exists(), f"Missing template: {name}.md"
 
 
+def test_continuity_check_system_section_has_no_placeholders():
+    """B3: the restructured continuity_check.md system section (before ---) must
+    carry NO {placeholders}, so load_system() (called with NO vars) does not leak
+    literal '{codex_context}' / '{content}' into the system prompt."""
+    repo_root = Path(__file__).parent.parent.parent.parent.parent
+    hu_dir = repo_root / "packages" / "prompts" / "hu"
+    if not hu_dir.exists():
+        pytest.skip("packages/prompts/hu directory not found")
+    loader = PromptLoader(hu_dir)
+    system = loader.load_system("continuity_check")
+    assert "{codex_context}" not in system
+    assert "{content}" not in system
+    # The system section is pure instructions (the JSON example lives in the user
+    # section), so there must be NO leftover brace placeholders at all.
+    assert "{" not in system and "}" not in system
+
+
+def test_continuity_check_user_section_renders_both_placeholders():
+    """B3: both {codex_context} and {content} live in the user section and render
+    via load_user(); the escaped JSON example renders as real single braces."""
+    repo_root = Path(__file__).parent.parent.parent.parent.parent
+    hu_dir = repo_root / "packages" / "prompts" / "hu"
+    if not hu_dir.exists():
+        pytest.skip("packages/prompts/hu directory not found")
+    loader = PromptLoader(hu_dir)
+    user = loader.load_user(
+        "continuity_check",
+        codex_context="KODEX-JELZO",
+        content="JELENET-JELZO",
+    )
+    assert "KODEX-JELZO" in user
+    assert "JELENET-JELZO" in user
+    # No literal placeholders left.
+    assert "{codex_context}" not in user
+    assert "{content}" not in user
+    # The escaped example braces ({{ }}) rendered to real single braces, so the
+    # model sees a valid JSON example, not doubled braces.
+    assert '{"severity"' in user
+    assert "{{" not in user
+
+
 def test_module_level_singleton_exists():
     from app.services.prompt_loader import prompt_loader
     assert isinstance(prompt_loader, PromptLoader)
