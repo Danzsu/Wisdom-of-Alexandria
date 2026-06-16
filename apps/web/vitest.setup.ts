@@ -2,7 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { server } from "./test/msw/server";
-import { resetCodexStore, resetPlanStore } from "./test/msw/handlers";
+import {
+  resetCodexStore,
+  resetPlanStore,
+  resetRelationStore,
+} from "./test/msw/handlers";
 
 // Start the MSW server before any test runs; fail loudly on a request that no
 // handler covers so a missing mock can never be mistaken for a passing test.
@@ -18,6 +22,7 @@ afterEach(() => {
   server.resetHandlers();
   resetPlanStore();
   resetCodexStore();
+  resetRelationStore();
 });
 
 afterAll(() => {

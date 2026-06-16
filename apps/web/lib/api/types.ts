@@ -15,6 +15,7 @@ import type {
   BookRead as GenBookRead,
   ChapterRead as GenChapterRead,
   CodexEntryRead as GenCodexEntryRead,
+  CodexRelationRead as GenCodexRelationRead,
   Expect,
   MatchesContract,
   ProjectRead as GenProjectRead,
@@ -344,6 +345,58 @@ export const codexEntryUpdateSchema = z.object({
 export type CodexEntryUpdate = z.infer<typeof codexEntryUpdateSchema>;
 
 /* ---------------------------------------------------------------------------
+ * CodexRelation — mirrors app/schemas/codex_relation.py (UX-3a relationship
+ * graph). PROJECT-scoped (`/projects/{pid}/codex-relations`). A relation is a
+ * directed edge between two polymorphic codex entities: `{from_entity_type,
+ * from_entity_id}` → `{to_entity_type, to_entity_id}`, labelled by a free
+ * `relation_type` (≤100) with an optional `description`. The entity types are
+ * plain strings (`character` / `location` / `worldbuilding` / `codex`); the
+ * nodes themselves come from the project's codex entries.
+ * ------------------------------------------------------------------------- */
+
+/** A codex relation as returned by the API (`CodexRelationRead`). */
+export const codexRelationReadSchema = z.object({
+  id: idString,
+  project_id: idString,
+  from_entity_type: z.string(),
+  from_entity_id: idString,
+  to_entity_type: z.string(),
+  to_entity_id: idString,
+  relation_type: z.string(),
+  description: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type CodexRelationRead = z.infer<typeof codexRelationReadSchema>;
+
+/**
+ * Request body for creating a relation (`CodexRelationCreate`). The endpoints
+ * are polymorphic over entity type, so both endpoints carry the type + id pair.
+ */
+export const codexRelationCreateSchema = z.object({
+  from_entity_type: z.string().min(1).max(100),
+  from_entity_id: idString,
+  to_entity_type: z.string().min(1).max(100),
+  to_entity_id: idString,
+  relation_type: z.string().min(1).max(100),
+  description: z.string().nullable().optional(),
+});
+export type CodexRelationCreate = z.infer<typeof codexRelationCreateSchema>;
+
+/**
+ * Request body for patching a relation (`CodexRelationUpdate`). The backend only
+ * allows the LABEL to change — the endpoints (`from`/`to`) are immutable, so a
+ * re-wire is a delete + create, not a patch.
+ */
+export const codexRelationUpdateSchema = z.object({
+  relation_type: z.string().min(1).max(100).optional(),
+  description: z.string().nullable().optional(),
+});
+export type CodexRelationUpdate = z.infer<typeof codexRelationUpdateSchema>;
+
+export const codexRelationListSchema = z.array(codexRelationReadSchema);
+
+/* ---------------------------------------------------------------------------
  * Beat — mirrors app/schemas/beat.py (BeatRead / BeatCreate). Scene-scoped.
  * ------------------------------------------------------------------------- */
 
@@ -401,5 +454,11 @@ export type CoreContractTies = [
   Expect<MatchesContract<z.infer<typeof beatReadSchema>, GenBeatRead>>,
   Expect<
     MatchesContract<z.infer<typeof codexEntryReadSchema>, GenCodexEntryRead>
+  >,
+  Expect<
+    MatchesContract<
+      z.infer<typeof codexRelationReadSchema>,
+      GenCodexRelationRead
+    >
   >,
 ];

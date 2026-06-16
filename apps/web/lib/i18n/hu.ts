@@ -627,6 +627,62 @@ export const hu = {
     createError: "Nem sikerült létrehozni a bejegyzést",
   },
   /**
+   * Kapcsolatok — the relationship graph (UX-3a). The screen renders the
+   * project's codex relations as a calm force/radial graph; copy covers the
+   * loading / error / empty states, the create-relation modal and the side
+   * detail panel.
+   */
+  relations: {
+    /** Screen states. */
+    loading: "Kapcsolatok betöltése…",
+    error: "Nem sikerült betölteni a kapcsolatokat",
+    /** Empty state (no relations yet). */
+    emptyTitle: "Még nincs kapcsolat",
+    emptyHint:
+      "A Codex-bejegyzéseid közötti kapcsolatok itt rajzolódnak ki — szövetséges, mentor, ellenség. Rajzold meg az elsőt, és a háló kialakul.",
+    emptyCta: "Első kapcsolat",
+    /** Toolbar. */
+    addNew: "Új kapcsolat",
+    title: "Kapcsolatok",
+    nodeCount: (n: number) => `${n} bejegyzés`,
+    edgeCount: (n: number) => `${n} kapcsolat`,
+    /** Node fallback when the referenced codex entry no longer exists. */
+    missingNode: "Ismeretlen bejegyzés",
+    missingHint: "A hivatkozott Codex-bejegyzés már nem létezik.",
+    /** Side detail panel. */
+    detailEmptyHint: "Válassz egy bejegyzést a hálóból a kapcsolatai megtekintéséhez.",
+    detailRelationsHeading: "Kapcsolatok",
+    detailNoRelations: "Ehhez a bejegyzéshez még nincs kapcsolat.",
+    detailOpenCodex: "Megnyitás a Codexben",
+    detailDirectionFrom: "innen",
+    detailDirectionTo: "ide",
+    closePanelAria: "Panel bezárása",
+    deleteRelationAria: "Kapcsolat törlése",
+    deleted: "Kapcsolat törölve",
+    deleteError: "A kapcsolat törlése sikertelen",
+    /** Create-relation modal. */
+    modalTitle: "Új kapcsolat",
+    modalFromLabel: "Honnan",
+    modalToLabel: "Hová",
+    modalFromPlaceholder: "Válassz bejegyzést…",
+    modalToPlaceholder: "Válassz bejegyzést…",
+    modalTypeLabel: "Kapcsolat típusa",
+    modalTypePlaceholder: "pl. szövetséges, mentor, ellenség…",
+    modalDescriptionLabel: "Leírás",
+    modalDescriptionPlaceholder: "Néhány szó a kapcsolatról — opcionális…",
+    modalFromRequired: "Válaszd ki a kiinduló bejegyzést.",
+    modalToRequired: "Válaszd ki a cél bejegyzést.",
+    modalSameError: "Egy bejegyzés nem kapcsolódhat önmagához.",
+    modalTypeRequired: "A kapcsolat típusa kötelező.",
+    modalNoEntries:
+      "Előbb hozz létre legalább két Codex-bejegyzést, hogy kapcsolatot rajzolhass közöttük.",
+    modalCancel: "Mégse",
+    modalCreate: "Kapcsolat létrehozása",
+    createdToast: "Kapcsolat létrehozva",
+    createError: "Nem sikerült létrehozni a kapcsolatot",
+    graphAriaLabel: "Kapcsolatháló",
+  },
+  /**
    * Plan Board (`Alexandria App.dc.html` showplan ~line 817). Mode pills, view
    * toggle (Rács / Mátrix / Vázlat), density toggle, the SceneCard, act/chapter
    * headers, the bottom action bar. Copy is verbatim from the prototype.
@@ -1124,8 +1180,6 @@ export const hu = {
     hangokHint: "A Hangkönyvtár az M11-ben (V2) érkezik.",
     idosorLabel: "Idősor",
     idosorHint: "Az Idősor az M10-ben érkezik.",
-    kapcsolatokLabel: "Kapcsolatok",
-    kapcsolatokHint: "A Kapcsolatok az M10-ben érkezik.",
     promptokLabel: "Prompt Library",
     promptokHint: "A Prompt Library az M10-ben érkezik.",
   },

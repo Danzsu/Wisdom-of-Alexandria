@@ -8,6 +8,7 @@ import type {
   BookRead,
   ChapterRead,
   CodexEntryRead,
+  CodexRelationRead,
   ProjectRead,
   SceneRead,
   SeriesCreate,
@@ -305,6 +306,68 @@ export function makeCodexEntry(
  * ------------------------------------------------------------------------- */
 
 const NOW = "2026-06-14T16:00:00Z";
+
+/* ---------------------------------------------------------------------------
+ * CodexRelation fixtures (UX-3a relationship graph). Edges between the codex
+ * entries above. The second edge references a non-existent `to` entity so tests
+ * can exercise the muted "ismeretlen" fallback.
+ * ------------------------------------------------------------------------- */
+export const FAROSZ_RELATIONS: CodexRelationRead[] = [
+  {
+    id: "rel-szelene-konyvtar",
+    project_id: FAROSZ_PROJECT.id,
+    from_entity_type: "character",
+    from_entity_id: "codex-szelene",
+    to_entity_type: "location",
+    to_entity_id: "codex-nagykonyvtar",
+    relation_type: "őrzője",
+    description: "Szelene a Nagykönyvtár éjszakai írnoka.",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: "rel-szelene-missing",
+    project_id: FAROSZ_PROJECT.id,
+    from_entity_type: "character",
+    from_entity_id: "codex-szelene",
+    // References an entity that no longer exists → muted fallback node.
+    to_entity_type: "character",
+    to_entity_id: "codex-deleted-mentor",
+    relation_type: "mentora",
+    description: null,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+];
+
+let relationSeq = 0;
+
+/** Build a `CodexRelationRead` echo for a POST relation body. */
+export function makeCodexRelation(
+  projectId: string,
+  body: {
+    from_entity_type?: string;
+    from_entity_id?: string;
+    to_entity_type?: string;
+    to_entity_id?: string;
+    relation_type?: string;
+    description?: string | null;
+  },
+): CodexRelationRead {
+  relationSeq += 1;
+  return {
+    id: `rel-new-${relationSeq}`,
+    project_id: projectId,
+    from_entity_type: body.from_entity_type ?? "codex",
+    from_entity_id: body.from_entity_id ?? "",
+    to_entity_type: body.to_entity_type ?? "codex",
+    to_entity_id: body.to_entity_id ?? "",
+    relation_type: body.relation_type ?? "kapcsolat",
+    description: body.description ?? null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
 
 /** Config-driven model list (mirrors GET /ai/models → ModelsResponse). */
 export const MODELS_FIXTURE: ModelsResponse = {

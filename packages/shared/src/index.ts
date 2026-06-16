@@ -38,6 +38,7 @@ export type ChapterRead = ApiSchemas["ChapterRead"];
 export type SceneRead = ApiSchemas["SceneRead"];
 export type BeatRead = ApiSchemas["BeatRead"];
 export type CodexEntryRead = ApiSchemas["CodexEntryRead"];
+export type CodexRelationRead = ApiSchemas["CodexRelationRead"];
 export type SnippetRead = ApiSchemas["SnippetRead"];
 
 /* ---------------------------------------------------------------------------

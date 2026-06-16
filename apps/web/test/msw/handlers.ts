@@ -11,6 +11,7 @@ import {
   FAROSZ_BOOK,
   FAROSZ_CODEX,
   FAROSZ_PROJECT,
+  FAROSZ_RELATIONS,
   JOBS_FIXTURE,
   MODELS_FIXTURE,
   PROJECTS_FIXTURE,
@@ -21,6 +22,7 @@ import {
   makeAiResult,
   makeChapter,
   makeCodexEntry,
+  makeCodexRelation,
   makeContinuityResult,
   makeDescribeResult,
   makeProvider,
@@ -39,6 +41,9 @@ import type {
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
+  CodexRelationCreate,
+  CodexRelationRead,
+  CodexRelationUpdate,
   ProjectRead,
   SceneCreate,
   SceneRead,
@@ -179,6 +184,72 @@ codexStore.seed();
 /** Reset the in-memory Codex store (call in a test's beforeEach for isolation). */
 export function resetCodexStore(): void {
   codexStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory CodexRelation store (UX-3a) — stateful CRUD so the graph tests
+ * exercise list → create → delete. Seeded from FAROSZ_RELATIONS. Call
+ * `resetRelationStore()` in a test's beforeEach for isolation.
+ * ------------------------------------------------------------------------- */
+const relationStore = {
+  byProject: new Map<string, CodexRelationRead[]>(),
+
+  seed(): void {
+    this.byProject = new Map<string, CodexRelationRead[]>();
+    this.byProject.set(
+      FAROSZ_PROJECT.id,
+      FAROSZ_RELATIONS.map((r) => ({ ...r })),
+    );
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(projectId: string): CodexRelationRead[] {
+    return this.byProject.get(projectId) ?? [];
+  },
+
+  create(projectId: string, body: CodexRelationCreate): CodexRelationRead {
+    const created = makeCodexRelation(projectId, body);
+    const list = this.byProject.get(projectId) ?? [];
+    list.push(created);
+    this.byProject.set(projectId, list);
+    return created;
+  },
+
+  update(
+    projectId: string,
+    relationId: string,
+    patch: CodexRelationUpdate,
+  ): CodexRelationRead | undefined {
+    const list = this.byProject.get(projectId);
+    if (!list) return undefined;
+    const index = list.findIndex((r) => r.id === relationId);
+    if (index === -1) return undefined;
+    const merged: CodexRelationRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-14T17:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  remove(projectId: string, relationId: string): boolean {
+    const list = this.byProject.get(projectId);
+    if (!list) return false;
+    const index = list.findIndex((r) => r.id === relationId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    return true;
+  },
+};
+relationStore.seed();
+
+/** Reset the in-memory CodexRelation store (call in a test's beforeEach). */
+export function resetRelationStore(): void {
+  relationStore.reset();
 }
 
 /* ---------------------------------------------------------------------------
@@ -1085,6 +1156,56 @@ export const handlers = [
       if (!ok) {
         return HttpResponse.json(
           { detail: "Codex entry not found" },
+          { status: 404 },
+        );
+      }
+      return new HttpResponse(null, { status: 204 });
+    },
+  ),
+
+  /* ---- CodexRelations (UX-3a relationship graph). Project-scoped CRUD. ---- */
+  http.get(`${base}/projects/:projectId/codex-relations`, ({ params }) =>
+    HttpResponse.json(relationStore.list(String(params.projectId))),
+  ),
+
+  http.post(
+    `${base}/projects/:projectId/codex-relations`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as CodexRelationCreate;
+      const created = relationStore.create(String(params.projectId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.patch(
+    `${base}/projects/:projectId/codex-relations/:relationId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as CodexRelationUpdate;
+      const updated = relationStore.update(
+        String(params.projectId),
+        String(params.relationId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Relation not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(
+    `${base}/projects/:projectId/codex-relations/:relationId`,
+    ({ params }) => {
+      const ok = relationStore.remove(
+        String(params.projectId),
+        String(params.relationId),
+      );
+      if (!ok) {
+        return HttpResponse.json(
+          { detail: "Relation not found" },
           { status: 404 },
         );
       }

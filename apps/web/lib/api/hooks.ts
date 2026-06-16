@@ -58,6 +58,12 @@ import {
   listCodexEntries,
   updateCodexEntry,
 } from "./codex";
+import {
+  createCodexRelation,
+  deleteCodexRelation,
+  listCodexRelations,
+  updateCodexRelation,
+} from "./codex-relations";
 import type {
   BeatCreate,
   BeatRead,
@@ -70,6 +76,9 @@ import type {
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
+  CodexRelationCreate,
+  CodexRelationRead,
+  CodexRelationUpdate,
   ProjectCreate,
   ProjectRead,
   SceneCreate,
@@ -92,6 +101,10 @@ export const queryKeys = {
     ["projects", projectId, "codex", "series", seriesId] as const,
   codexEntry: (projectId: string, entryId: string) =>
     ["projects", projectId, "codex", entryId] as const,
+  // UX-3a — the relationship graph's edges (project-scoped). Kept under its own
+  // segment so it never collides with the codex-entry caches above.
+  projectRelations: (projectId: string) =>
+    ["projects", projectId, "codex-relations"] as const,
   bookChapters: (bookId: string) => ["books", bookId, "chapters"] as const,
   chapterScenes: (chapterId: string) =>
     ["chapters", chapterId, "scenes"] as const,
@@ -1091,6 +1104,96 @@ export function useDeleteCodexEntry(): UseMutationResult<
     onSuccess: (_data, { projectId }) =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectCodex(projectId),
+      }),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * CodexRelation hooks (UX-3a relationship graph). Project-scoped; every
+ * mutation invalidates the project's relation list so the graph re-renders.
+ * Errors propagate via the query/mutation `error` (never swallowed).
+ * ------------------------------------------------------------------------- */
+
+/** List a project's codex relations. Disabled until a project id is present. */
+export function useCodexRelations(
+  projectId: string | undefined,
+): UseQueryResult<CodexRelationRead[], Error> {
+  return useQuery({
+    queryKey: queryKeys.projectRelations(projectId ?? "__none__"),
+    queryFn: () => listCodexRelations(projectId as string),
+    enabled: Boolean(projectId),
+  });
+}
+
+/** Input for the relation-create mutation (project id + body). */
+export interface CreateCodexRelationInput {
+  projectId: string;
+  data: CodexRelationCreate;
+}
+
+/**
+ * Create a relation under a project; invalidates the project's relation list on
+ * success so the graph picks up the new edge. Returns the created relation.
+ */
+export function useCreateCodexRelation(): UseMutationResult<
+  CodexRelationRead,
+  Error,
+  CreateCodexRelationInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, data }: CreateCodexRelationInput) =>
+      createCodexRelation(projectId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectRelations(created.project_id),
+      }),
+  });
+}
+
+/** Input for the relation-update mutation (project + relation id + patch). */
+export interface UpdateCodexRelationInput {
+  projectId: string;
+  relationId: string;
+  patch: CodexRelationUpdate;
+}
+
+/** Patch a relation's label; invalidates the project's relation list. */
+export function useUpdateCodexRelation(): UseMutationResult<
+  CodexRelationRead,
+  Error,
+  UpdateCodexRelationInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, relationId, patch }: UpdateCodexRelationInput) =>
+      updateCodexRelation(projectId, relationId, patch),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectRelations(updated.project_id),
+      }),
+  });
+}
+
+/** Input for the relation-delete mutation (project + relation id). */
+export interface DeleteCodexRelationInput {
+  projectId: string;
+  relationId: string;
+}
+
+/** Delete a relation; invalidates the project's relation list on success. */
+export function useDeleteCodexRelation(): UseMutationResult<
+  void,
+  Error,
+  DeleteCodexRelationInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, relationId }: DeleteCodexRelationInput) =>
+      deleteCodexRelation(projectId, relationId),
+    onSuccess: (_data, { projectId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectRelations(projectId),
       }),
   });
 }

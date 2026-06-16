@@ -1,12 +1,14 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+"use client";
 
-/** Kapcsolatok (Relations graph) placeholder — filled in M10 (V1). */
+/**
+ * Kapcsolatok (relationship graph) screen (UX-3a). Relations are project-scoped
+ * but the route only carries `bookId`, so the owning project is resolved via the
+ * reused `useBookProjectId` resolver inside {@link RelationsScreen}.
+ */
+import { useParams } from "next/navigation";
+import { RelationsScreen } from "@/components/relations/relations-screen";
+
 export default function KapcsolatokPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.kapcsolatokLabel}
-      hint={hu.placeholders.kapcsolatokHint}
-    />
-  );
+  const params = useParams<{ bookId: string }>();
+  return <RelationsScreen bookId={params?.bookId} />;
 }
