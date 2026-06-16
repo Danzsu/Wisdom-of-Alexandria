@@ -5,7 +5,11 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
-import { resetCodexStore } from "@/test/msw/handlers";
+import {
+  resetBookStore,
+  resetCodexStore,
+  resetSeriesStore,
+} from "@/test/msw/handlers";
 import { FAROSZ_BOOK } from "@/test/msw/fixtures";
 import { CodexSidebar } from "@/components/shell/codex-sidebar";
 
@@ -29,6 +33,8 @@ function renderSidebar() {
 describe("CodexSidebar", () => {
   beforeEach(() => {
     resetCodexStore();
+    resetSeriesStore();
+    resetBookStore();
     replaceSpy.mockClear();
   });
 
@@ -92,10 +98,15 @@ describe("CodexSidebar", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables the Sorozat (series) scope toggle — V1", async () => {
+  it("exposes an enabled Projekt/Sorozat scope toggle (Feature #3c)", async () => {
     renderSidebar();
     await screen.findByText("Szelene");
-    const series = screen.getByRole("button", { name: /Sorozat/ });
-    expect(series).toBeDisabled();
+    const projectScope = screen.getByRole("button", { name: "Projekt" });
+    const seriesScope = screen.getByRole("button", { name: "Sorozat" });
+    expect(projectScope).toBeEnabled();
+    expect(seriesScope).toBeEnabled();
+    // Project scope is the default (pressed).
+    expect(projectScope).toHaveAttribute("aria-pressed", "true");
+    expect(seriesScope).toHaveAttribute("aria-pressed", "false");
   });
 });

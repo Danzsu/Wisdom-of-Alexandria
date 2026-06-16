@@ -10,6 +10,8 @@ import type {
   CodexEntryRead,
   ProjectRead,
   SceneRead,
+  SeriesCreate,
+  SeriesRead,
 } from "@/lib/api/types";
 import type {
   AIContextEntity,
@@ -49,9 +51,30 @@ export const HOMOK_PROJECT: ProjectRead = {
   word_count: 0,
 };
 
+/* ---------------------------------------------------------------------------
+ * Series (Feature #3a). One series under the Fárosz project; the Fárosz book is
+ * assigned to it (`series_id`). Codex entries can be project-global (`null`) or
+ * scoped to this series — see FAROSZ_CODEX below.
+ * ------------------------------------------------------------------------- */
+
+export const FAROSZ_SERIES: SeriesRead = {
+  id: "5e21e500-0000-0000-0000-000000000001",
+  project_id: FAROSZ_PROJECT.id,
+  title: "Az Alexandriai Ciklus",
+  description: "A Nagykönyvtár köré épülő történetek.",
+  order_index: 0,
+  created_at: "2026-06-14T14:32:00Z",
+  updated_at: "2026-06-14T14:32:00Z",
+};
+
+export const SERIES_FIXTURE: SeriesRead[] = [FAROSZ_SERIES];
+
 export const FAROSZ_BOOK: BookRead = {
   id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   project_id: FAROSZ_PROJECT.id,
+  // Assigned to the Fárosz series so the Codex "Sorozat" scope has a series to
+  // filter by (project-global + this series' entries).
+  series_id: FAROSZ_SERIES.id,
   title: "A Fárosz őrzője",
   description: null,
   synopsis: null,
@@ -64,6 +87,25 @@ export const FAROSZ_BOOK: BookRead = {
 };
 
 export const PROJECTS_FIXTURE: ProjectRead[] = [FAROSZ_PROJECT, HOMOK_PROJECT];
+
+let seriesSeq = 0;
+
+/** Build a `SeriesRead` echo for a POST /projects/{pid}/series body. */
+export function makeSeries(
+  projectId: string,
+  body: SeriesCreate,
+): SeriesRead {
+  seriesSeq += 1;
+  return {
+    id: `series-new-${seriesSeq}`,
+    project_id: projectId,
+    title: body.title,
+    description: body.description ?? null,
+    order_index: body.order_index ?? 0,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
 
 /* ---------------------------------------------------------------------------
  * Chapters + scenes (M4 Write View). One book → two chapters; the second
@@ -194,6 +236,8 @@ export const FAROSZ_CODEX: CodexEntryRead[] = [
   {
     id: "codex-szelene",
     project_id: FAROSZ_PROJECT.id,
+    // Project-global entry (visible in every scope).
+    series_id: null,
     title: "Szelene",
     entry_type: "character",
     content: "A Nagykönyvtár éjszakai írnoka.",
@@ -208,6 +252,9 @@ export const FAROSZ_CODEX: CodexEntryRead[] = [
   {
     id: "codex-nagykonyvtar",
     project_id: FAROSZ_PROJECT.id,
+    // Series-scoped entry — only appears in the project scope + the Fárosz
+    // series scope, NOT in another series' scope.
+    series_id: FAROSZ_SERIES.id,
     title: "Nagykönyvtár",
     entry_type: "location",
     content: "A keleti szárny és a tiltott termek.",
@@ -233,12 +280,14 @@ export function makeCodexEntry(
     role?: string | null;
     ai_visible?: boolean;
     tags?: string[];
+    series_id?: string | null;
   },
 ): CodexEntryRead {
   codexSeq += 1;
   return {
     id: `codex-new-${codexSeq}`,
     project_id: projectId,
+    series_id: body.series_id ?? null,
     title: body.title ?? "Névtelen bejegyzés",
     entry_type: body.entry_type ?? "custom",
     content: body.content ?? null,

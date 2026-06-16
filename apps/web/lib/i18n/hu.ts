@@ -441,13 +441,53 @@ export const hu = {
     filterAria: "Szűrés",
     addNew: "Új",
     addNewAria: "Új Codex-bejegyzés",
+    scopeProject: "Projekt",
     scopeBook: "Ez a könyv",
     scopeSeries: "Sorozat",
-    // Sorozat scope is V1 — disabled with an honest note.
-    scopeSeriesDisabledTitle: "A sorozat-szintű Codex a V1-ben érkezik.",
-    seriesEmptyTitle: "Még üres a sorozat-Codex",
-    seriesEmptyHint:
-      "A több könyvön átívelő szereplők és helyszínek itt jelennek meg. A sorozat-Codex a V1-ben érkezik.",
+    /** Tooltip on the series scope when the active book has no series. */
+    scopeSeriesNoSeriesTitle:
+      "Ehhez a könyvhöz nincs sorozat társítva — csak a projekt-szintű bejegyzések látszanak.",
+    /** Honest note shown in the series scope when the book has no series. */
+    seriesNoSeriesNote:
+      "Ehhez a könyvhöz nincs sorozat társítva. Csak a projekt-szintű bejegyzések láthatók. Társíts egy sorozatot a kezeléshez.",
+    /** Series-scope list states. */
+    seriesScopeLoading: "Sorozat-Codex betöltése…",
+    /* ---- Series management (Feature #3c) ---- */
+    seriesManageAria: "Sorozatok kezelése",
+    seriesManageTitle: "Sorozatok",
+    seriesManageHint:
+      "A sorozatok több könyvön átívelő szereplőket és helyszíneket csoportosítanak egy projekten belül.",
+    seriesNewLabel: "Új sorozat",
+    seriesNamePlaceholder: "Sorozat neve…",
+    seriesCreate: "Létrehozás",
+    seriesRename: "Átnevezés",
+    seriesRenameAria: (title: string) => `${title} átnevezése`,
+    seriesDeleteAria: (title: string) => `${title} törlése`,
+    seriesSave: "Mentés",
+    seriesCancel: "Mégse",
+    seriesEmptyManage: "Még nincs sorozat ebben a projektben.",
+    seriesLoadError: "Nem sikerült betölteni a sorozatokat",
+    seriesCreateError: "Nem sikerült létrehozni a sorozatot",
+    seriesRenameError: "Nem sikerült átnevezni a sorozatot",
+    seriesDeleteError: "Nem sikerült törölni a sorozatot",
+    seriesCreatedToast: "Sorozat létrehozva",
+    seriesRenamedToast: "Sorozat átnevezve",
+    seriesDeletedToast: "Sorozat törölve",
+    seriesDeleteConfirmTitle: "Sorozat törlése",
+    seriesDeleteConfirmDescription: (title: string) =>
+      `Biztosan törlöd a(z) „${title}” sorozatot? A bejegyzések projekt-szintűvé válnak.`,
+    /* ---- Assign the current book to a series ---- */
+    bookSeriesLabel: "A könyv sorozata",
+    bookSeriesNone: "Nincs sorozat",
+    bookSeriesAssignAria: "A könyv sorozatának kiválasztása",
+    bookSeriesSaveError: "Nem sikerült menteni a könyv sorozatát",
+    bookSeriesSavedToast: "A könyv sorozata frissítve",
+    /* ---- Codex entry scope picker (detail) ---- */
+    entryScopeLabel: "Hatókör",
+    entryScopeHint:
+      "Projekt-szintű: minden könyvben látszik. Sorozat-szintű: csak a sorozat könyveiben.",
+    entryScopeProject: "Projekt-szintű (minden könyv)",
+    entryScopeSaveError: "Nem sikerült menteni a hatókört",
     // List states.
     listLoading: "Codex betöltése…",
     listError: "Nem sikerült betölteni a Codexet",

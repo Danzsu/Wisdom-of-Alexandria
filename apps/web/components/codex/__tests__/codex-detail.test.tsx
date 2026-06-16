@@ -15,6 +15,7 @@ const base = `${API_BASE_URL}/api/v1`;
 const SZELENE: CodexEntryRead = {
   id: "codex-szelene",
   project_id: FAROSZ_PROJECT.id,
+  series_id: null,
   title: "Szelene",
   entry_type: "character",
   content: "A Nagykönyvtár éjszakai írnoka.",

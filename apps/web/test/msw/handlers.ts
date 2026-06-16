@@ -17,6 +17,7 @@ import {
   PROVIDERS_FIXTURE,
   SCENE_BEATS_FIXTURE,
   SCENES_BY_CHAPTER,
+  SERIES_FIXTURE,
   makeAiResult,
   makeChapter,
   makeCodexEntry,
@@ -25,11 +26,13 @@ import {
   makeProvider,
   makeRevision,
   makeScene,
+  makeSeries,
   makeSnippet,
   maskKey,
 } from "./fixtures";
 import type {
   BookRead,
+  BookUpdate,
   ChapterCreate,
   ChapterRead,
   ChapterUpdate,
@@ -40,6 +43,9 @@ import type {
   SceneCreate,
   SceneRead,
   SceneUpdate,
+  SeriesCreate,
+  SeriesRead,
+  SeriesUpdate,
 } from "@/lib/api/types";
 import type { DescribeRequest } from "@/lib/api/ai-types";
 import type {
@@ -118,6 +124,17 @@ const codexStore = {
     return this.byProject.get(projectId) ?? [];
   },
 
+  /**
+   * Feature #3a — list under a SERIES scope: project-global entries
+   * (`series_id === null`) PLUS the given series' entries. Mirrors the real
+   * backend's `?series_id=<id>` filter.
+   */
+  listForSeries(projectId: string, seriesId: string): CodexEntryRead[] {
+    return this.list(projectId).filter(
+      (e) => e.series_id === null || e.series_id === seriesId,
+    );
+  },
+
   get(projectId: string, entryId: string): CodexEntryRead | undefined {
     return this.list(projectId).find((e) => e.id === entryId);
   },
@@ -162,6 +179,132 @@ codexStore.seed();
 /** Reset the in-memory Codex store (call in a test's beforeEach for isolation). */
 export function resetCodexStore(): void {
   codexStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory Series store (Feature #3a) — stateful CRUD so the series-management
+ * + scope tests exercise list → create → rename → delete. Seeded from
+ * SERIES_FIXTURE. Call `resetSeriesStore()` in a test's beforeEach.
+ * ------------------------------------------------------------------------- */
+const seriesStore = {
+  byProject: new Map<string, SeriesRead[]>(),
+
+  seed(): void {
+    this.byProject = new Map<string, SeriesRead[]>();
+    this.byProject.set(
+      FAROSZ_PROJECT.id,
+      SERIES_FIXTURE.map((s) => ({ ...s })),
+    );
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(projectId: string): SeriesRead[] {
+    return [...(this.byProject.get(projectId) ?? [])].sort(
+      (a, b) => a.order_index - b.order_index,
+    );
+  },
+
+  get(projectId: string, seriesId: string): SeriesRead | undefined {
+    return (this.byProject.get(projectId) ?? []).find((s) => s.id === seriesId);
+  },
+
+  /** Does this series id exist in ANY project? (for the cross-project check) */
+  ownerProjectOf(seriesId: string): string | undefined {
+    for (const [projectId, list] of this.byProject.entries()) {
+      if (list.some((s) => s.id === seriesId)) return projectId;
+    }
+    return undefined;
+  },
+
+  create(projectId: string, body: SeriesCreate): SeriesRead {
+    const created = makeSeries(projectId, body);
+    const list = this.byProject.get(projectId) ?? [];
+    list.push(created);
+    this.byProject.set(projectId, list);
+    return created;
+  },
+
+  update(
+    projectId: string,
+    seriesId: string,
+    patch: SeriesUpdate,
+  ): SeriesRead | undefined {
+    const list = this.byProject.get(projectId);
+    if (!list) return undefined;
+    const index = list.findIndex((s) => s.id === seriesId);
+    if (index === -1) return undefined;
+    const merged: SeriesRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-16T12:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  remove(projectId: string, seriesId: string): boolean {
+    const list = this.byProject.get(projectId);
+    if (!list) return false;
+    const index = list.findIndex((s) => s.id === seriesId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    return true;
+  },
+};
+seriesStore.seed();
+
+/** Reset the in-memory Series store (call in a test's beforeEach). */
+export function resetSeriesStore(): void {
+  seriesStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory Book store (Feature #3a) — only the Fárosz book, kept stateful so a
+ * PATCH /books/{id} (e.g. assigning a series_id) is reflected in the subsequent
+ * GET list (`resolveBookById` re-reads it). Call `resetBookStore()` in beforeEach.
+ * ------------------------------------------------------------------------- */
+const bookStore = {
+  byProject: new Map<string, BookRead[]>(),
+
+  seed(): void {
+    this.byProject = new Map<string, BookRead[]>();
+    this.byProject.set(FAROSZ_PROJECT.id, [{ ...FAROSZ_BOOK }]);
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(projectId: string): BookRead[] {
+    return this.byProject.get(projectId) ?? [];
+  },
+
+  update(
+    projectId: string,
+    bookId: string,
+    patch: BookUpdate,
+  ): BookRead | undefined {
+    const list = this.byProject.get(projectId);
+    if (!list) return undefined;
+    const index = list.findIndex((b) => b.id === bookId);
+    if (index === -1) return undefined;
+    const merged: BookRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-16T12:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+};
+bookStore.seed();
+
+/** Reset the in-memory Book store (call in a test's beforeEach). */
+export function resetBookStore(): void {
+  bookStore.reset();
 }
 
 /* ---------------------------------------------------------------------------
@@ -507,6 +650,7 @@ function makeBook(projectId: string, body: Partial<BookRead>): BookRead {
   return {
     id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     project_id: projectId,
+    series_id: body.series_id ?? null,
     title: body.title ?? "Névtelen könyv",
     description: body.description ?? null,
     synopsis: body.synopsis ?? null,
@@ -537,10 +681,9 @@ export const handlers = [
   http.get(`${base}/projects/:projectId/books`, ({ params }) => {
     // The Fárosz project owns the Fárosz book; other projects have none. This
     // lets `resolveProjectIdForBook` find the owning project for snippet POSTs.
-    if (params.projectId === FAROSZ_PROJECT.id) {
-      return HttpResponse.json([FAROSZ_BOOK]);
-    }
-    return HttpResponse.json([] as BookRead[]);
+    // Served from the stateful book store so a PATCH (series assignment) shows
+    // up on the next read.
+    return HttpResponse.json(bookStore.list(String(params.projectId)));
   }),
 
   http.post(`${base}/projects/:projectId/books`, async ({ params, request }) => {
@@ -548,6 +691,88 @@ export const handlers = [
     return HttpResponse.json(makeBook(String(params.projectId), body), {
       status: 201,
     });
+  }),
+
+  /* ---- Book update (PATCH — Feature #3a series assignment) ----
+   * Mirrors the backend: a `series_id` pointing at a series in a DIFFERENT
+   * project is rejected with 400; a series in this project (or null) is accepted.
+   */
+  http.patch(
+    `${base}/projects/:projectId/books/:bookId`,
+    async ({ params, request }) => {
+      const projectId = String(params.projectId);
+      const body = (await request.json()) as BookUpdate;
+      if (
+        body.series_id !== undefined &&
+        body.series_id !== null &&
+        seriesStore.ownerProjectOf(body.series_id) !== projectId
+      ) {
+        return HttpResponse.json(
+          { detail: "A sorozat egy másik projekthez tartozik." },
+          { status: 400 },
+        );
+      }
+      const updated = bookStore.update(projectId, String(params.bookId), body);
+      if (!updated) {
+        return HttpResponse.json({ detail: "Book not found" }, { status: 404 });
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  /* ---- Series (project-scoped, full CRUD — Feature #3a) ---- */
+  http.get(`${base}/projects/:projectId/series`, ({ params }) =>
+    HttpResponse.json(seriesStore.list(String(params.projectId))),
+  ),
+
+  http.get(`${base}/projects/:projectId/series/:seriesId`, ({ params }) => {
+    const series = seriesStore.get(
+      String(params.projectId),
+      String(params.seriesId),
+    );
+    if (!series) {
+      return HttpResponse.json({ detail: "Series not found" }, { status: 404 });
+    }
+    return HttpResponse.json(series);
+  }),
+
+  http.post(
+    `${base}/projects/:projectId/series`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as SeriesCreate;
+      const created = seriesStore.create(String(params.projectId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.patch(
+    `${base}/projects/:projectId/series/:seriesId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as SeriesUpdate;
+      const updated = seriesStore.update(
+        String(params.projectId),
+        String(params.seriesId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Series not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(`${base}/projects/:projectId/series/:seriesId`, ({ params }) => {
+    const ok = seriesStore.remove(
+      String(params.projectId),
+      String(params.seriesId),
+    );
+    if (!ok) {
+      return HttpResponse.json({ detail: "Series not found" }, { status: 404 });
+    }
+    return new HttpResponse(null, { status: 204 });
   }),
 
   /* ---- DOCX import (#2b) ----
@@ -730,10 +955,17 @@ export const handlers = [
     },
   ),
 
-  /* ---- Codex (project-scoped, full CRUD — M6) ---- */
-  http.get(`${base}/projects/:projectId/codex`, ({ params }) =>
-    HttpResponse.json(codexStore.list(String(params.projectId))),
-  ),
+  /* ---- Codex (project-scoped, full CRUD — M6; series scope — #3a) ---- */
+  http.get(`${base}/projects/:projectId/codex`, ({ params, request }) => {
+    const projectId = String(params.projectId);
+    const seriesId = new URL(request.url).searchParams.get("series_id");
+    // `?series_id=<id>` → project-global + that series; omitted → all entries.
+    const entries =
+      seriesId === null
+        ? codexStore.list(projectId)
+        : codexStore.listForSeries(projectId, seriesId);
+    return HttpResponse.json(entries);
+  }),
 
   http.get(`${base}/projects/:projectId/codex/:entryId`, ({ params }) => {
     const entry = codexStore.get(

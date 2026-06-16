@@ -129,11 +129,26 @@ export function countMentions(
  * Endpoint functions (each validates the response with Zod — drift throws).
  * ------------------------------------------------------------------------- */
 
-/** List the codex entries belonging to a project. */
+/**
+ * List the codex entries belonging to a project.
+ *
+ * Feature #3a — an optional `seriesId` narrows the result to the SERIES SCOPE:
+ * the backend returns project-global entries (`series_id = null`) PLUS that
+ * series' entries. Omitting `seriesId` returns every entry (project scope). The
+ * filter is applied server-side via `?series_id=<id>` so the toggle changes the
+ * actual query (correct + scalable) rather than filtering a full client list.
+ */
 export async function listCodexEntries(
   projectId: string,
+  seriesId?: string,
 ): Promise<CodexEntryRead[]> {
-  const data = await apiFetch<unknown>(`/projects/${projectId}/codex`);
+  const query =
+    seriesId === undefined
+      ? ""
+      : `?series_id=${encodeURIComponent(seriesId)}`;
+  const data = await apiFetch<unknown>(
+    `/projects/${projectId}/codex${query}`,
+  );
   return codexEntryListSchema.parse(data);
 }
 

@@ -46,6 +46,7 @@ import {
   useDeleteCodexEntry,
   useUpdateCodexEntry,
 } from "@/lib/api/hooks";
+import { useSeries } from "@/lib/api/series-hooks";
 import type { BookTreeResult } from "@/lib/api/hooks";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { cn, countWords } from "@/lib/utils";
@@ -174,7 +175,7 @@ export function CodexDetail({
         </div>
 
         {tab === "details" ? (
-          <DetailsTab entry={entry} onPatch={patch} />
+          <DetailsTab entry={entry} projectId={projectId} onPatch={patch} />
         ) : tab === "mentions" ? (
           <MentionsTab tree={tree} needles={needles} />
         ) : tab === "tracking" ? (
@@ -334,13 +335,16 @@ function DetailHeader({
 
 function DetailsTab({
   entry,
+  projectId,
   onPatch,
 }: {
   entry: CodexEntryRead;
+  projectId: string;
   onPatch: (patch: {
     aliases?: string[];
     role?: string | null;
     content?: string | null;
+    series_id?: string | null;
   }) => void;
 }) {
   const [aliasInput, setAliasInput] = useState("");
@@ -473,6 +477,13 @@ function DetailsTab({
       {/* Story role */}
       <RoleField role={entry.role} onPatch={onPatch} />
 
+      {/* Scope (Feature #3c): project-global or a specific series. */}
+      <ScopeField
+        projectId={projectId}
+        seriesId={entry.series_id}
+        onPatch={onPatch}
+      />
+
       <button
         type="button"
         onClick={() => toast.info(hu.codex.addDetail)}
@@ -518,6 +529,60 @@ function RoleField({
         placeholder={hu.codex.rolePlaceholder}
         className="box-border h-9 w-full max-w-[280px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none placeholder:text-text-faint focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
       />
+    </div>
+  );
+}
+
+/**
+ * Scope picker (Feature #3c) — sets the entry's `series_id`: project-global
+ * (`null`, visible in every book) or a specific series in the project. On change
+ * it persists via the shared patch helper (errors surfaced there, never
+ * swallowed). When the project has no series, only the project-global option is
+ * offered (honest — there is nothing to scope to yet).
+ */
+function ScopeField({
+  projectId,
+  seriesId,
+  onPatch,
+}: {
+  projectId: string;
+  seriesId: string | null;
+  onPatch: (patch: { series_id?: string | null }) => void;
+}) {
+  const series = useSeries(projectId);
+  const options = series.data ?? [];
+
+  function handleChange(value: string) {
+    const next = value === "" ? null : value;
+    if (next === seriesId) return;
+    onPatch({ series_id: next });
+  }
+
+  return (
+    <div>
+      <FieldLabel htmlFor="codex-scope">{hu.codex.entryScopeLabel}</FieldLabel>
+      <p className="m-0 mb-[7px] text-[12px] text-text-muted">
+        {hu.codex.entryScopeHint}
+      </p>
+      {series.isError ? (
+        <p role="alert" className="m-0 text-[12px] text-danger-text">
+          {series.error?.message ?? hu.codex.seriesLoadError}
+        </p>
+      ) : null}
+      <select
+        id="codex-scope"
+        aria-label={hu.codex.entryScopeLabel}
+        value={seriesId ?? ""}
+        onChange={(e) => handleChange(e.target.value)}
+        className="box-border h-9 w-full max-w-[320px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
+      >
+        <option value="">{hu.codex.entryScopeProject}</option>
+        {options.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.title}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

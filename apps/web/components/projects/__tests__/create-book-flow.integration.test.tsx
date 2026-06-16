@@ -75,6 +75,7 @@ function installRecordingHandlers(): RecordedCall[] {
         {
           id: RETURNED_BOOK_ID,
           project_id: String(params.pid),
+          series_id: null,
           title: body.title ?? "Névtelen könyv",
           description: (body.description as string | null) ?? null,
           synopsis: (body.synopsis as string | null) ?? null,

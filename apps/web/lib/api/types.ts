@@ -46,13 +46,57 @@ export const projectCreateSchema = z.object({
 export type ProjectCreate = z.infer<typeof projectCreateSchema>;
 
 /* ---------------------------------------------------------------------------
+ * Series — mirrors app/schemas/series.py (Feature #3a). A Series groups books
+ * within a project; Codex entries can be series-scoped (see `series_id` below).
+ * ------------------------------------------------------------------------- */
+
+/** A series as returned by the API (`SeriesRead`). Belongs to a project. */
+export const seriesReadSchema = z.object({
+  id: idString,
+  project_id: idString,
+  title: z.string(),
+  description: z.string().nullable(),
+  order_index: z.number().int(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type SeriesRead = z.infer<typeof seriesReadSchema>;
+
+/**
+ * Request body for creating a series under a project (`SeriesCreate`).
+ * `order_index` is optional (the backend defaults it server-side), so the
+ * inferred input type stays `{title, description?, order_index?}`.
+ */
+export const seriesCreateSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().nullable().optional(),
+  order_index: z.number().int().optional(),
+});
+export type SeriesCreate = z.infer<typeof seriesCreateSchema>;
+
+/** Request body for patching a series (`SeriesUpdate`). All fields optional. */
+export const seriesUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().nullable().optional(),
+  order_index: z.number().int().optional(),
+});
+export type SeriesUpdate = z.infer<typeof seriesUpdateSchema>;
+
+export const seriesListSchema = z.array(seriesReadSchema);
+
+/* ---------------------------------------------------------------------------
  * Book — mirrors app/schemas/book.py
  * ------------------------------------------------------------------------- */
 
-/** A book as returned by the API (`BookRead`). Belongs to a project. */
+/**
+ * A book as returned by the API (`BookRead`). Belongs to a project, and since
+ * Feature #3a may optionally belong to a `Series` within that project
+ * (`series_id`: the series id, or `null` for an unassigned book).
+ */
 export const bookReadSchema = z.object({
   id: idString,
   project_id: idString,
+  series_id: z.string().nullable(),
   title: z.string(),
   description: z.string().nullable(),
   synopsis: z.string().nullable(),
@@ -64,6 +108,24 @@ export const bookReadSchema = z.object({
   updated_at: z.string(),
 });
 export type BookRead = z.infer<typeof bookReadSchema>;
+
+/**
+ * Request body for patching a book (`BookUpdate`). All fields optional. The
+ * frontend only sends what it changes; `series_id` assigns the book to a series
+ * (a series id) or clears it (`null`). The backend rejects a cross-project
+ * series with a 400 (surfaced as an `ApiError`, never swallowed).
+ */
+export const bookUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().nullable().optional(),
+  synopsis: z.string().nullable().optional(),
+  genre: z.string().max(100).nullable().optional(),
+  language: z.string().max(10).optional(),
+  word_count_target: z.number().int().nullable().optional(),
+  order_index: z.number().int().optional(),
+  series_id: z.string().nullable().optional(),
+});
+export type BookUpdate = z.infer<typeof bookUpdateSchema>;
 
 /** Request body for creating a book under a project (`BookCreate`). */
 export const bookCreateSchema = z.object({
@@ -218,6 +280,9 @@ export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
 export const codexEntryReadSchema = z.object({
   id: idString,
   project_id: idString,
+  // Feature #3a — a codex entry is project-global (`null`) or scoped to a
+  // specific series within the project (the series id).
+  series_id: z.string().nullable(),
   title: z.string(),
   entry_type: z.string(),
   content: z.string().nullable(),
@@ -248,6 +313,8 @@ export const codexEntryCreateSchema = z.object({
   role: z.string().max(100).nullable().optional(),
   ai_visible: z.boolean().default(true),
   tags: z.array(z.string()).default([]),
+  // Feature #3a — scope: a series id, or `null`/omitted for project-global.
+  series_id: z.string().nullable().optional(),
 });
 export type CodexEntryCreate = z.infer<typeof codexEntryCreateSchema>;
 
@@ -260,6 +327,8 @@ export const codexEntryUpdateSchema = z.object({
   role: z.string().max(100).nullable().optional(),
   ai_visible: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
+  // Feature #3a — re-scope an entry: a series id, or `null` for project-global.
+  series_id: z.string().nullable().optional(),
 });
 export type CodexEntryUpdate = z.infer<typeof codexEntryUpdateSchema>;
 

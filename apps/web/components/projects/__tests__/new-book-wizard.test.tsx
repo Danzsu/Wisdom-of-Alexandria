@@ -66,6 +66,7 @@ describe("NewBookWizard", () => {
           {
             id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
             project_id: String(params.pid),
+            series_id: null,
             title: body.title,
             description: null,
             synopsis: null,

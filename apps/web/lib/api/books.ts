@@ -15,8 +15,10 @@ import {
   bookCreateSchema,
   bookListSchema,
   bookReadSchema,
+  bookUpdateSchema,
   type BookCreate,
   type BookRead,
+  type BookUpdate,
 } from "./types";
 
 /** List the books belonging to a project. */
@@ -46,6 +48,25 @@ export async function createBook(
     method: "POST",
     body,
   });
+  return bookReadSchema.parse(data);
+}
+
+/**
+ * Patch a book within a project (`BookUpdate`). Feature #3a uses this to assign
+ * the book to a series (`series_id`: a series id) or clear it (`null`); the
+ * backend rejects a cross-project series with a 400, which `apiFetch` raises as
+ * an `ApiError` (never swallowed). The payload is validated first.
+ */
+export async function updateBook(
+  projectId: string,
+  bookId: string,
+  patch: BookUpdate,
+): Promise<BookRead> {
+  const body = bookUpdateSchema.parse(patch);
+  const data = await apiFetch<unknown>(
+    `/projects/${projectId}/books/${bookId}`,
+    { method: "PATCH", body },
+  );
   return bookReadSchema.parse(data);
 }
 

@@ -5,7 +5,7 @@
  *
  * Layout (faithful to the prototype showcodex nav, Alexandria App.dc.html ~330):
  *   book header (cover + title + author) · underline tabs (Codex / Snippetek /
- *   Chatek) · search + filter · scope toggle (Ez a könyv / Sorozat) · "+ Új"
+ *   Chatek) · search + filter · scope toggle (Projekt / Sorozat) · "+ Új"
  *   dashed button (opens the New-Codex modal) · grouped entry list by type.
  *
  * Codex is PROJECT-scoped but the route only carries `bookId`, so the owning
@@ -13,9 +13,17 @@
  * rebuilt). Selecting an entry writes the `?entry` query param (shared with the
  * detail page via {@link useCodexSelection}). Loading / empty / error states are
  * surfaced honestly.
+ *
+ * SCOPE (Feature #3c): the toggle switches the actual server query.
+ *   - "Projekt": every entry (no `series_id` filter).
+ *   - "Sorozat": the active book's series → project-global + that series'
+ *     entries, fetched with `?series_id=<id>`. When the active book has NO
+ *     series, the series scope honestly shows project-global entries only with a
+ *     clear note (not a fake/empty state). The book's series is read from the
+ *     resolved `BookRead.series_id`.
  */
 import { useMemo, useState } from "react";
-import { Filter, Library, Plus, Search } from "lucide-react";
+import { Filter, Plus, Search } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { BookSpineCard } from "@/components/kit/book-spine-card";
 import { Icon } from "@/components/kit/icon";
@@ -24,6 +32,7 @@ import { bookIdFromPathname } from "@/lib/use-shell-chrome";
 import { usePathname } from "next/navigation";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
 import { useBookTree, useCodexEntries } from "@/lib/api/hooks";
+import { useResolvedBook } from "@/lib/api/export-hooks";
 import { countMentions, mentionNeedles } from "@/lib/api/codex";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -31,8 +40,10 @@ import { hu } from "@/lib/i18n/hu";
 import { CodexEntryAvatar, entryTypeOrder } from "@/components/codex/codex-meta";
 import { useCodexSelection } from "@/components/codex/use-codex-selection";
 import { NewCodexModal } from "@/components/codex/new-codex-modal";
+import { SeriesManagePopover } from "@/components/codex/series-manage-popover";
 
 type SidebarTab = "codex" | "snippets" | "chats";
+type CodexScope = "project" | "series";
 
 /** A group of entries sharing an entry type, ready to render as a section. */
 interface EntryGroup {
@@ -63,13 +74,30 @@ export function CodexSidebar() {
   const bookId = bookIdFromPathname(pathname ?? "/") ?? undefined;
   const projectIdQuery = useBookProjectId(bookId);
   const projectId = projectIdQuery.data;
-  const codex = useCodexEntries(projectId);
   const tree = useBookTree(bookId);
   const { selectedId, select } = useCodexSelection();
 
   const [tab, setTab] = useState<SidebarTab>("codex");
+  const [scope, setScope] = useState<CodexScope>("project");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+
+  // The active book carries its series_id (Feature #3a) — resolved from the
+  // bare bookId. The series scope filters the codex list by this series id.
+  const bookQuery = useResolvedBook(bookId);
+  const book = bookQuery.data;
+  const activeSeriesId = book?.series_id ?? undefined;
+
+  // The series scope shows project-global + that series' entries via the
+  // `?series_id=` server query. When the book has NO series we fall back to the
+  // project list (honest: project-global only) and show a clear note below.
+  const useSeriesQuery = scope === "series" && activeSeriesId !== undefined;
+  const codex = useCodexEntries(
+    projectId,
+    useSeriesQuery ? activeSeriesId : undefined,
+  );
+  // The series scope is selected but the active book has no series → honest note.
+  const seriesScopeNoSeries = scope === "series" && activeSeriesId === undefined;
 
   const entries = useMemo(() => codex.data ?? [], [codex.data]);
 
@@ -179,26 +207,50 @@ export function CodexSidebar() {
         </button>
       </div>
 
-      {/* Scope toggle. Only "Ez a könyv" is active in the MVP; "Sorozat" is a
-          V1 placeholder (disabled), so there is no scope STATE to track yet. */}
+      {/* Scope toggle (Feature #3c). Switches the actual server query: Projekt
+          = all entries; Sorozat = project-global + the active book's series via
+          `?series_id=`. The manage-popover handles series CRUD + book→series
+          assignment. */}
       <div className="flex flex-none items-center gap-1 border-b border-border bg-surface-soft px-2.5 py-1.5">
         <button
           type="button"
-          aria-pressed
-          className="h-7 flex-1 rounded-[7px] border border-accent bg-accent-muted text-[12px] font-semibold text-accent-text"
+          aria-pressed={scope === "project"}
+          onClick={() => setScope("project")}
+          className={cn(
+            "h-7 flex-1 rounded-[7px] border text-[12px]",
+            scope === "project"
+              ? "border-accent bg-accent-muted font-semibold text-accent-text"
+              : "border-border bg-transparent text-text-muted hover:bg-surface-muted",
+          )}
         >
-          {hu.codex.scopeBook}
+          {hu.codex.scopeProject}
         </button>
         <button
           type="button"
-          disabled
-          title={hu.codex.scopeSeriesDisabledTitle}
-          className="flex h-7 flex-1 items-center justify-center gap-[5px] rounded-[7px] border border-border bg-transparent text-[12px] text-text-faint opacity-60"
+          aria-pressed={scope === "series"}
+          onClick={() => setScope("series")}
+          title={
+            seriesScopeNoSeries ? hu.codex.scopeSeriesNoSeriesTitle : undefined
+          }
+          className={cn(
+            "flex h-7 flex-1 items-center justify-center gap-[5px] rounded-[7px] border text-[12px]",
+            scope === "series"
+              ? "border-accent bg-accent-muted font-semibold text-accent-text"
+              : "border-border bg-transparent text-text-muted hover:bg-surface-muted",
+          )}
         >
-          <Icon icon={Library} size={12} />
           {hu.codex.scopeSeries}
         </button>
+        <SeriesManagePopover projectId={projectId} book={book} />
       </div>
+
+      {/* Honest note when the series scope is active but the book has no series:
+          we show project-global entries only (not a fake/empty state). */}
+      {seriesScopeNoSeries && tab === "codex" ? (
+        <p className="border-b border-border bg-surface-soft px-2.5 py-2 text-[11px] leading-[1.5] text-text-muted">
+          {hu.codex.seriesNoSeriesNote}
+        </p>
+      ) : null}
 
       {/* List */}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">

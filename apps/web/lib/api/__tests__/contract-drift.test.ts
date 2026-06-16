@@ -23,9 +23,11 @@
 // returns.
 import { describe, expect, it } from "vitest";
 import type {
+  BookRead,
   CodexEntryRead,
   ProjectRead,
   SceneRead,
+  SeriesRead,
 } from "@/lib/api/types";
 import type {
   AIResult,
@@ -34,8 +36,10 @@ import type {
 } from "@/lib/api/ai-types";
 import type { ProviderRead } from "@/lib/api/providers";
 import {
+  FAROSZ_BOOK,
   FAROSZ_CODEX,
   FAROSZ_PROJECT,
+  FAROSZ_SERIES,
   PROVIDER_GEMINI,
   SCENE_ACTIVE,
 } from "@/test/msw/fixtures";
@@ -58,6 +62,20 @@ const sceneShape = SCENE_ACTIVE satisfies SceneRead;
 
 /** CodexEntryRead — re-checks the shared fixture against the type. */
 const codexShape = FAROSZ_CODEX[0] satisfies CodexEntryRead;
+
+/**
+ * SeriesRead — pins the Feature #3a series contract: a project-scoped grouping
+ * with id/title/order + timestamps. If the backend renames/drops a field and the
+ * FE type follows, this fixture stops satisfying `SeriesRead` → a `tsc` error.
+ */
+const seriesShape = FAROSZ_SERIES satisfies SeriesRead;
+
+/**
+ * BookRead — pins the Feature #3a `series_id` slot (a book may belong to a
+ * series within its project, or `null`). The Fárosz book is assigned to a
+ * series so the field is exercised with a real value.
+ */
+const bookShape = FAROSZ_BOOK satisfies BookRead;
 
 /** ProviderRead — re-checks the shared fixture (masked key only) vs the type. */
 const providerShape = PROVIDER_GEMINI satisfies ProviderRead;
@@ -143,7 +161,7 @@ describe("FE↔BE contract drift-guard (interim)", () => {
     expect(typeof revisionShape.revision_type).toBe("string");
   });
 
-  it("CodexEntryRead: id/timestamps are strings, ai_visible is boolean, arrays are arrays", () => {
+  it("CodexEntryRead: id/timestamps are strings, ai_visible is boolean, arrays are arrays, series_id slot present", () => {
     expect(typeof codexShape.id).toBe("string");
     expect(typeof codexShape.created_at).toBe("string");
     expect(typeof codexShape.updated_at).toBe("string");
@@ -151,6 +169,26 @@ describe("FE↔BE contract drift-guard (interim)", () => {
     expect(typeof codexShape.entry_type).toBe("string");
     expect(Array.isArray(codexShape.aliases)).toBe(true);
     expect(Array.isArray(codexShape.tags)).toBe(true);
+    // Feature #3a scope slot: present (null = project-global, string = a series).
+    expect("series_id" in codexShape).toBe(true);
+  });
+
+  it("SeriesRead: id/timestamps/title are strings, order_index is a number", () => {
+    expect(typeof seriesShape.id).toBe("string");
+    expect(typeof seriesShape.project_id).toBe("string");
+    expect(typeof seriesShape.title).toBe("string");
+    expect(typeof seriesShape.order_index).toBe("number");
+    expect(typeof seriesShape.created_at).toBe("string");
+    expect(typeof seriesShape.updated_at).toBe("string");
+    // description is nullable, but the key must exist on the wire.
+    expect("description" in seriesShape).toBe(true);
+  });
+
+  it("BookRead: carries a series_id slot (a series id or null)", () => {
+    expect(typeof bookShape.id).toBe("string");
+    expect(typeof bookShape.project_id).toBe("string");
+    // Feature #3a: the book→series link. The key must exist (null is valid).
+    expect("series_id" in bookShape).toBe(true);
   });
 
   it("ProviderRead: id/timestamps are strings, has_key is boolean, NEVER carries a raw key", () => {

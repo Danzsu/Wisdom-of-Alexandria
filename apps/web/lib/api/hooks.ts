@@ -27,7 +27,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { createProject, getProject, listProjects } from "./projects";
-import { createBook, listBooks } from "./books";
+import { createBook, listBooks, updateBook } from "./books";
 import { importDocx, type BookImportSummary } from "./imports";
 import {
   createChapter,
@@ -58,6 +58,7 @@ import type {
   BeatRead,
   BookCreate,
   BookRead,
+  BookUpdate,
   ChapterCreate,
   ChapterRead,
   ChapterUpdate,
@@ -79,6 +80,11 @@ export const queryKeys = {
     ["projects", projectId, "books"] as const,
   projectCodex: (projectId: string) =>
     ["projects", projectId, "codex"] as const,
+  // Feature #3a — the codex list under a SERIES scope (`?series_id=`): a
+  // distinct cache key per (project, series) so the project-scope list and the
+  // series-scoped list never clobber each other.
+  projectCodexBySeries: (projectId: string, seriesId: string) =>
+    ["projects", projectId, "codex", "series", seriesId] as const,
   codexEntry: (projectId: string, entryId: string) =>
     ["projects", projectId, "codex", entryId] as const,
   bookChapters: (bookId: string) => ["books", bookId, "chapters"] as const,
@@ -220,6 +226,43 @@ export function useImportDocx(): UseMutationResult<
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.projectBooks(projectId),
+      });
+    },
+  });
+}
+
+/** Input for the book-update mutation (project + book id + patch). */
+export interface UpdateBookInput {
+  projectId: string;
+  bookId: string;
+  patch: BookUpdate;
+}
+
+/**
+ * Patch a book (Feature #3a: assign/clear its `series_id`). On success the
+ * project's book list is invalidated AND the resolved-book caches (the export
+ * screen's `["export","book",id]` + the AI book→project map are keyed by bookId)
+ * are invalidated so the sidebar's series resolution picks up the change. Errors
+ * (incl. the backend's 400 for a cross-project series) propagate via the
+ * mutation's `error` — never swallowed.
+ */
+export function useUpdateBook(): UseMutationResult<
+  BookRead,
+  Error,
+  UpdateBookInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, bookId, patch }: UpdateBookInput) =>
+      updateBook(projectId, bookId, patch),
+    onSuccess: async (updated) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.projectBooks(updated.project_id),
+      });
+      // The sidebar resolves the active book via `resolveBookById`, cached under
+      // the export key by bookId; refresh it so the new series_id is reflected.
+      await queryClient.invalidateQueries({
+        queryKey: ["export", "book", updated.id],
       });
     },
   });
@@ -875,13 +918,26 @@ export function useCreateBeat(): UseMutationResult<
  * Codex (read-only — M4 CodexMention popover; full CRUD is M6)
  * ------------------------------------------------------------------------- */
 
-/** List a project's codex entries. Disabled until a project id is supplied. */
+/**
+ * List a project's codex entries. Disabled until a project id is supplied.
+ *
+ * Feature #3a — passing `seriesId` switches to the SERIES SCOPE: the query hits
+ * `?series_id=<id>` (project-global + that series' entries) under a distinct
+ * cache key, so the toggle changes the actual server query rather than filtering
+ * a full client-side list. Omitting it lists every entry (project scope). A
+ * mutation that invalidates `projectCodex(projectId)` also invalidates the
+ * series-scoped lists (prefix match), so both views stay fresh.
+ */
 export function useCodexEntries(
   projectId: string | undefined,
+  seriesId?: string,
 ): UseQueryResult<CodexEntryRead[], Error> {
   return useQuery({
-    queryKey: queryKeys.projectCodex(projectId ?? "__none__"),
-    queryFn: () => listCodexEntries(projectId as string),
+    queryKey:
+      seriesId === undefined
+        ? queryKeys.projectCodex(projectId ?? "__none__")
+        : queryKeys.projectCodexBySeries(projectId ?? "__none__", seriesId),
+    queryFn: () => listCodexEntries(projectId as string, seriesId),
     enabled: Boolean(projectId),
   });
 }
@@ -964,6 +1020,13 @@ export function useUpdateCodexEntry(): UseMutationResult<
         (prev) =>
           prev ? prev.map((e) => (e.id === updated.id ? updated : e)) : prev,
       );
+      // A `series_id` change re-scopes the entry between the project-global and
+      // series views, so refresh the series-scoped lists (prefix match under the
+      // codex key, excluding the exact project-scope key we patched in place).
+      return queryClient.invalidateQueries({
+        queryKey: queryKeys.projectCodex(updated.project_id),
+        predicate: (q) => q.queryKey.length > 3,
+      });
     },
   });
 }
