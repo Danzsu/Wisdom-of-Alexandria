@@ -1038,6 +1038,17 @@ export const hu = {
     addProjectHint: "vagy kézirat importálása (.docx, .md)",
     metaBooks: (n: number) => `${n} könyv`,
     /**
+     * Card meta line combining the project's book count and total word count
+     * (Feature #1). Both values come from the backend aggregates. The word count
+     * uses hu-locale grouping (space thousands separator). 0 books renders as
+     * "Nincs könyv"; counts are joined with a middle dot.
+     */
+    metaCounts: (books: number, words: number): string => {
+      const bookPart = books === 0 ? "Nincs könyv" : `${books} könyv`;
+      const wordPart = `${words.toLocaleString("hu-HU")} szó`;
+      return `${bookPart} · ${wordPart}`;
+    },
+    /**
      * Hungarian relative-time label for a project's last-updated date, relative
      * to `now` (defaults to the call moment). Used on the cards instead of a
      * fabricated book count — only real `updated_at` data is shown.

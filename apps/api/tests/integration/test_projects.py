@@ -187,3 +187,121 @@ async def test_list_projects_negative_skip_is_422(client: AsyncClient, auth_head
 async def test_list_projects_limit_at_cap_ok(client: AsyncClient, auth_headers: dict):
     resp = await client.get("/api/v1/projects?limit=200", headers=auth_headers)
     assert resp.status_code == 200
+
+
+# ── Feature #1: project card aggregates (book_count + word_count) ────────────
+# Each project card shows the number of books and the total words (sum of
+# Scene.word_count across every scene in every chapter of every book). The list
+# + get read paths both carry the aggregates; create returns 0/0.
+
+
+async def _add_scene(client, auth_headers, chapter_id: str, content: str) -> None:
+    resp = await client.post(
+        f"/api/v1/chapters/{chapter_id}/scenes",
+        json={"title": "S", "content": content},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+
+
+async def _add_chapter(client, auth_headers, book_id: str) -> str:
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/chapters", json={"title": "Ch"}, headers=auth_headers
+    )
+    assert resp.status_code == 201
+    return resp.json()["id"]
+
+
+async def _add_book(client, auth_headers, project_id: str) -> str:
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/books", json={"title": "B"}, headers=auth_headers
+    )
+    assert resp.status_code == 201
+    return resp.json()["id"]
+
+
+async def test_create_project_returns_zero_aggregates(client: AsyncClient, auth_headers: dict):
+    resp = await client.post("/api/v1/projects", json={"title": "Új"}, headers=auth_headers)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["book_count"] == 0
+    assert data["word_count"] == 0
+
+
+async def test_aggregates_two_books_with_scenes(client: AsyncClient, auth_headers: dict):
+    proj = (await client.post("/api/v1/projects", json={"title": "Agg"}, headers=auth_headers)).json()
+    pid = proj["id"]
+
+    book_a = await _add_book(client, auth_headers, pid)
+    book_b = await _add_book(client, auth_headers, pid)
+
+    ch_a1 = await _add_chapter(client, auth_headers, book_a)
+    ch_a2 = await _add_chapter(client, auth_headers, book_a)
+    ch_b1 = await _add_chapter(client, auth_headers, book_b)
+
+    # word_counts: 3 + 2 + 4 + 1 = 10 across two books / three chapters.
+    await _add_scene(client, auth_headers, ch_a1, "egy két három")  # 3
+    await _add_scene(client, auth_headers, ch_a1, "négy öt")  # 2
+    await _add_scene(client, auth_headers, ch_a2, "hat hét nyolc kilenc")  # 4
+    await _add_scene(client, auth_headers, ch_b1, "tíz")  # 1
+
+    # GET single.
+    get_resp = await client.get(f"/api/v1/projects/{pid}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    detail = get_resp.json()
+    assert detail["book_count"] == 2
+    assert detail["word_count"] == 10
+
+    # GET list — same aggregates for this project.
+    list_resp = await client.get("/api/v1/projects", headers=auth_headers)
+    assert list_resp.status_code == 200
+    listed = next(p for p in list_resp.json() if p["id"] == pid)
+    assert listed["book_count"] == 2
+    assert listed["word_count"] == 10
+
+
+async def test_aggregates_empty_project(client: AsyncClient, auth_headers: dict):
+    proj = (await client.post("/api/v1/projects", json={"title": "Üres"}, headers=auth_headers)).json()
+    pid = proj["id"]
+    resp = await client.get(f"/api/v1/projects/{pid}", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["book_count"] == 0
+    assert data["word_count"] == 0
+
+
+async def test_aggregates_books_without_scenes(client: AsyncClient, auth_headers: dict):
+    proj = (await client.post("/api/v1/projects", json={"title": "Könyv-nincs-jelenet"}, headers=auth_headers)).json()
+    pid = proj["id"]
+    await _add_book(client, auth_headers, pid)
+    book = await _add_book(client, auth_headers, pid)
+    await _add_chapter(client, auth_headers, book)  # chapter but no scenes
+
+    resp = await client.get(f"/api/v1/projects/{pid}", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["book_count"] == 2
+    assert data["word_count"] == 0  # coalesced null SUM
+
+
+async def test_aggregates_do_not_leak_across_projects(client: AsyncClient, auth_headers: dict):
+    proj_a = (await client.post("/api/v1/projects", json={"title": "A"}, headers=auth_headers)).json()
+    proj_b = (await client.post("/api/v1/projects", json={"title": "B"}, headers=auth_headers)).json()
+
+    book_a = await _add_book(client, auth_headers, proj_a["id"])
+    ch_a = await _add_chapter(client, auth_headers, book_a)
+    await _add_scene(client, auth_headers, ch_a, "egy két három")  # 3 words, project A
+
+    # project B gets two books but only 2 words total.
+    book_b1 = await _add_book(client, auth_headers, proj_b["id"])
+    await _add_book(client, auth_headers, proj_b["id"])
+    ch_b = await _add_chapter(client, auth_headers, book_b1)
+    await _add_scene(client, auth_headers, ch_b, "négy öt")  # 2 words, project B
+
+    resp = await client.get("/api/v1/projects", headers=auth_headers)
+    assert resp.status_code == 200
+    by_id = {p["id"]: p for p in resp.json()}
+    assert by_id[proj_a["id"]]["book_count"] == 1
+    assert by_id[proj_a["id"]]["word_count"] == 3
+    assert by_id[proj_b["id"]]["book_count"] == 2
+    assert by_id[proj_b["id"]]["word_count"] == 2

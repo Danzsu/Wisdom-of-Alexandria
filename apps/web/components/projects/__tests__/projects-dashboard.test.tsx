@@ -56,6 +56,34 @@ describe("ProjectsDashboard", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders per-project book + word counts on the cards (Feature #1)", async () => {
+    renderWithProviders(<ProjectsDashboard />);
+    await screen.findAllByText("A Fárosz őrzője");
+
+    // The formatter pins the contract; the card renders its output. Match on the
+    // load-bearing pieces (book count + grouped word count) with a flexible
+    // matcher so locale whitespace (regular vs narrow no-break space) can't make
+    // the assertion brittle.
+    const farosz = hu.projects.metaCounts(1, 12450);
+    expect(farosz).toContain("1 könyv");
+    const wordPart = (12450).toLocaleString("hu-HU");
+    expect(
+      screen.getAllByText((_t, el) => {
+        const text = el?.textContent ?? "";
+        return text.includes("1 könyv") && text.includes(`${wordPart} szó`);
+      }).length,
+    ).toBeGreaterThan(0);
+
+    // Homok: 0 books → the graceful empty path ("Nincs könyv").
+    const homok = hu.projects.metaCounts(0, 0);
+    expect(homok).toContain("Nincs könyv");
+    expect(
+      screen.getAllByText((_t, el) =>
+        (el?.textContent ?? "").includes("Nincs könyv"),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("opens the New-book wizard from the primary quick action", async () => {
     const user = userEvent.setup();
     renderWithProviders(<ProjectsDashboard />);

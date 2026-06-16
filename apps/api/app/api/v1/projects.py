@@ -9,7 +9,8 @@ from app.services.crud_project import (
     create_project,
     delete_project,
     get_project,
-    list_projects,
+    get_project_read,
+    list_projects_read,
     update_project,
 )
 
@@ -32,7 +33,7 @@ async def list_all(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> list[ProjectRead]:
-    return await list_projects(db, skip=skip, limit=limit)
+    return await list_projects_read(db, skip=skip, limit=limit)
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -41,7 +42,7 @@ async def get_one(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> ProjectRead:
-    project = await get_project(db, project_id)
+    project = await get_project_read(db, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project

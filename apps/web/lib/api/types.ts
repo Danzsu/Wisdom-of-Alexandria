@@ -30,6 +30,10 @@ export const projectReadSchema = z.object({
   language: z.string(),
   created_at: z.string(), // ISO-8601 datetime
   updated_at: z.string(),
+  // Card aggregates (Feature #1): number of books and total words across the
+  // whole project (sum of Scene.word_count). Computed server-side on read paths.
+  book_count: z.number().int(),
+  word_count: z.number().int(),
 });
 export type ProjectRead = z.infer<typeof projectReadSchema>;
 

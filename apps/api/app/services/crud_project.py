@@ -1,10 +1,47 @@
 import uuid
 
+from alexandria_core.models.book import Book
+from alexandria_core.models.chapter import Chapter
 from alexandria_core.models.project import Project
-from sqlalchemy import select
+from alexandria_core.models.scene import Scene
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+
+
+def _book_count_subquery():
+    """Correlated scalar subquery: number of books in a project."""
+    return (
+        select(func.count(Book.id))
+        .where(Book.project_id == Project.id)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
+
+def _word_count_subquery():
+    """Correlated scalar subquery: total Scene.word_count across the whole project.
+
+    Walks the FK chain Scene → Chapter → Book → Project and coalesces a null SUM
+    (a project with no scenes) to 0.
+    """
+    return (
+        select(func.coalesce(func.sum(Scene.word_count), 0))
+        .select_from(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Book, Chapter.book_id == Book.id)
+        .where(Book.project_id == Project.id)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
+
+def _to_read(project: Project, book_count: int, word_count: int) -> ProjectRead:
+    """Build a ProjectRead from a Project plus its computed aggregates."""
+    return ProjectRead.model_validate(project).model_copy(
+        update={"book_count": book_count, "word_count": word_count}
+    )
 
 
 async def create_project(db: AsyncSession, data: ProjectCreate) -> Project:
@@ -20,11 +57,39 @@ async def get_project(db: AsyncSession, project_id: uuid.UUID) -> Project | None
     return result.scalar_one_or_none()
 
 
-async def list_projects(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Project]:
+async def get_project_read(
+    db: AsyncSession, project_id: uuid.UUID
+) -> ProjectRead | None:
+    """Fetch one project WITH its aggregates as a single query (no N+1)."""
     result = await db.execute(
-        select(Project).offset(skip).limit(limit).order_by(Project.created_at.desc())
+        select(Project, _book_count_subquery(), _word_count_subquery()).where(
+            Project.id == project_id
+        )
     )
-    return list(result.scalars().all())
+    row = result.first()
+    if row is None:
+        return None
+    project, book_count, word_count = row
+    return _to_read(project, book_count, word_count)
+
+
+async def list_projects_read(
+    db: AsyncSession, skip: int = 0, limit: int = 100
+) -> list[ProjectRead]:
+    """List projects WITH aggregates in ONE query (correlated subqueries, no N+1).
+
+    Keeps the existing pagination + newest-first ordering.
+    """
+    result = await db.execute(
+        select(Project, _book_count_subquery(), _word_count_subquery())
+        .offset(skip)
+        .limit(limit)
+        .order_by(Project.created_at.desc())
+    )
+    return [
+        _to_read(project, book_count, word_count)
+        for project, book_count, word_count in result.all()
+    ]
 
 
 async def update_project(db: AsyncSession, project: Project, data: ProjectUpdate) -> Project:

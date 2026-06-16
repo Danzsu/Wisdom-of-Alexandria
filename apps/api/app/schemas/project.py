@@ -25,3 +25,9 @@ class ProjectRead(BaseModel):
     language: str
     created_at: datetime
     updated_at: datetime
+    # Card aggregates (Feature #1). `book_count` = number of books in the project;
+    # `word_count` = sum of Scene.word_count across every scene in every chapter of
+    # every book. Computed on the read paths (list + get); create returns 0/0 since
+    # a brand-new project has no books or scenes yet.
+    book_count: int = 0
+    word_count: int = 0

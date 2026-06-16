@@ -31,6 +31,10 @@ export const FAROSZ_PROJECT: ProjectRead = {
   language: "hu",
   created_at: "2026-06-14T14:32:00Z",
   updated_at: "2026-06-14T14:32:00Z",
+  // Feature #1 aggregates: one book, a non-trivial total word count (exercises
+  // the hu-locale thousands grouping in the card meta line).
+  book_count: 1,
+  word_count: 12450,
 };
 
 export const HOMOK_PROJECT: ProjectRead = {
@@ -40,6 +44,9 @@ export const HOMOK_PROJECT: ProjectRead = {
   language: "hu",
   created_at: "2026-06-11T09:10:00Z",
   updated_at: "2026-06-11T09:10:00Z",
+  // No book yet → the card shows the "Nincs könyv · 0 szó" empty path.
+  book_count: 0,
+  word_count: 0,
 };
 
 export const FAROSZ_BOOK: BookRead = {

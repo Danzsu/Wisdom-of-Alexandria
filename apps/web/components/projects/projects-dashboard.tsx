@@ -624,9 +624,10 @@ function ProjectCard({
         : "linear-gradient(150deg,#5b7a8c 0%,#42606f 60%,#2f4855 100%)",
     color: variant === "gold" ? "var(--accent-fg)" : "rgba(255,255,255,.85)",
   };
-  // ProjectRead exposes no book-count/word-count aggregate, so we show only REAL
-  // data — the relative last-updated date — rather than a fabricated "1 könyv"
-  // constant. (Real per-project book counts would cost one request per card.)
+  // Feature #1: the backend now carries per-project aggregates, so the card shows
+  // real book + word counts ("{n} könyv · {formatted} szó"). The relative
+  // last-updated date stays as a secondary detail line in the grid view.
+  const counts = hu.projects.metaCounts(project.book_count, project.word_count);
   const meta = hu.projects.relativeUpdated(project.updated_at);
 
   if (view === "list") {
@@ -649,6 +650,9 @@ function ProjectCard({
           </span>
           <span className="block truncate text-[12px] text-text-muted">
             {project.description ?? ""}
+          </span>
+          <span className="mt-0.5 block truncate text-[11px] tabular-nums text-text-muted">
+            {counts}
           </span>
         </span>
       </button>
@@ -678,6 +682,9 @@ function ProjectCard({
           </span>
         ) : null}
         <span className="mt-2 block text-[11px] tabular-nums text-text-muted">
+          {counts}
+        </span>
+        <span className="mt-0.5 block text-[11px] tabular-nums text-text-faint">
           {meta}
         </span>
       </span>

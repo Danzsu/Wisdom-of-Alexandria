@@ -24,6 +24,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   CodexEntryRead,
+  ProjectRead,
   SceneRead,
 } from "@/lib/api/types";
 import type {
@@ -34,6 +35,7 @@ import type {
 import type { ProviderRead } from "@/lib/api/providers";
 import {
   FAROSZ_CODEX,
+  FAROSZ_PROJECT,
   PROVIDER_GEMINI,
   SCENE_ACTIVE,
 } from "@/test/msw/fixtures";
@@ -59,6 +61,14 @@ const codexShape = FAROSZ_CODEX[0] satisfies CodexEntryRead;
 
 /** ProviderRead — re-checks the shared fixture (masked key only) vs the type. */
 const providerShape = PROVIDER_GEMINI satisfies ProviderRead;
+
+/**
+ * ProjectRead — pins the Feature #1 card-aggregate contract: `book_count` +
+ * `word_count` are integers alongside the base project fields. If the backend
+ * renames/drops either and the FE type follows, this fixture stops satisfying
+ * `ProjectRead` → a `tsc` error.
+ */
+const projectShape = FAROSZ_PROJECT satisfies ProjectRead;
 
 /** RevisionRead — minimal typed literal (no standalone fixture is exported). */
 const revisionShape = {
@@ -115,6 +125,14 @@ describe("FE↔BE contract drift-guard (interim)", () => {
     expect(typeof sceneShape.status).toBe("string");
     // nullable FK is present (null is a valid value, but the key must exist).
     expect("pov_character_id" in sceneShape).toBe(true);
+  });
+
+  it("ProjectRead: id/timestamps are strings, book_count + word_count are numbers", () => {
+    expect(typeof projectShape.id).toBe("string");
+    expect(typeof projectShape.created_at).toBe("string");
+    expect(typeof projectShape.updated_at).toBe("string");
+    expect(typeof projectShape.book_count).toBe("number");
+    expect(typeof projectShape.word_count).toBe("number");
   });
 
   it("RevisionRead: id/timestamps are strings, approved is a boolean", () => {
