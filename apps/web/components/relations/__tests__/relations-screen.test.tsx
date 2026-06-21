@@ -11,7 +11,9 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
-import { FAROSZ_BOOK, FAROSZ_PROJECT } from "@/test/msw/fixtures";
+import { resetRelationStore } from "@/test/msw/handlers";
+import { FAROSZ_BOOK } from "@/test/msw/fixtures";
+import { hu } from "@/lib/i18n/hu";
 import { RelationsScreen } from "../relations-screen";
 
 const base = `${API_BASE_URL}/api/v1`;
@@ -19,10 +21,23 @@ const base = `${API_BASE_URL}/api/v1`;
 // The screen resolves project via books; the resolver reads the route's bookId.
 // We pass bookId directly as a prop, so no router mock is needed for the screen.
 
+// Mock GSAP so we can ASSERT it is never entered when animation is gated off.
+// The graph's `canAnimateGsapNow()` short-circuits under the test env, so
+// `import("gsap")` must never run and `gsap.context` must never be called. A
+// mutation that inverts the gate (GSAP running under the static baseline) makes
+// the "does not invoke GSAP" test fail.
+const gsapContextMock = vi.fn(() => ({ revert: vi.fn() }));
+vi.mock("gsap", () => ({
+  gsap: { context: gsapContextMock },
+  default: { context: gsapContextMock },
+}));
+
 describe("RelationsScreen", () => {
   beforeEach(() => {
-    // Default: motion enabled is fine — canAnimate() is gated on NODE_ENV=test
-    // so GSAP never runs under vitest regardless.
+    // Reset the stateful MSW relation store so list/create/delete tests don't
+    // pollute each other.
+    resetRelationStore();
+    gsapContextMock.mockClear();
   });
 
   it("renders nodes and edges from the project's relations (static path)", async () => {
@@ -104,41 +119,22 @@ describe("RelationsScreen", () => {
     );
   });
 
-  it("creates a relation via the modal (POSTs the payload)", async () => {
+  it("creates a relation and the new edge appears in the graph (round-trip)", async () => {
+    // A REAL list → create → appears round-trip against the stateful MSW store
+    // (no POST override, so the store actually persists the new relation and the
+    // invalidated list query re-renders the graph with it). A mutation that
+    // breaks the create's query invalidation makes the new edge never appear.
     const user = userEvent.setup();
-    let captured: unknown = null;
-    server.use(
-      http.post(
-        `${base}/projects/:projectId/codex-relations`,
-        async ({ request }) => {
-          captured = await request.json();
-          return HttpResponse.json(
-            {
-              id: "rel-new-test",
-              project_id: FAROSZ_PROJECT.id,
-              from_entity_type: "character",
-              from_entity_id: "codex-szelene",
-              to_entity_type: "location",
-              to_entity_id: "codex-nagykonyvtar",
-              relation_type: "látogatja",
-              description: null,
-              created_at: "2026-06-14T16:00:00Z",
-              updated_at: "2026-06-14T16:00:00Z",
-            },
-            { status: 201 },
-          );
-        },
-      ),
-    );
 
     render(
       <Providers>
         <RelationsScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
-    await waitFor(() =>
-      expect(screen.getByText("Szelene")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Szelene")).toBeInTheDocument());
+
+    // The new label is not present before creating it.
+    expect(screen.queryByText("látogatja")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Új kapcsolat" }));
 
@@ -160,13 +156,45 @@ describe("RelationsScreen", () => {
       within(dialog).getByRole("button", { name: "Kapcsolat létrehozása" }),
     );
 
+    // The graph re-renders with the new edge's label (it came from the store).
     await waitFor(() =>
-      expect(captured).toMatchObject({
-        from_entity_id: "codex-szelene",
-        to_entity_id: "codex-nagykonyvtar",
-        relation_type: "látogatja",
-      }),
+      expect(screen.getByText("látogatja")).toBeInTheDocument(),
     );
+    // The original edges are still present (the store appended, didn't replace).
+    expect(screen.getByText("őrzője")).toBeInTheDocument();
+  });
+
+  it("deletes a relation from the detail panel and removes its edge", async () => {
+    // list → select node → delete → the relation is gone from the stateful store
+    // and the graph/list no longer show its label. A mutation that breaks the
+    // delete (store remove / query invalidation) makes the edge persist.
+    const user = userEvent.setup();
+
+    render(
+      <Providers>
+        <RelationsScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    await waitFor(() => expect(screen.getByText("Szelene")).toBeInTheDocument());
+
+    // Open Szelene's detail panel — it lists her two relations.
+    await user.click(screen.getByRole("button", { name: "Szelene" }));
+    const panel = await screen.findByRole("complementary");
+    expect(within(panel).getByText("őrzője")).toBeInTheDocument();
+
+    // Delete the "őrzője" relation via its row delete button.
+    const deleteButtons = within(panel).getAllByRole("button", {
+      name: hu.relations.deleteRelationAria,
+    });
+    await user.click(deleteButtons[0]);
+
+    // After the delete + invalidation, "őrzője" is gone from the whole screen.
+    await waitFor(() =>
+      expect(screen.queryByText("őrzője")).not.toBeInTheDocument(),
+    );
+    // The other relation remains (it renders both as a graph edge label and in
+    // the still-open detail panel, so assert it is still present at all).
+    expect(screen.getAllByText("mentora").length).toBeGreaterThan(0);
   });
 
   it("blocks a self-loop with an inline error", async () => {
@@ -203,32 +231,38 @@ describe("RelationsScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders statically under prefers-reduced-motion (no GSAP, no crash)", async () => {
-    const original = window.matchMedia;
-    window.matchMedia = ((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
+  it("does NOT enter GSAP when animation is gated off (static SVG baseline)", async () => {
+    // The graph's gate short-circuits under the test env, so the GSAP edge/node
+    // draw-in must never run: `gsap.context` is the entry point and must NOT be
+    // called. (A mutation that inverts the gate makes this fail.) The static SVG
+    // still renders fully.
+    render(
+      <Providers>
+        <RelationsScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    await waitFor(() => expect(screen.getByText("Szelene")).toBeInTheDocument());
+    expect(screen.getByText("őrzője")).toBeInTheDocument();
 
-    try {
-      render(
-        <Providers>
-          <RelationsScreen bookId={FAROSZ_BOOK.id} />
-        </Providers>,
-      );
-      // The graph still renders its nodes — the static SVG is the baseline.
-      await waitFor(() =>
-        expect(screen.getByText("Szelene")).toBeInTheDocument(),
-      );
-      expect(screen.getByText("őrzője")).toBeInTheDocument();
-    } finally {
-      window.matchMedia = original;
-    }
+    // GSAP was never entered — give any stray async import() a tick to land.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gsapContextMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an error state when the relations query fails", async () => {
+    server.use(
+      http.get(`${base}/projects/:projectId/codex-relations`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+      ),
+    );
+    render(
+      <Providers>
+        <RelationsScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    // The screen shows its error copy rather than crashing / rendering blank.
+    await waitFor(() =>
+      expect(screen.getByText(hu.relations.error)).toBeInTheDocument(),
+    );
   });
 });

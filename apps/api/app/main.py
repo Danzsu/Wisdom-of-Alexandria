@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
-from app.core.errors import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +39,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     """Catch-all for truly unhandled exceptions.
 
     FastAPI's own ``HTTPException`` and ``RequestValidationError`` handlers are
-    registered first and keep their normal behaviour — only exceptions that
-    reach the bottom of the stack hit this handler. The full exception (with
-    traceback) is logged server-side; the client gets a sanitized, bounded 500
-    body so no traceback, raw internal text, or secret leaks out, and no
-    newline bleeds into the response.
+    registered first and keep their normal behaviour (intentional, safe detail) —
+    only exceptions that reach the bottom of the stack hit this handler. The full
+    exception (with traceback) is logged server-side; the client gets a fixed,
+    GENERIC message. We deliberately do NOT echo ``str(exc)`` (even sanitized):
+    arbitrary internal exception text can embed a secret in its first chars,
+    which truncation alone would not strip — so no traceback, raw internal text,
+    or secret can leak out.
     """
     logger.exception("Unhandled exception during %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"detail": safe_error(exc)})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 app.include_router(api_router, prefix="/api/v1")

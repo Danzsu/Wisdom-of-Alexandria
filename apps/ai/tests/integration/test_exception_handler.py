@@ -46,6 +46,13 @@ async def test_unhandled_exception_returns_sanitized_500(raw_client: AsyncClient
     assert "\r" not in detail
     # The whole 5000-char tail cannot have survived truncation.
     assert "x" * 400 not in resp.text
+    # The embedded secret must NOT leak — the catch-all returns a fixed generic
+    # body and never echoes the unhandled exception's (attacker-influenceable)
+    # message, which could embed a key within the first 300 chars.
+    assert "sk-should-not-leak-1234" not in resp.text
+    assert "SECRET" not in resp.text
+    # No raw internal detail text bleeds through either.
+    assert "tracebacky internal detail" not in resp.text
 
 
 @pytest.mark.integration

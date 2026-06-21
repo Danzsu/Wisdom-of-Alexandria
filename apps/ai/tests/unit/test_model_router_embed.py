@@ -52,6 +52,41 @@ async def test_embed_returns_vectors_without_db():
     assert mock_call.call_args.kwargs["model"] == "ollama/nomic-embed-text"
 
 
+def _embedding_response_attr(vectors: list[list[float]]):
+    """Build a response whose data items expose ``.embedding`` as an ATTRIBUTE
+    (not a dict subscript) — the LiteLLM object shape, exercising the non-dict
+    branch of embed()'s ``item["embedding"] if isinstance(item, dict) else
+    item.embedding``."""
+    resp = MagicMock()
+    items = []
+    for i, v in enumerate(vectors):
+        item = MagicMock(spec=["embedding", "index"])  # NOT a dict
+        item.embedding = v
+        item.index = i
+        items.append(item)
+    resp.data = items
+    return resp
+
+
+@pytest.mark.unit
+async def test_embed_parses_attribute_shaped_items():
+    """Items exposing ``.embedding`` as an attribute (LiteLLM object shape, not a
+    dict) are parsed via the attribute branch. A mutation dropping that branch
+    would mis-parse these into raw mock objects and fail the float assertions."""
+    router = ModelRouter(base_url="http://ollama:11434", default_model="ollama/llama3.2")
+    with patch(
+        "app.services.model_router.aembedding",
+        new=AsyncMock(
+            return_value=_embedding_response_attr([[0.1, 0.2], [0.3, 0.4]])
+        ),
+    ):
+        vectors = await router.embed(
+            ["első", "második"], model="ollama/nomic-embed-text"
+        )
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert all(isinstance(x, float) for v in vectors for x in v)
+
+
 @pytest.mark.unit
 async def test_embed_raises_on_partial_batch():
     """A response with fewer vectors than inputs must RAISE — the caller maps

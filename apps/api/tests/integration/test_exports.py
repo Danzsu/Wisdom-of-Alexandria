@@ -39,6 +39,10 @@ async def test_export_contains_book_title(client: AsyncClient, auth_headers: dic
     book_id, _, _ = await _build_book(client, auth_headers)
     resp = await client.post(f"/api/v1/books/{book_id}/exports", headers=auth_headers)
     assert "Az elveszett királyság" in resp.text
+    # Structural: the book title is an H1 *line* (exact, so a heading-level
+    # mutation H1->H2 is caught — `## …` is not the same line as `# …`).
+    lines = resp.text.splitlines()
+    assert "# Az elveszett királyság" in lines
 
 
 async def test_export_contains_chapters(client: AsyncClient, auth_headers: dict):
@@ -46,6 +50,11 @@ async def test_export_contains_chapters(client: AsyncClient, auth_headers: dict)
     resp = await client.post(f"/api/v1/books/{book_id}/exports", headers=auth_headers)
     assert "Prológus" in resp.text
     assert "Az indulás" in resp.text
+    # Structural: chapters are H2 *lines* (numbered). Exact-line match catches a
+    # heading-level mutation (H2->H1 or H2->H3).
+    lines = resp.text.splitlines()
+    assert "## 1. Prológus" in lines
+    assert "## 2. Az indulás" in lines
 
 
 async def test_export_contains_scene_content(client: AsyncClient, auth_headers: dict):
@@ -53,6 +62,11 @@ async def test_export_contains_scene_content(client: AsyncClient, auth_headers: 
     resp = await client.post(f"/api/v1/books/{book_id}/exports", headers=auth_headers)
     assert "A nap felkelt." in resp.text
     assert "A hős lóra szállt." in resp.text
+    # Structural: scenes are H3 *lines* (chapter.scene numbered). Exact-line
+    # match catches a heading-level mutation (H3->H2 or H3->H4).
+    lines = resp.text.splitlines()
+    assert "### 1.1 Reggel" in lines
+    assert "### 2.1 Utazás" in lines
 
 
 async def test_export_marks_empty_scenes(client: AsyncClient, auth_headers: dict):
@@ -72,11 +86,18 @@ async def test_export_excludes_archived_scenes(client: AsyncClient, auth_headers
     proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
     book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "Könyv"}, headers=auth_headers)).json()
     ch = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers)).json()
-    s = (await client.post(f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "Archiválandó", "content": "Titkos tartalom"}, headers=auth_headers)).json()
+    # A non-archived scene that MUST remain, plus an archived one that must vanish.
+    await client.post(f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "Megmaradó", "content": "Látható tartalom", "order_index": 0}, headers=auth_headers)
+    s = (await client.post(f"/api/v1/chapters/{ch['id']}/scenes", json={"title": "Archiválandó", "content": "Titkos tartalom", "order_index": 1}, headers=auth_headers)).json()
     await client.post(f"/api/v1/chapters/{ch['id']}/scenes/{s['id']}/archive", headers=auth_headers)
 
     resp = await client.post(f"/api/v1/books/{book['id']}/exports", headers=auth_headers)
+    # Archived scene excluded …
     assert "Titkos tartalom" not in resp.text
+    assert "Archiválandó" not in resp.text
+    # … but the non-archived scene IS present (a mutation excluding ALL scenes is caught).
+    assert "Látható tartalom" in resp.text
+    assert "Megmaradó" in resp.text
 
 
 async def test_export_book_not_found(client: AsyncClient, auth_headers: dict):

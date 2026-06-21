@@ -48,6 +48,7 @@ from alexandria_core.models.style_guide import StyleGuide
 from alexandria_core.models.worldbuilding_entry import WorldbuildingEntry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.services.crud_provider import get_embedding_provider
 from app.services.model_router import ModelRouter, model_router
@@ -108,6 +109,31 @@ def _join(*parts: str | None) -> str:
 def _truncate(text: str, limit: int = _SNIPPET_LEN) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[:limit]
+
+
+def _scope_filter(active_series_id: uuid.UUID | None) -> ColumnElement[bool]:
+    """Build the series-scope predicate for retrieval (B3b).
+
+    Returns a SQLAlchemy boolean predicate matching ONLY rows that are in scope
+    for a generation whose book belongs to ``active_series_id``:
+
+    - project-global rows (``Embedding.series_id IS NULL``), PLUS
+    - the active series' rows (when ``active_series_id`` is given),
+
+    EXCLUDING every OTHER series' codex and other series' books' manuscript.
+    When ``active_series_id`` is ``None`` (the book is not in a series), only the
+    project-global rows match.
+
+    This is extracted as a pure function so the scope leak is unit-testable on
+    SQLite WITHOUT the PostgreSQL-only ``<=>`` cosine operator: a test can filter
+    seeded Embedding rows by this predicate alone (any ordering) and assert that
+    other-series rows are excluded. A mutation that widens the predicate to leak
+    other series therefore fails locally, not only under @pytest.mark.postgres.
+    """
+    series_filter: ColumnElement[bool] = Embedding.series_id.is_(None)
+    if active_series_id is not None:
+        series_filter = series_filter | (Embedding.series_id == active_series_id)
+    return series_filter
 
 
 class EmbeddingService:
@@ -419,9 +445,8 @@ class EmbeddingService:
         query_vec = (await self.router.embed([query], model=embedding_model, db=db))[0]
 
         # Series filter: global (NULL) OR the active series; never other series.
-        series_filter = Embedding.series_id.is_(None)
-        if active_series_id is not None:
-            series_filter = series_filter | (Embedding.series_id == active_series_id)
+        # Extracted to a pure helper so the leak is unit-testable on SQLite.
+        series_filter = _scope_filter(active_series_id)
 
         # Over-fetch a little so defensive ai_visible filtering still leaves k.
         rows = (

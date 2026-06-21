@@ -32,6 +32,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, prefetch: vi.fn() }),
 }));
 
+// Mock GSAP so we can ASSERT it is never entered when animation is gated off.
+// `canAnimateGsapNow()` short-circuits under the test env (and under reduced
+// motion in prod), so `import("gsap")` must never run and `gsap.context` must
+// never be called. If the gate inverts, this mock records the call and the
+// "does not invoke GSAP" test fails.
+const gsapContextMock = vi.fn(() => ({ revert: vi.fn() }));
+vi.mock("gsap", () => ({
+  gsap: { context: gsapContextMock },
+  default: { context: gsapContextMock },
+}));
+
 describe("status → marker-state mapping (UX-3b)", () => {
   it("maps the four scene statuses to the three marker states", () => {
     expect(statusToMarkerState("complete")).toBe("completed");
@@ -57,6 +68,7 @@ describe("TimelineScreen", () => {
     resetPlanStore();
     resetCodexStore();
     pushMock.mockClear();
+    gsapContextMock.mockClear();
   });
 
   it("renders chapters and their scenes in reading order with status", async () => {
@@ -95,6 +107,96 @@ describe("TimelineScreen", () => {
     expect(c1.compareDocumentPosition(c2)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+
+  it("renders each scene's word count from the fixture", async () => {
+    render(
+      <Providers>
+        <TimelineScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    // SCENE_FIRST.word_count === 4, SCENE_ACTIVE.word_count === 13.
+    // (A mutation rendering a constant instead of word_count fails this.)
+    await waitFor(() =>
+      expect(screen.getByText(hu.timeline.sceneWords(4))).toBeInTheDocument(),
+    );
+    expect(screen.getByText(hu.timeline.sceneWords(13))).toBeInTheDocument();
+  });
+
+  it("orders scenes within a chapter by order_index, not array order", async () => {
+    // Two scenes in CHAPTER_ONE supplied OUT of order_index order in the array:
+    // the array lists order_index 2 first, then 0 — the screen must sort them so
+    // "Első jelenet" (0) precedes "Második jelenet" (2). (Reversing the intra-
+    // chapter sort fails this.)
+    server.use(
+      http.get(`${base}/chapters/:chapterId/scenes`, ({ params }) => {
+        if (String(params.chapterId) === CHAPTER_ONE.id) {
+          return HttpResponse.json([
+            {
+              id: "5cea2222-2222-2222-2222-222222222222",
+              chapter_id: CHAPTER_ONE.id,
+              title: "Második jelenet",
+              content: "x",
+              summary: null,
+              order_index: 2,
+              status: "draft",
+              word_count: 2,
+              pov_character_id: null,
+              created_at: "2026-06-14T14:32:00Z",
+              updated_at: "2026-06-14T14:32:00Z",
+            },
+            {
+              id: "5cea1111-1111-1111-1111-111111111111",
+              chapter_id: CHAPTER_ONE.id,
+              title: "Első jelenet",
+              content: "x",
+              summary: null,
+              order_index: 0,
+              status: "complete",
+              word_count: 1,
+              pov_character_id: null,
+              created_at: "2026-06-14T14:32:00Z",
+              updated_at: "2026-06-14T14:32:00Z",
+            },
+          ]);
+        }
+        return HttpResponse.json([]);
+      }),
+    );
+
+    render(
+      <Providers>
+        <TimelineScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Első jelenet")).toBeInTheDocument(),
+    );
+    const first = screen.getByText("Első jelenet");
+    const second = screen.getByText("Második jelenet");
+    expect(first.compareDocumentPosition(second)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("reflects the status → marker-state mapping on the scene node in the DOM", async () => {
+    const { container } = render(
+      <Providers>
+        <TimelineScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText("1. jelenet — Az éjszakai műszak"),
+      ).toBeInTheDocument(),
+    );
+    // SCENE_FIRST is "complete" → "completed"; SCENE_ACTIVE is "draft" → "planned".
+    // Asserted via the marker's data attribute (the rendered DOM, not the unit fn).
+    const states = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-marker-state]"),
+    ).map((el) => el.dataset.markerState);
+    expect(states).toContain("completed");
+    expect(states).toContain("planned");
   });
 
   it("resolves the POV character name when a scene has one", async () => {
@@ -213,39 +315,30 @@ describe("TimelineScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders statically under prefers-reduced-motion (no GSAP, no crash)", async () => {
-    const original = window.matchMedia;
-    window.matchMedia = ((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
-
-    try {
-      render(
-        <Providers>
-          <TimelineScreen bookId={FAROSZ_BOOK.id} />
-        </Providers>,
-      );
-      // The timeline still renders its scenes — the static render is the baseline.
-      await waitFor(() =>
-        expect(
-          screen.getByText("1. jelenet — Az éjszakai műszak"),
-        ).toBeInTheDocument(),
-      );
-      const region = screen.getByRole("region", {
-        name: hu.timeline.listAriaLabel,
-      });
+  it("does NOT enter GSAP when animation is gated off (static baseline)", async () => {
+    // The gate short-circuits under the test env, so the GSAP draw-in must never
+    // run: `gsap.context` is the entry point and must NOT be called. (A mutation
+    // that inverts the gate — GSAP running under the static baseline — makes this
+    // fail.) The static render still renders fully.
+    render(
+      <Providers>
+        <TimelineScreen bookId={FAROSZ_BOOK.id} />
+      </Providers>,
+    );
+    await waitFor(() =>
       expect(
-        within(region).getByText("3. jelenet — Rejtett jelek"),
-      ).toBeInTheDocument();
-    } finally {
-      window.matchMedia = original;
-    }
+        screen.getByText("1. jelenet — Az éjszakai műszak"),
+      ).toBeInTheDocument(),
+    );
+    const region = screen.getByRole("region", {
+      name: hu.timeline.listAriaLabel,
+    });
+    expect(
+      within(region).getByText("3. jelenet — Rejtett jelek"),
+    ).toBeInTheDocument();
+
+    // GSAP was never entered — give any stray async import() a tick to land.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gsapContextMock).not.toHaveBeenCalled();
   });
 });

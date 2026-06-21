@@ -295,8 +295,16 @@ async def test_reject_revision(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):
     from alexandria_core.models.revision import Revision
+    from alexandria_core.models.scene import Scene
 
     _, scene_id = await _setup_scene(client, auth_headers)
+
+    # Give the scene real manuscript content + summary first; rejecting a
+    # revision must NOT touch either (it only flips approved/status).
+    scene = await db_session.get(Scene, uuid.UUID(scene_id))
+    scene.content = "Az eredeti jelenet szövege változatlan marad."
+    scene.summary = "Eredeti összefoglaló."
+    await db_session.commit()
 
     rev = Revision(
         scene_id=uuid.UUID(scene_id),
@@ -310,6 +318,12 @@ async def test_reject_revision(
     resp = await client.post(f"/api/v1/revisions/{rev.id}/reject", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["approved"] is False
+
+    # The scene is untouched: reject does not insert the revision content.
+    refreshed = await db_session.get(Scene, uuid.UUID(scene_id))
+    await db_session.refresh(refreshed)
+    assert refreshed.content == "Az eredeti jelenet szövege változatlan marad."
+    assert refreshed.summary == "Eredeti összefoglaló."
 
 
 async def test_reject_revision_already_false(

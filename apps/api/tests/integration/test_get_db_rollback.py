@@ -38,7 +38,10 @@ async def test_get_db_rolls_back_on_error(engine_fixture, monkeypatch):
     # The session is clean: a fresh query (a subsequent op like fail_job's
     # commit would do) works instead of raising PendingRollbackError, and the
     # uncommitted poison row is gone.
-    assert session.in_transaction() is False or True  # rollback ended the txn
+    # After get_db rolled back the failed transaction, the session must NOT be
+    # left inside a (poisoned) transaction — otherwise the next commit would
+    # raise PendingRollbackError.
+    assert session.in_transaction() is False
     result = await session.execute(
         select(Project).where(Project.title == "poison-row")
     )

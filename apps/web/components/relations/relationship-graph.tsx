@@ -23,6 +23,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { layoutGraph, type PositionedGraph } from "./graph-layout";
 import type { GraphData } from "./graph-data";
+import { canAnimateGsapNow } from "@/lib/gsap-gate";
 import { hu } from "@/lib/i18n/hu";
 import { cn } from "@/lib/utils";
 
@@ -53,14 +54,6 @@ const POV_TEXT: Record<number, string> = {
 
 const NODE_RADIUS = 26;
 
-/** Whether the GSAP draw-in may run: real browser, motion allowed, not test. */
-function canAnimate(): boolean {
-  if (typeof window === "undefined") return false;
-  if (process.env.NODE_ENV === "test") return false;
-  if (typeof window.matchMedia !== "function") return false;
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /** Build initials for a node label (mirrors the Avatar helper). */
 function initialsFrom(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -85,7 +78,7 @@ export function RelationshipGraph({
 
   // GSAP draw-in (client-only, reduced-motion/test-gated, fully reverted).
   useEffect(() => {
-    if (!canAnimate()) return;
+    if (!canAnimateGsapNow()) return;
     const root = svgRef.current;
     if (!root) return;
 

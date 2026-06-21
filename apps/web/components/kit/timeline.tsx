@@ -40,6 +40,7 @@ export function TimelineMarker({ state, className }: TimelineMarkerProps) {
   return (
     <span
       aria-hidden="true"
+      data-marker-state={state}
       className={cn(
         "absolute -left-[26px] top-1 h-4 w-4 rounded-full",
         state === "completed" &&

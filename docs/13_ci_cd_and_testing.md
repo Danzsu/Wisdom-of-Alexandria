@@ -172,6 +172,16 @@ async def test_codex_vector_search(client, db_session):
 
 `pytest.ini`-ben a skip logika automatikus a `IS_POSTGRES` flaggel vagy custom plugin-nel.
 
+> **Őszinte lefedettségi megjegyzés (2026-06):** A `@pytest.mark.postgres`
+> marker jelenleg **egyetlen tesztet sem** díszít, és a
+> `tests/unit/test_alembic_roundtrip.py` szándékosan SQLite-ot kényszerít. Ennek
+> következménye, hogy a **pgvector**-specifikus migrációs DDL (vektor oszlop +
+> index) és minden Postgres-only kódág **lokálisan nincs lefuttatva** — ezeket
+> kizárólag egy zöld CI-Postgres futás validálja. Egy zöld lokális (SQLite)
+> futás tehát NEM bizonyítja, hogy a pgvector migráció vagy a Postgres-only
+> útvonalak helyesek; ezek addig **bizonyítatlanok**, amíg a CI-Postgres tier le
+> nem fut. (Lokálisan nem indítunk pgvectort.)
+
 ---
 
 ### Réteg 3 — E2E tesztek (Playwright)

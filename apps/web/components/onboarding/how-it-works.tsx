@@ -6,6 +6,7 @@ import { Library, LayoutList, Sparkles, CheckCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { canAnimateGsap } from "@/lib/gsap-gate";
 import { hu } from "@/lib/i18n/hu";
 
 /**
@@ -39,11 +40,15 @@ function prefersReducedMotion(): boolean {
  * browser falls back to the plain scrollable stack.
  */
 function canRunScrollNarrative(): boolean {
-  if (typeof window === "undefined") return false;
-  // Vitest sets this; never register GSAP under test.
-  if (process.env.NODE_ENV === "test") return false;
-  if (prefersReducedMotion()) return false;
-  return true;
+  const hasWindow = typeof window !== "undefined";
+  return canAnimateGsap(
+    hasWindow,
+    // Vitest sets this; never register GSAP under test.
+    process.env.NODE_ENV === "test",
+    hasWindow && typeof window.matchMedia === "function"
+      ? window.matchMedia.bind(window)
+      : undefined,
+  );
 }
 
 /**
@@ -159,10 +164,7 @@ export function HowItWorks() {
     close();
   }
 
-  const reduced =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = prefersReducedMotion();
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && dismiss()}>

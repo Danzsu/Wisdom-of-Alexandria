@@ -39,6 +39,7 @@ import {
   type ChapterWithScenes,
 } from "@/lib/api/hooks";
 import { useNavTo } from "@/lib/use-nav-to";
+import { canAnimateGsapNow } from "@/lib/gsap-gate";
 import { routes } from "@/lib/routes";
 import { povSlot } from "@/lib/pov-color";
 import { hu } from "@/lib/i18n/hu";
@@ -48,14 +49,6 @@ import { sceneStatusLabel, statusToMarkerState } from "./status-mapping";
 
 export interface TimelineScreenProps {
   bookId: string | undefined;
-}
-
-/** Whether the GSAP draw-in may run: real browser, motion allowed, not test. */
-function canAnimate(): boolean {
-  if (typeof window === "undefined") return false;
-  if (process.env.NODE_ENV === "test") return false;
-  if (typeof window.matchMedia !== "function") return false;
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /** StatusPill variant per scene status (colour is paired with the text label). */
@@ -135,7 +128,7 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
 
   // GSAP draw-in (client-only, reduced-motion/test-gated, fully reverted).
   useEffect(() => {
-    if (!canAnimate()) return;
+    if (!canAnimateGsapNow()) return;
     const root = rootRef.current;
     if (!root) return;
 

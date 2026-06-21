@@ -24,14 +24,15 @@ def _word_count_subquery():
     """Correlated scalar subquery: total Scene.word_count across the whole project.
 
     Walks the FK chain Scene → Chapter → Book → Project and coalesces a null SUM
-    (a project with no scenes) to 0.
+    (a project with no scenes) to 0. Archived scenes are excluded to match the
+    archived-exclusion applied everywhere else (crud_scene.list_scenes, exports).
     """
     return (
         select(func.coalesce(func.sum(Scene.word_count), 0))
         .select_from(Scene)
         .join(Chapter, Scene.chapter_id == Chapter.id)
         .join(Book, Chapter.book_id == Book.id)
-        .where(Book.project_id == Project.id)
+        .where(Book.project_id == Project.id, Scene.status != "archived")
         .correlate(Project)
         .scalar_subquery()
     )

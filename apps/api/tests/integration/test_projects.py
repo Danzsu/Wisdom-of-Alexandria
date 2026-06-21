@@ -284,6 +284,43 @@ async def test_aggregates_books_without_scenes(client: AsyncClient, auth_headers
     assert data["word_count"] == 0  # coalesced null SUM
 
 
+async def test_word_count_excludes_archived_scenes(client: AsyncClient, auth_headers: dict):
+    """REAL BUG regression: archived scenes must NOT contribute to the project
+    word_count aggregate (archived scenes are excluded everywhere else)."""
+    proj = (
+        await client.post("/api/v1/projects", json={"title": "Arch"}, headers=auth_headers)
+    ).json()
+    pid = proj["id"]
+    book = await _add_book(client, auth_headers, pid)
+    ch = await _add_chapter(client, auth_headers, book)
+
+    # One normal scene (N=3 words) + one archived scene (M=4 words).
+    normal = (
+        await client.post(
+            f"/api/v1/chapters/{ch}/scenes",
+            json={"title": "Normál", "content": "egy két három"},  # 3
+            headers=auth_headers,
+        )
+    ).json()
+    assert normal  # created
+    to_archive = (
+        await client.post(
+            f"/api/v1/chapters/{ch}/scenes",
+            json={"title": "Archív", "content": "négy öt hat hét"},  # 4
+            headers=auth_headers,
+        )
+    ).json()
+    arch_resp = await client.post(
+        f"/api/v1/chapters/{ch}/scenes/{to_archive['id']}/archive", headers=auth_headers
+    )
+    assert arch_resp.status_code == 200
+
+    resp = await client.get(f"/api/v1/projects/{pid}", headers=auth_headers)
+    assert resp.status_code == 200
+    # word_count == N (3), excludes the archived M (4) → NOT 7.
+    assert resp.json()["word_count"] == 3
+
+
 async def test_aggregates_do_not_leak_across_projects(client: AsyncClient, auth_headers: dict):
     proj_a = (await client.post("/api/v1/projects", json={"title": "A"}, headers=auth_headers)).json()
     proj_b = (await client.post("/api/v1/projects", json={"title": "B"}, headers=auth_headers)).json()

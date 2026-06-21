@@ -45,6 +45,13 @@ async def test_unhandled_exception_returns_sanitized_500(raw_client: AsyncClient
     assert "\r" not in detail
     # The whole 5000-char tail cannot have survived truncation.
     assert "x" * 400 not in resp.text
+    # The CRITICAL assertion: the embedded secret (in the FIRST chars of the
+    # exception message, where truncation alone would NOT strip it) must never
+    # reach the client. The catch-all returns a generic message, not str(exc).
+    assert "SECRET=" not in resp.text
+    assert "sk-should-not-leak" not in resp.text
+    assert "tracebacky internal detail" not in resp.text
+    assert detail == "Internal server error"
 
 
 async def test_http_exception_not_shadowed(raw_client: AsyncClient):

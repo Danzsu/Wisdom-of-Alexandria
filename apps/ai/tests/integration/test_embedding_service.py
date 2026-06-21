@@ -26,7 +26,12 @@ from alexandria_core.models.series import Series
 from alexandria_core.models.style_guide import StyleGuide
 from sqlalchemy import func, select
 
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import (
+    _SNIPPET_LEN,
+    EmbeddingService,
+    _scope_filter,
+    _truncate,
+)
 from app.services.model_router import ModelRouter
 
 EMBED_MODEL = "openai/text-embedding-3-small"
@@ -505,6 +510,145 @@ async def test_codex_moved_to_another_series_resyncs_series_id(db_session):
     await db_session.refresh(refreshed)
     assert refreshed.series_id == series_b  # NOT stale series_a
     assert result.updated == 1
+
+
+# ── snippet truncation boundary (_SNIPPET_LEN) ──────────────────────────────────
+#
+# The snippet folded into the AI prompt is bounded by _SNIPPET_LEN; without it a
+# huge source field would leak its full content into the context. Assert both the
+# pure helper AND the live retrieval-label path (db.get, no cosine — SQLite-safe).
+
+
+@pytest.mark.unit
+def test_truncate_caps_at_snippet_len():
+    """A long string is cut to exactly _SNIPPET_LEN; a short one is unchanged."""
+    long_text = "x" * (_SNIPPET_LEN + 500)
+    out = _truncate(long_text)
+    assert len(out) == _SNIPPET_LEN
+    assert _truncate("rövid") == "rövid"
+
+
+@pytest.mark.integration
+async def test_resolved_snippet_is_truncated_to_bound(db_session):
+    """The snippet returned by the retrieval label resolver is truncated to
+    _SNIPPET_LEN, so a long codex body cannot leak its full content into the
+    prompt. A mutation removing _truncate would return the full text and fail."""
+    project_id = await _make_project(db_session)
+    long_body = "Á" * (_SNIPPET_LEN * 3)
+    entry = CodexEntry(
+        project_id=project_id, title="Hosszú", content=long_body, ai_visible=True
+    )
+    db_session.add(entry)
+    await db_session.commit()
+
+    svc = EmbeddingService(router=_mock_router())
+    resolved = await svc._resolve_visible_label_snippet(db_session, "codex", entry.id)
+    assert resolved is not None
+    _label, snippet = resolved
+    assert len(snippet) == _SNIPPET_LEN  # full body did NOT leak through
+    assert len(snippet) < len(long_body)
+
+
+# ── series scope FILTER (B3b) — SQLite-executable leak guard ────────────────────
+#
+# retrieve()'s real series filter only runs under the PostgreSQL `<=>` cosine path
+# (skipped on SQLite). These tests exercise the EXTRACTED ``_scope_filter`` pure
+# predicate directly against seeded rows — NO cosine operator — so a mutation that
+# widens the filter to leak OTHER series is caught locally on SQLite.
+
+
+async def _seed_scope_embedding(
+    db, project_id: uuid.UUID, *, label: str, series_id: uuid.UUID | None
+) -> uuid.UUID:
+    """Seed a codex Embedding row with a given series scope (vector irrelevant)."""
+    entry = CodexEntry(
+        project_id=project_id, series_id=series_id, title=label, content=label,
+        ai_visible=True,
+    )
+    db.add(entry)
+    await db.flush()
+    emb = Embedding(
+        project_id=project_id,
+        series_id=series_id,
+        entity_type="codex",
+        entity_id=entry.id,
+        content_hash=f"h-{label}",
+        embedding=[0.0, 0.0, 0.0, 0.0],
+        model_name=EMBED_MODEL,
+        dim=4,
+    )
+    db.add(emb)
+    await db.commit()
+    return entry.id
+
+
+@pytest.mark.integration
+async def test_scope_filter_active_series_includes_global_and_series_excludes_other(
+    db_session,
+):
+    """active_series_id=A → project-global (NULL) + series-A rows; series-B and
+    other PROJECTS excluded. Filtered by the scope predicate alone (no cosine),
+    so this runs on SQLite and catches a widened-filter leak mutation."""
+    project_id = await _make_project(db_session)
+    other_project = await _make_project(db_session)
+    series_a = await _make_series(db_session, project_id, "A")
+    series_b = await _make_series(db_session, project_id, "B")
+
+    global_id = await _seed_scope_embedding(
+        db_session, project_id, label="Globalis", series_id=None
+    )
+    a_id = await _seed_scope_embedding(
+        db_session, project_id, label="A-kodex", series_id=series_a
+    )
+    b_id = await _seed_scope_embedding(
+        db_session, project_id, label="B-kodex", series_id=series_b
+    )
+    # A row in ANOTHER project must never match the project-scoped query either.
+    other_id = await _seed_scope_embedding(
+        db_session, other_project, label="Masik-projekt", series_id=None
+    )
+
+    rows = (
+        await db_session.execute(
+            select(Embedding.entity_id)
+            .where(Embedding.project_id == project_id)
+            .where(_scope_filter(series_a))
+        )
+    ).scalars().all()
+    ids = set(rows)
+
+    assert global_id in ids  # project-global always in scope
+    assert a_id in ids  # active series in scope
+    assert b_id not in ids  # OTHER series excluded — the leak guard
+    assert other_id not in ids  # other project excluded (project predicate)
+
+
+@pytest.mark.integration
+async def test_scope_filter_no_active_series_returns_only_global(db_session):
+    """active_series_id=None → ONLY project-global (NULL) rows; any series row
+    excluded. Catches a mutation that lets series rows through when no series is
+    active."""
+    project_id = await _make_project(db_session)
+    series_a = await _make_series(db_session, project_id, "A")
+
+    global_id = await _seed_scope_embedding(
+        db_session, project_id, label="Globalis", series_id=None
+    )
+    a_id = await _seed_scope_embedding(
+        db_session, project_id, label="A-kodex", series_id=series_a
+    )
+
+    rows = (
+        await db_session.execute(
+            select(Embedding.entity_id)
+            .where(Embedding.project_id == project_id)
+            .where(_scope_filter(None))
+        )
+    ).scalars().all()
+    ids = set(rows)
+
+    assert ids == {global_id}
+    assert a_id not in ids
 
 
 @pytest.mark.integration

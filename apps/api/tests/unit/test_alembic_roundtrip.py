@@ -8,6 +8,15 @@ table + the two ``series_id`` columns + their indexes appear and disappear.
 This is SQLite-only on purpose: the project's CI Postgres tier runs the same
 chain, but a contributor on the default SQLite tier can still catch a broken
 migration here without a live PostgreSQL connection.
+
+HONEST COVERAGE CAVEAT: SQLite silently ignores / no-ops Postgres-specific DDL.
+In particular the **pgvector** column type + any pgvector index DDL in the
+migrations is NOT exercised here — under aiosqlite it is skipped or rendered
+inert, so a broken pgvector migration would still pass this test. The
+``@pytest.mark.postgres`` marker currently decorates ZERO tests, so those
+Postgres-only code paths are UNPROVEN locally and only validated by a green run
+on the CI-Postgres tier. Do not treat a green local run as proof that the
+pgvector DDL is correct. (We do NOT attempt to spin up pgvector locally.)
 """
 import os
 import sqlite3

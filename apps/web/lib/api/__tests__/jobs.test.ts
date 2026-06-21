@@ -38,6 +38,29 @@ describe("lib/api/jobs", () => {
     expect(seenUrl).toContain("limit=10");
   });
 
+  it("listJobs status filter returns ONLY matching jobs (behavior)", async () => {
+    // The default stateful handler actually filters by status — assert the
+    // RETURNED set, not just the query string. A client that drops the status
+    // param would return all 3 jobs and fail this.
+    const failed = await listJobs({ bookId: FAROSZ_BOOK.id, status: "failed" });
+    expect(failed).toHaveLength(1);
+    expect(failed.every((j) => j.status === "failed")).toBe(true);
+
+    const done = await listJobs({ bookId: FAROSZ_BOOK.id, status: "done" });
+    expect(done).toHaveLength(1);
+    expect(done[0]?.status).toBe("done");
+  });
+
+  it("listJobs limit caps the RETURNED set (behavior)", async () => {
+    const all = await listJobs({ bookId: FAROSZ_BOOK.id });
+    expect(all.length).toBeGreaterThan(1);
+    // limit=1 must slice the returned list to one row.
+    const capped = await listJobs({ bookId: FAROSZ_BOOK.id, limit: 1 });
+    expect(capped).toHaveLength(1);
+    // Newest-first is preserved: the first row is the failed job.
+    expect(capped[0]?.status).toBe("failed");
+  });
+
   it("listJobs returns the validated, newest-first job list", async () => {
     const jobs = await listJobs({ bookId: FAROSZ_BOOK.id });
     expect(jobs).toHaveLength(JOBS_FIXTURE.length);
