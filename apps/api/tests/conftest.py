@@ -15,7 +15,6 @@ import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 
@@ -43,12 +42,25 @@ async def engine_fixture():
 
 @pytest.fixture
 async def db_session(engine_fixture):
-    session_factory = async_sessionmaker(
-        engine_fixture, expire_on_commit=False, class_=AsyncSession
-    )
-    async with session_factory() as session:
-        yield session
-        await session.rollback()
+    # Per-test isolation. Bind the session to ONE connection inside an outer
+    # transaction and run it in "create_savepoint" mode: the code under test can
+    # call commit()/rollback() (which release / roll back a SAVEPOINT) WITHOUT
+    # ever committing the OUTER transaction. Rolling that outer transaction back
+    # at teardown undoes everything the test wrote, so committed rows never leak
+    # across tests on the shared session-scoped engine (the prior fixture's
+    # end-of-test rollback() was a no-op once a test had committed).
+    async with engine_fixture.connect() as conn:
+        trans = await conn.begin()
+        session = AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            yield session
+        finally:
+            await session.close()
+            await trans.rollback()
 
 
 @pytest.fixture

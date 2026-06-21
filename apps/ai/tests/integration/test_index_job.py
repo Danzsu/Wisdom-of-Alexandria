@@ -9,23 +9,36 @@ the dotted-path producer/consumer contract.
 
 import importlib
 import uuid
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import pytest
 from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
 from alexandria_core.models.project import Project
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.jobs.index_job import _run_index_job, run_index_job
 from app.services.embedding_service import EmbeddingService, SyncResult
 
 
-def _factory(engine_fixture):
-    """A fresh session factory bound to the test engine — mirrors the worker
-    opening its OWN session (separate from the request/test session)."""
-    return async_sessionmaker(
-        engine_fixture, expire_on_commit=False, class_=AsyncSession
-    )
+def _session_factory(db_session: AsyncSession):
+    """Inject the test's transactional ``db_session`` as the worker's session
+    factory.
+
+    In production the worker opens its OWN session (``AsyncSessionLocal``); the
+    ``session_factory`` injection point exists precisely so a test can substitute
+    one. Under the per-test isolation fixture the test's writes live in an
+    uncommitted outer transaction, so a genuinely separate connection could not
+    see them — and that separate connection is infrastructure, not the behaviour
+    under test (the state machine + counts + sanitized failure ARE). So the
+    worker re-uses the test session; the yielded context must NOT close it (the
+    fixture owns its lifecycle)."""
+
+    @asynccontextmanager
+    async def _factory():
+        yield db_session
+
+    return _factory
 
 
 def _sync_result(indexed=0, updated=0, deleted=0, skipped=0, capped=False):
@@ -55,7 +68,7 @@ async def _make_index_job(db: AsyncSession, project_id: uuid.UUID) -> Generation
 
 
 @pytest.mark.integration
-async def test_index_job_runs_sync_and_records_counts(db_session, engine_fixture):
+async def test_index_job_runs_sync_and_records_counts(db_session):
     project_id = await _make_project(db_session)
     job = await _make_index_job(db_session, project_id)
 
@@ -64,7 +77,7 @@ async def test_index_job_runs_sync_and_records_counts(db_session, engine_fixture
     emb.sync_project.return_value = _sync_result(indexed=3, updated=1, skipped=2)
 
     await _run_index_job(
-        job.id, session_factory=_factory(engine_fixture), embeddings=emb
+        job.id, session_factory=_session_factory(db_session), embeddings=emb
     )
 
     await db_session.refresh(job)
@@ -79,10 +92,11 @@ async def test_index_job_runs_sync_and_records_counts(db_session, engine_fixture
 
 
 @pytest.mark.integration
-async def test_index_job_is_running_when_sync_executes(db_session, engine_fixture):
-    """Mutation guard for the pending->RUNNING commit: at the moment sync_project
-    runs, the job row must already be RUNNING (committed before the heavy work),
-    so a separate reader (the worker's own session) observes progress."""
+async def test_index_job_is_running_when_sync_executes(db_session):
+    """Mutation guard for the pending->RUNNING commit ORDER: at the moment
+    sync_project runs, the job row must already be RUNNING (committed before the
+    heavy work). If the worker did the sync BEFORE flipping RUNNING, the readback
+    here would see PENDING and this fails."""
     project_id = await _make_project(db_session)
     job = await _make_index_job(db_session, project_id)
     captured = {}
@@ -97,13 +111,13 @@ async def test_index_job_is_running_when_sync_executes(db_session, engine_fixtur
     emb.sync_project.side_effect = _capturing_sync
 
     await _run_index_job(
-        job.id, session_factory=_factory(engine_fixture), embeddings=emb
+        job.id, session_factory=_session_factory(db_session), embeddings=emb
     )
     assert captured["status_at_sync"] == JobStatus.RUNNING
 
 
 @pytest.mark.integration
-async def test_index_job_no_provider_is_noop_success(db_session, engine_fixture):
+async def test_index_job_no_provider_is_noop_success(db_session):
     project_id = await _make_project(db_session)
     job = await _make_index_job(db_session, project_id)
 
@@ -111,7 +125,7 @@ async def test_index_job_no_provider_is_noop_success(db_session, engine_fixture)
     emb.resolve_embedding_model.return_value = None  # RAG unconfigured
 
     await _run_index_job(
-        job.id, session_factory=_factory(engine_fixture), embeddings=emb
+        job.id, session_factory=_session_factory(db_session), embeddings=emb
     )
 
     await db_session.refresh(job)
@@ -122,7 +136,7 @@ async def test_index_job_no_provider_is_noop_success(db_session, engine_fixture)
 
 
 @pytest.mark.integration
-async def test_index_job_failure_is_persisted_and_sanitized(db_session, engine_fixture):
+async def test_index_job_failure_is_persisted_and_sanitized(db_session):
     """A sync_project crash -> job FAILED with a bounded, single-line
     error_message. Mutation guard: drop the except-branch and the job stays
     RUNNING, failing these asserts. (safe_error bounds/one-lines; it does not
@@ -136,7 +150,7 @@ async def test_index_job_failure_is_persisted_and_sanitized(db_session, engine_f
     emb.sync_project.side_effect = RuntimeError(raw)
 
     await _run_index_job(
-        job.id, session_factory=_factory(engine_fixture), embeddings=emb
+        job.id, session_factory=_session_factory(db_session), embeddings=emb
     )
 
     await db_session.refresh(job)
@@ -148,12 +162,12 @@ async def test_index_job_failure_is_persisted_and_sanitized(db_session, engine_f
 
 
 @pytest.mark.integration
-async def test_index_job_missing_job_is_noop(db_session, engine_fixture):
+async def test_index_job_missing_job_is_noop(db_session):
     """An unknown job id is a clean no-op (e.g. the job was deleted before the
     worker picked it up) — never a crash."""
     emb = AsyncMock(spec=EmbeddingService)
     await _run_index_job(
-        uuid.uuid4(), session_factory=_factory(engine_fixture), embeddings=emb
+        uuid.uuid4(), session_factory=_session_factory(db_session), embeddings=emb
     )
     emb.resolve_embedding_model.assert_not_awaited()
 
