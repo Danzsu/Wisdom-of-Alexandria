@@ -267,6 +267,27 @@ class AIService:
         if project_id is None:
             logger.debug("RAG skipped: no resolvable project for scene_id=%s", scene_id)
             return "", []
+        return await self._retrieve_context(
+            db, project_id=project_id, active_series_id=active_series_id, query=query
+        )
+
+    async def _retrieve_context(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: uuid.UUID,
+        active_series_id: uuid.UUID | None,
+        query: str,
+    ) -> tuple[str, list[RetrievedItem]]:
+        """Shared RAG core: bounded project sync + series-scoped top-k retrieve.
+
+        Used by both scene-scoped generation (``_rag_context``) and project-scoped
+        Q&A (``research``). Degrades to ``("", [])`` — logged, never crashed — when
+        no embedding provider is configured or any embedding/retrieval call fails;
+        a flaky provider must never block the feature that called it.
+        """
+        if not query.strip():
+            return "", []
         model = await self.embeddings.resolve_embedding_model(db)
         if model is None:
             # Optional cloud embeddings not configured — expected, not an error.
@@ -287,8 +308,8 @@ class AIService:
                 k=RAG_TOP_K,
                 active_series_id=active_series_id,
             )
-        except Exception as e:  # noqa: BLE001 — degrade, don't crash the write
-            # Roll back so the generation's own commits run on a clean session.
+        except Exception as e:  # noqa: BLE001 — degrade, don't crash the caller
+            # Roll back so the caller's own commits run on a clean session.
             await db.rollback()
             logger.warning(
                 "RAG retrieval failed for project %s; continuing with no context: %s",
@@ -688,6 +709,73 @@ class AIService:
             db, job, output_data={"warning_count": len(warnings)}
         )
         return warnings, job, _context_entities(retrieved)
+
+    async def research(
+        self,
+        db: AsyncSession,
+        *,
+        question: str,
+        project_id: uuid.UUID,
+        scene_id: uuid.UUID | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[str, GenerationJob | None, list[dict[str, str]]]:
+        """Answer a free-form question grounded on the project's Codex + manuscript.
+
+        ANALYSIS, not generation: creates a ``GenerationJob(job_type="research")``
+        and returns ``(answer, job, context_entities)`` — NEVER a Revision (there
+        is nothing to insert into the manuscript).
+
+        Flow mirrors ``check_continuity``:
+          1. Empty question → empty result, no LLM call, no job.
+          2. Project-scoped RAG retrieval (series-scoped when a ``scene_id`` gives
+             a book context). When RAG is unconfigured the answer STILL runs with
+             empty context (graceful degradation — the model just has less to go
+             on), never a 500.
+          3. A real LLM/infra error fails the job + re-raises (stays loud).
+        """
+        if not question.strip():
+            return "", None, []
+
+        # Series scope (optional): if the caller is in a scene/book context, scope
+        # retrieval to project-global + that book's series; otherwise project-wide.
+        active_series_id = await self._resolve_series_id(db, scene_id)
+        context, retrieved = await self._retrieve_context(
+            db, project_id=project_id, active_series_id=active_series_id, query=question
+        )
+
+        job = await self.svc.create_job(
+            db,
+            job_type="research",
+            project_id=project_id,
+            scene_id=scene_id,
+            model_name=model,
+            prompt_version=PROMPT_VERSION,
+            input_data={"question": question[:500]},
+        )
+        try:
+            system = self.loader.load_system("research")
+            user = self.loader.load_user(
+                "research", codex_context=context, question=question
+            )
+            response = await self.router.complete(
+                messages=self.router.build_messages(system, user),
+                model=model,
+                db=db,
+                **_gen_overrides(temperature, max_tokens),
+            )
+        except Exception as e:
+            # Real LLM/infra error — roll back for a clean fail_job commit, re-raise.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
+            raise
+
+        answer = response.content.strip()
+        await self.svc.complete_job(
+            db, job, output_data={"answered": bool(answer)}
+        )
+        return answer, job, _context_entities(retrieved)
 
 
 ai_service = AIService()

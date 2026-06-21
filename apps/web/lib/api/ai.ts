@@ -36,6 +36,7 @@ import {
   continuityResultSchema,
   generationJobReadSchema,
   modelsResponseSchema,
+  researchResultSchema,
   revisionReadSchema,
   snippetCreateSchema,
   snippetReadSchema,
@@ -46,6 +47,7 @@ import {
   type GenerateSceneRequest,
   type GenerationJobRead,
   type ModelsResponse,
+  type ResearchResult,
   type RevisionRead,
   type RewriteRequest,
   type SnippetCreate,
@@ -144,6 +146,39 @@ export async function checkContinuity(
     baseUrl: AI_BASE_URL,
   });
   return continuityResultSchema.parse(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * Research (Codex/manuscript RAG Q&A, P2)
+ * ------------------------------------------------------------------------- */
+
+/** Input for a grounded Codex/manuscript question. */
+export interface ResearchInput {
+  question: string;
+  projectId: string;
+  /** Optional book/scene context → series-scoped retrieval (else project-wide). */
+  sceneId?: string | null;
+  model?: string | null;
+}
+
+/**
+ * Ask a free-form question grounded on the project's Codex + manuscript (RAG
+ * Q&A). Analysis only — NO revision, nothing is written to the manuscript. The
+ * answer comes back with `context_entities` citation chips (empty when RAG was
+ * skipped / unconfigured). Errors surface via `apiFetch` — never swallowed.
+ */
+export async function research(input: ResearchInput): Promise<ResearchResult> {
+  const data = await apiFetch<unknown>("/ai/research", {
+    method: "POST",
+    body: {
+      question: input.question,
+      project_id: input.projectId,
+      scene_id: input.sceneId ?? null,
+      model: input.model ?? null,
+    },
+    baseUrl: AI_BASE_URL,
+  });
+  return researchResultSchema.parse(data);
 }
 
 /* ---------------------------------------------------------------------------

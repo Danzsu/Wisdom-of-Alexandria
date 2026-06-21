@@ -22,6 +22,7 @@ import type {
   MatchesContract,
   ModelInfo as GenModelInfo,
   ModelsResponse as GenModelsResponse,
+  ResearchResult as GenResearchResult,
   RevisionRead as GenRevisionRead,
   SnippetRead as GenSnippetRead,
 } from "@alexandria/shared";
@@ -198,6 +199,19 @@ export const continuityResultSchema = z.object({
 export type ContinuityResult = z.infer<typeof continuityResultSchema>;
 
 /* ---------------------------------------------------------------------------
+ * Research (Codex/manuscript RAG Q&A) — mirrors ai.py ResearchResult.
+ *
+ * Analysis, NOT generation: the answer is grounded on retrieved Codex/manuscript
+ * context; `context_entities` are the citation chips (empty when RAG was skipped
+ * / unconfigured — the model then answered from the question alone).
+ * ------------------------------------------------------------------------- */
+export const researchResultSchema = z.object({
+  answer: z.string().default(""),
+  context_entities: contextEntitiesField,
+});
+export type ResearchResult = z.infer<typeof researchResultSchema>;
+
+/* ---------------------------------------------------------------------------
  * Snippet — mirrors app/schemas/snippet.py (SnippetCreate / SnippetRead).
  * Snippets are project-scoped (`/projects/{project_id}/snippets`).
  * ------------------------------------------------------------------------- */
@@ -337,6 +351,9 @@ export type AIContractTies = [
   >,
   Expect<
     MatchesContract<z.infer<typeof continuityResultSchema>, GenContinuityResult>
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof researchResultSchema>, GenResearchResult>
   >,
   Expect<MatchesContract<z.infer<typeof modelInfoSchema>, GenModelInfo>>,
   Expect<

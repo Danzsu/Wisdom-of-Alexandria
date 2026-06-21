@@ -26,6 +26,7 @@ import type {
   ContinuityWarning,
   GenerationJobRead,
   ModelsResponse,
+  ResearchResult,
   RevisionRead,
   SnippetRead,
 } from "@/lib/api/ai-types";
@@ -620,6 +621,16 @@ export function makeContinuityResult(
   contextEntities: AIContextEntity[] = [],
 ): ContinuityResult {
   return { warnings, context_entities: contextEntities };
+}
+
+/** Build a `ResearchResult` echo (Codex/manuscript RAG Q&A, P2). */
+export function makeResearchResult(
+  answer = "Szelene a Nagykönyvtár éjszakai írnoka.",
+  contextEntities: AIContextEntity[] = [
+    { id: "codex-szelene", label: "Szelene", entity_type: "character" },
+  ],
+): ResearchResult {
+  return { answer, context_entities: contextEntities };
 }
 
 /** Build a `SnippetRead` echo for a POST /projects/{pid}/snippets body. */

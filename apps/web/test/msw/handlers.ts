@@ -29,6 +29,7 @@ import {
   makeDescribeResult,
   makeIndexJob,
   makePlotline,
+  makeResearchResult,
   makePlotlineScene,
   makeProvider,
   makeRevision,
@@ -1638,6 +1639,13 @@ export const handlers = [
    * paths. ---- */
   http.post(`${aiBase}/ai/continuity`, () =>
     HttpResponse.json(makeContinuityResult()),
+  ),
+
+  /* ---- Research (Codex/manuscript RAG Q&A, P2). Default returns a grounded
+   * answer + one citation chip; tests override for the no-context / error
+   * paths via server.use(...). ---- */
+  http.post(`${aiBase}/ai/research`, () =>
+    HttpResponse.json(makeResearchResult()),
   ),
 
   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the

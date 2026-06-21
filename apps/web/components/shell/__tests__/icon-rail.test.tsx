@@ -44,7 +44,7 @@ describe("IconRail", () => {
     expect(screen.getByRole("button", { name: "Terv" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Írás" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Codex" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kutatás" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Tiszta írás" }),
     ).toBeInTheDocument();

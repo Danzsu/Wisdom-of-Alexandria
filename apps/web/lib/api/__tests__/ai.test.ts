@@ -9,10 +9,16 @@ import {
   generateScene,
   indexProjectAsync,
   listModels,
+  research,
   resolveProjectIdForBook,
   rewrite,
 } from "@/lib/api/ai";
-import { FAROSZ_BOOK, FAROSZ_PROJECT, makeIndexJob } from "@/test/msw/fixtures";
+import {
+  FAROSZ_BOOK,
+  FAROSZ_PROJECT,
+  makeIndexJob,
+  makeResearchResult,
+} from "@/test/msw/fixtures";
 
 /** AI service base — `/ai/*` handlers live here after the Alexandria split. */
 const aiBase = `${AI_BASE_URL}/api/v1`;
@@ -192,6 +198,29 @@ describe("lib/api/ai", () => {
 
   it("resolveProjectIdForBook throws when no project owns the book", async () => {
     await expect(resolveProjectIdForBook("unknown-book")).rejects.toThrow();
+  });
+
+  it("research POSTs question + project_id to the AI base and parses the answer + chips", async () => {
+    let seenUrl: string | null = null;
+    let seenBody: unknown = null;
+    server.use(
+      http.post(`${aiBase}/ai/research`, async ({ request }) => {
+        seenUrl = request.url;
+        seenBody = await request.json();
+        return HttpResponse.json(makeResearchResult("A válasz."));
+      }),
+    );
+    const res = await research({
+      question: "Ki Szelene?",
+      projectId: FAROSZ_PROJECT.id,
+    });
+    expect(seenUrl).toContain(AI_BASE_URL);
+    expect(seenBody).toMatchObject({
+      question: "Ki Szelene?",
+      project_id: FAROSZ_PROJECT.id,
+    });
+    expect(res.answer).toBe("A válasz.");
+    expect(res.context_entities.length).toBeGreaterThan(0);
   });
 
   it("indexProjectAsync POSTs to the AI base with project_id and parses the job", async () => {

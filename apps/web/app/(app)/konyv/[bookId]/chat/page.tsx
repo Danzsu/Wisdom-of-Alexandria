@@ -1,12 +1,14 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+"use client";
 
-/** Chat placeholder — filled in M10 (V1). */
+/**
+ * Kutatás (Codex/manuscript RAG Q&A) screen — the book's `chat` route. Research
+ * is project-scoped but the route only carries `bookId`, so the owning project
+ * is resolved inside {@link ResearchScreen} via the shared `useBookProjectId`.
+ */
+import { useParams } from "next/navigation";
+import { ResearchScreen } from "@/components/research/research-screen";
+
 export default function ChatPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.chatLabel}
-      hint={hu.placeholders.chatHint}
-    />
-  );
+  const params = useParams<{ bookId: string }>();
+  return <ResearchScreen bookId={params?.bookId} />;
 }

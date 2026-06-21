@@ -163,6 +163,19 @@ class IndexRequest(BaseModel):
     project_id: uuid.UUID | None = None
 
 
+class ResearchRequest(BaseModel):
+    """A free-form Codex/manuscript Q&A question, grounded via RAG (P2)."""
+
+    question: str
+    project_id: uuid.UUID
+    # Optional book/scene context: when given, retrieval is series-scoped to that
+    # book's series (project-global + that series), else project-wide.
+    scene_id: uuid.UUID | None = None
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
 # ── Response schemas ─────────────────────────────────────────────────────────
 
 class ContextEntity(BaseModel):
@@ -228,6 +241,19 @@ class ContinuityResult(BaseModel):
     """
 
     warnings: list[ContinuityWarning] = Field(default_factory=list)
+    context_entities: list[ContextEntity] = Field(default_factory=list)
+
+
+class ResearchResult(BaseModel):
+    """Codex/manuscript Q&A response (P2). NO revision — this is analysis.
+
+    ``answer`` is the model's grounded answer (empty only for an empty question).
+    ``context_entities`` lists the Codex/manuscript entries RAG grounded the
+    answer on (empty when RAG was skipped / unconfigured — the model then answered
+    from the question alone), shown as citation chips.
+    """
+
+    answer: str = ""
     context_entities: list[ContextEntity] = Field(default_factory=list)
 
 
@@ -403,6 +429,42 @@ async def continuity(
         )
         return ContinuityResult(
             warnings=[ContinuityWarning(**w) for w in warnings],
+            context_entities=[ContextEntity(**c) for c in context_entities],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/research", response_model=ResearchResult)
+async def research(
+    data: ResearchRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: AIService = Depends(get_ai_service),
+) -> ResearchResult:
+    """Answer a free-form question grounded on the project's Codex + manuscript
+    (RAG Q&A). Analysis only — NO revision, nothing is written to the manuscript.
+
+    Degradation contract (no 500 for either case):
+    - empty/whitespace question → empty answer + empty context_entities.
+    - RAG/embeddings unconfigured → the model still answers from the question
+      alone (empty context_entities), never an error.
+    """
+    try:
+        answer, _job, context_entities = await svc.research(
+            db,
+            question=data.question,
+            project_id=data.project_id,
+            scene_id=data.scene_id,
+            model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        return ResearchResult(
+            answer=answer,
             context_entities=[ContextEntity(**c) for c in context_entities],
         )
     except Exception as e:

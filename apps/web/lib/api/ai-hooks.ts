@@ -25,9 +25,11 @@ import {
   generateScene,
   indexProjectAsync,
   listModels,
+  research,
   resolveProjectIdForBook,
   rewrite,
   writeContinue,
+  type ResearchInput,
 } from "./ai";
 import { getJob, listJobs } from "./jobs";
 import type {
@@ -38,6 +40,7 @@ import type {
   GenerateSceneRequest,
   GenerationJobRead,
   ModelsResponse,
+  ResearchResult,
   RevisionRead,
   RewriteRequest,
   SnippetCreate,
@@ -288,6 +291,19 @@ export function useCheckContinuity(): UseMutationResult<
     mutationFn: ({ sceneId, model }: CheckContinuityInput) =>
       checkContinuity(sceneId, model),
   });
+}
+
+/**
+ * Ask a grounded Codex/manuscript question (RAG Q&A — the "Kutatás" screen).
+ * Resolves to an answer + citation chips; NEVER a Revision (analysis only).
+ * Errors surface via Query's `error` / `isError` — never swallowed.
+ */
+export function useResearch(): UseMutationResult<
+  ResearchResult,
+  Error,
+  ResearchInput
+> {
+  return useMutation({ mutationFn: (input: ResearchInput) => research(input) });
 }
 
 /* ---------------------------------------------------------------------------

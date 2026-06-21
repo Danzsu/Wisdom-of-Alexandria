@@ -51,7 +51,7 @@ export const hu = {
     idosor: "Idősor",
     kapcsolatok: "Kapcsolatok",
     cselekmenyszalak: "Cselekményszálak",
-    chat: "Chat",
+    chat: "Kutatás",
     cleanWrite: "Tiszta írás",
     export: "Export",
     settings: "Beállítások",
@@ -1320,6 +1320,21 @@ export const hu = {
     saveAsSnippet: "Mentés Snippetként",
     /** Theme toggle aria-label / title. */
     themeToggle: "Téma váltása",
+  },
+  /** Kutatás (Codex/manuscript RAG Q&A) screen. */
+  research: {
+    title: "Kutatás",
+    subtitle: "Kérdezz a saját világodról és kéziratodról — a válasz a Codexre és a kéziratra alapozva születik.",
+    placeholder: "Mit szeretnél megtudni a világodról?",
+    ask: "Kérdés",
+    asking: "Keresés…",
+    answerLabel: "Válasz",
+    citationsLabel: "Források:",
+    emptyTitle: "Tegyél fel egy kérdést",
+    emptyHint: "Pl. „Milyen kapcsolatban áll Szelene és a Nagykönyvtár?” — a válasz a Codex és a kézirat alapján készül.",
+    errorRetry: "A kérdés megválaszolása nem sikerült. Próbáld újra.",
+    noProviderNote: "Nincs beágyazási szolgáltató beállítva — a válasz a Codex-kontextus nélkül készült.",
+    questionAria: "Kutatási kérdés",
   },
   /** Book-route placeholder screens (M2 verifiable nav; real screens later). */
   placeholders: {

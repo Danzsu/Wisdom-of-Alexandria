@@ -58,6 +58,7 @@ export type AIResult = AiSchemas["AIResult"];
 export type AIDescribeResult = AiSchemas["AIDescribeResult"];
 export type ContinuityWarning = AiSchemas["ContinuityWarning"];
 export type ContinuityResult = AiSchemas["ContinuityResult"];
+export type ResearchResult = AiSchemas["ResearchResult"];
 export type ModelInfo = AiSchemas["ModelInfo"];
 export type ModelsResponse = AiSchemas["ModelsResponse"];
 export type ProviderRead = AiSchemas["ProviderRead"];

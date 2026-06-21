@@ -43,6 +43,7 @@ class RevisionService:
         db: AsyncSession,
         *,
         job_type: str,
+        project_id: uuid.UUID | None = None,
         scene_id: uuid.UUID | None = None,
         chapter_id: uuid.UUID | None = None,
         model_name: str | None = None,
@@ -51,6 +52,7 @@ class RevisionService:
     ) -> GenerationJob:
         job = GenerationJob(
             job_type=job_type,
+            project_id=project_id,
             scene_id=scene_id,
             chapter_id=chapter_id,
             status=JobStatus.RUNNING,

@@ -166,6 +166,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Research
+         * @description Answer a free-form question grounded on the project's Codex + manuscript
+         *     (RAG Q&A). Analysis only — NO revision, nothing is written to the manuscript.
+         *
+         *     Degradation contract (no 500 for either case):
+         *     - empty/whitespace question → empty answer + empty context_entities.
+         *     - RAG/embeddings unconfigured → the model still answers from the question
+         *       alone (empty context_entities), never an error.
+         */
+        post: operations["research_api_v1_ai_research_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/rewrite": {
         parameters: {
             query?: never;
@@ -657,6 +683,45 @@ export interface components {
             type?: ("ollama" | "gemini" | "anthropic" | "openai" | "openrouter" | "custom") | null;
         };
         /**
+         * ResearchRequest
+         * @description A free-form Codex/manuscript Q&A question, grounded via RAG (P2).
+         */
+        ResearchRequest: {
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Question */
+            question: string;
+            /** Scene Id */
+            scene_id?: string | null;
+            /** Temperature */
+            temperature?: number | null;
+        };
+        /**
+         * ResearchResult
+         * @description Codex/manuscript Q&A response (P2). NO revision — this is analysis.
+         *
+         *     ``answer`` is the model's grounded answer (empty only for an empty question).
+         *     ``context_entities`` lists the Codex/manuscript entries RAG grounded the
+         *     answer on (empty when RAG was skipped / unconfigured — the model then answered
+         *     from the question alone), shown as citation chips.
+         */
+        ResearchResult: {
+            /**
+             * Answer
+             * @default
+             */
+            answer: string;
+            /** Context Entities */
+            context_entities?: components["schemas"]["ContextEntity"][];
+        };
+        /**
          * RevisionRead
          * @description Read view of a Revision.
          *
@@ -996,6 +1061,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelsResponse"];
+                };
+            };
+        };
+    };
+    research_api_v1_ai_research_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
