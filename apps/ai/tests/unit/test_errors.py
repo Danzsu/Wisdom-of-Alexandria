@@ -6,8 +6,7 @@ exception is surfaced to a client (HTTP detail) or persisted (job
 """
 
 import pytest
-
-from app.core.errors import safe_error
+from alexandria_core.core.errors import safe_error
 
 
 @pytest.mark.unit

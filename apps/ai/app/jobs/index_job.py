@@ -17,10 +17,10 @@ import asyncio
 import logging
 import uuid
 
+from alexandria_core.core.errors import safe_error
 from alexandria_core.db.session import AsyncSessionLocal
 from alexandria_core.models.generation_job import JobStatus
 
-from app.core.errors import safe_error
 from app.services.crud_generation_job import get_job
 from app.services.embedding_service import EmbeddingService, SyncResult, embedding_service
 

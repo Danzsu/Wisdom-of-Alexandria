@@ -1,9 +1,11 @@
-"""Shared error sanitization helpers.
+"""Shared error sanitization helper for the Alexandria backends.
 
-Used wherever an internal exception must be surfaced to a client (HTTP detail)
-or persisted (job ``error_message``). The goal is to never leak unbounded raw
-internal text — stack-trace-like blobs, multi-line provider dumps, or anything
-that might embed a secret — into a response or the database.
+Both services (``apps/api`` domain, ``apps/ai`` AI/RAG) surface internal
+exceptions to clients (HTTP detail) or persist them (job ``error_message``).
+This is the SINGLE source of the sanitizer — used wherever raw internal text
+must be bounded before it leaves the process, so a stack-trace blob, multi-line
+provider dump, or anything that might embed a secret can never flood a response,
+a log line, or the database as separate lines.
 """
 
 _MAX_ERROR_LEN = 300
@@ -16,8 +18,8 @@ def safe_error(exc: Exception | str) -> str:
     already-extracted ``error_message`` as well as a caught exception).
 
     - Falls back to the exception class name when ``str(exc)`` is empty.
-    - Collapses newlines/tabs to spaces so multi-line internal dumps cannot
-      bleed into logs or responses as separate lines.
+    - Collapses newlines/tabs/whitespace runs to single spaces so multi-line
+      internal dumps cannot bleed into logs or responses as separate lines.
     - Truncates to a fixed maximum length so an attacker-influenced or
       pathologically long message cannot flood the channel.
 

@@ -33,6 +33,7 @@ import type {
   ProviderRead as GenProviderRead,
 } from "@alexandria/shared";
 import { AI_BASE_URL, apiFetch } from "./client";
+import { idString } from "./schema-primitives";
 
 /* ---------------------------------------------------------------------------
  * Provider types — the slugs the backend accepts. Ollama needs no api_key
@@ -69,8 +70,6 @@ export function asProviderType(value: string): ProviderType | null {
 /* ---------------------------------------------------------------------------
  * Zod schemas — mirror the backend Pydantic schemas exactly.
  * ------------------------------------------------------------------------- */
-
-const idString = z.string().min(1);
 
 const providerTypeSchema = z.enum(PROVIDER_TYPES);
 

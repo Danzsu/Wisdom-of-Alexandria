@@ -10,6 +10,7 @@
  * to `packages/shared` is a later cleanup (per the M3 spec).
  */
 import { z } from "zod";
+import { idString } from "./schema-primitives";
 import type {
   BeatRead as GenBeatRead,
   BookRead as GenBookRead,
@@ -28,13 +29,6 @@ import type {
 /* ---------------------------------------------------------------------------
  * Project — mirrors app/schemas/project.py
  * ------------------------------------------------------------------------- */
-
-/**
- * UUID-bearing id field. The backend types these as `uuid.UUID`, but we only
- * validate "non-empty string" here: strict RFC-4122 version/variant checks would
- * reject valid server ids and are an unnecessary frontend over-reach.
- */
-const idString = z.string().min(1);
 
 /** A project as returned by the API (`ProjectRead`). */
 export const projectReadSchema = z.object({

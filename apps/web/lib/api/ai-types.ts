@@ -25,8 +25,7 @@ import type {
   RevisionRead as GenRevisionRead,
   SnippetRead as GenSnippetRead,
 } from "@alexandria/shared";
-
-const idString = z.string().min(1);
+import { idString } from "./schema-primitives";
 
 /* ---------------------------------------------------------------------------
  * Revision — mirrors app/schemas/revision.py (RevisionRead).

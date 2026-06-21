@@ -50,7 +50,6 @@ import { RestoreBackupDialog } from "./restore-backup-dialog";
 
 const ONBOARD_KEY = "woa-onboard-dismissed";
 type SortKey = "recent" | "title";
-type GroupKey = "none" | "genre";
 type ViewKey = "grid" | "list";
 
 export function ProjectsDashboard() {
@@ -513,7 +512,6 @@ function AllProjectsSection({
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
-  const [group, setGroup] = useState<GroupKey>("none");
   const [view, setView] = useState<ViewKey>("grid");
   const motionConf = useCalmMotion();
 
@@ -548,7 +546,6 @@ function AllProjectsSection({
           />
         </label>
         <SortDropdown value={sort} onChange={setSort} />
-        <GroupDropdown value={group} onChange={setGroup} />
         <SegmentedControl<ViewKey>
           aria-label={`${hu.projects.viewGrid} / ${hu.projects.viewList}`}
           value={view}
@@ -640,39 +637,6 @@ function SortDropdown({
         </MenuRow>
         <MenuRow onSelect={() => onChange("title")}>
           {hu.projects.sortTitle}
-        </MenuRow>
-      </PopoverMenuContent>
-    </PopoverMenu>
-  );
-}
-
-function GroupDropdown({
-  value,
-  onChange,
-}: {
-  value: GroupKey;
-  onChange: (v: GroupKey) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const label = value === "genre" ? hu.projects.groupGenre : hu.projects.groupNone;
-  return (
-    <PopoverMenu open={open} onOpenChange={setOpen}>
-      <PopoverMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={hu.projects.groupLabel}
-          className="flex h-[30px] items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[12px] text-text-muted transition-colors hover:border-border-strong"
-        >
-          {label}
-          <Icon icon={ChevronDown} size={11} />
-        </button>
-      </PopoverMenuTrigger>
-      <PopoverMenuContent align="end">
-        <MenuRow onSelect={() => onChange("none")}>
-          {hu.projects.groupNone}
-        </MenuRow>
-        <MenuRow onSelect={() => onChange("genre")}>
-          {hu.projects.groupGenre}
         </MenuRow>
       </PopoverMenuContent>
     </PopoverMenu>

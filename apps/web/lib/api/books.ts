@@ -81,10 +81,12 @@ export async function updateBook(
  */
 export async function resolveBookById(bookId: string): Promise<BookRead> {
   const projects = await listProjects();
-  for (const project of projects) {
-    const books = await listBooks(project.id);
-    const match = books.find((b) => b.id === bookId);
-    if (match) return match;
-  }
+  // Fetch every project's books in PARALLEL (not a serial waterfall) — without a
+  // top-level GET /books/{id} we must scan, but the round-trips need not be
+  // sequential. The hook layer caches the result so this fires at most once per
+  // book per session.
+  const bookLists = await Promise.all(projects.map((p) => listBooks(p.id)));
+  const match = bookLists.flat().find((b) => b.id === bookId);
+  if (match) return match;
   throw new Error(`Nem található könyv ezzel az azonosítóval: ${bookId}`);
 }

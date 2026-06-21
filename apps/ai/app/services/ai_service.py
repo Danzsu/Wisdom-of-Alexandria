@@ -4,6 +4,7 @@ import re
 import uuid
 from typing import Any
 
+from alexandria_core.core.errors import safe_error
 from alexandria_core.models.chapter import Chapter
 from alexandria_core.models.generation_job import GenerationJob
 from alexandria_core.models.revision import Revision
@@ -11,7 +12,6 @@ from alexandria_core.models.scene import Scene
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import safe_error
 from app.services.embedding_service import (
     EmbeddingService,
     RetrievedItem,

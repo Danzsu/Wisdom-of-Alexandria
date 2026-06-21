@@ -8,10 +8,10 @@ Secrets are decrypted only in-memory here and are NEVER logged or returned.
 import logging
 
 import httpx
+from alexandria_core.core.errors import safe_error as _safe_error
 from alexandria_core.models.provider import Provider
 
 from app.core.crypto import DecryptionError, decrypt_secret
-from app.core.errors import safe_error as _safe_error
 from app.schemas.provider import ProviderModelInfo, ProviderTestResult
 
 logger = logging.getLogger(__name__)

@@ -3,6 +3,7 @@ import uuid
 
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
+from alexandria_core.core.errors import safe_error
 from alexandria_core.models.generation_job import JobStatus
 from alexandria_core.models.project import Project
 from alexandria_core.schemas.revision import RevisionRead
@@ -10,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
 from app.services.crud_generation_job import create_index_job
