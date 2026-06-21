@@ -117,12 +117,17 @@ async def test_index_async_enqueue_failure_marks_job_failed(
     project_id = await _make_project(db_session)
     with patch(
         "app.api.v1.ai.enqueue_index_job",
-        side_effect=RuntimeError("redis down secret-leak-xyz"),
+        side_effect=RuntimeError("redis://:s3cr3t-leak-xyz@broker:6379 refused"),
     ):
         resp = await client.post(
             f"/api/v1/ai/index/async?project_id={project_id}", headers=auth_headers
         )
     assert resp.status_code == 502
+    # The 502 detail must be a FIXED message — the enqueue exception (a Redis
+    # connection error) can carry the broker URL + credentials; it must NEVER be
+    # echoed to the client (safe_error only bounds, it does not strip secrets).
+    assert "s3cr3t-leak-xyz" not in resp.text
+    assert "broker:6379" not in resp.text
     # The job exists and is FAILED, not left dangling as PENDING.
     job = (
         await db_session.execute(

@@ -58,7 +58,7 @@ export async function listJobs(
  * (non-2xx / transport / parse) throw via `apiFetch` — never swallowed.
  */
 export async function getJob(jobId: string): Promise<GenerationJobRead> {
-  const data = await apiFetch<unknown>(`/jobs/${jobId}`, {
+  const data = await apiFetch<unknown>(`/jobs/${encodeURIComponent(jobId)}`, {
     baseUrl: AI_BASE_URL,
   });
   return generationJobReadSchema.parse(data);

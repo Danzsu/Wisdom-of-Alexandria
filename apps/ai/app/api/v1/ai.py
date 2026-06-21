@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from alexandria_core.core.config import settings
@@ -21,6 +22,8 @@ from app.services.embedding_service import (
 )
 from app.services.job_queue import enqueue_index_job
 from app.services.provider_service import list_provider_models
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -503,14 +506,18 @@ async def index_project_async(
         enqueue_index_job(job.id)
     except Exception as e:
         # The job row exists but could not be queued (e.g. Redis unreachable).
-        # Mark it failed so it is not stuck PENDING forever, then surface a
-        # sanitized 502. Never leak the underlying connection error verbatim.
+        # Mark it failed so it is not stuck PENDING forever. The 502 detail is a
+        # FIXED message — the enqueue exception (a Redis connection error) can
+        # carry the broker URL incl. credentials, and safe_error only bounds, it
+        # does NOT strip secrets — so we never echo it to the client. The cause
+        # is logged server-side (sanitized) for diagnosis.
+        logger.warning("Index job enqueue failed: %s", safe_error(e))
         job.status = JobStatus.FAILED
         job.error_message = "A feladat sorba állítása nem sikerült."
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Could not enqueue index job: {safe_error(e)}",
+            detail="Could not enqueue index job (queue unavailable).",
         )
     return GenerationJobRead.model_validate(job)
 
