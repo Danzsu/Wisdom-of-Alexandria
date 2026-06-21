@@ -1,5 +1,7 @@
 # 14 — Jövőbeli fejlesztési terv (backend-támogatás + halasztott funkciók)
 
+> *(részben elavult — lásd `docs/17`; pl. az RQ async worker és a Lighthouse CI gate már KÉSZ)*
+
 Ez a dokumentum összegyűjti azokat a funkciókat és **backend-bővítéseket**, amelyek a frontend MVP építése (M0–M8) során **szándékosan halasztva** lettek, vagy amelyekhez a backend jelenleg nem ad támogatást. A frontend ezeknél vagy stubot mutat, vagy egy dokumentált interim megoldást használ — mindegyik tételnél jelölve, hogy mit kell a backendnek megtámogatnia.
 
 Prioritás: **P1** = V1-hez kell · **P2** = V2 · **P3** = később.

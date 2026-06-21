@@ -4,7 +4,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 ---
 
-## a) Jelenlegi állapot (2026-06-16)
+## a) Jelenlegi állapot (2026-06-21)
 
 **Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
 
@@ -12,13 +12,13 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 | Csomag | Tesztek | Megjegyzés |
 |---|---|---|
-| `apps/api` | **491** | +3 pandoc-skip lokálisan; CI-ban futnak |
-| `apps/ai` | **243** | +6 pgvector-skip lokálisan; CI-ban futnak |
-| `apps/web` | **624** | — |
+| `apps/api` | **~493** | CI-ban (Postgres) futnak; +3 pandoc-skip lokálisan |
+| `apps/ai` | **~260** (Postgres) / **~255** (SQLite) | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
+| `apps/web` | **634** | — |
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
-**CI:** a `feat/alexandria-ui` ág fel van pusholva originra, és a **GitHub Actions CI ZÖLD**: backend ruff + `alembic upgrade head` Postgresen + pytest (pgvector + pandoc) · frontend type-check / lint / vitest · shared-types frissesség-check.
+**CI:** a `feat/alexandria-ui` ág fel van pusholva originra, és a **GitHub Actions CI ZÖLD** (run #5/#6 a backend / frontend / shared-types / lighthouse jobokon át): backend ruff + `alembic upgrade head` Postgresen + pytest (pgvector + pandoc) · frontend type-check / lint / vitest · shared-types frissesség-check · **advisory (non-blocking) Lighthouse job**.
 
 **Branch/push:** `feat/alexandria-ui` @ origin, zöld CI. Commit/push/branch nélkül — ez a doc-kör csak Markdown.
 
@@ -42,6 +42,7 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 - **RAG sorozat-tudatosság:** `Embedding.series_id` — más sorozat codexe/kézirata sosem szivárog egy generálás kontextusába.
 - **Folytonosság-ellenőrző:** `POST /ai/continuity` (jelenet-scope, RAG-kontextus, strukturált severity/message/entity figyelmeztetések, robusztus JSON-parse látható figyelmeztetéssé degradálva; az infra-hibák hangosak maradnak) + a valódi Warnings tab.
 - **Élő AI-jobs képernyő + nav-badge:** book-scope `GET /jobs` + polling (az interaktív AI SZINKRON marad; az élő job-képernyő history + attention).
+- **Aszinkron RAG-index job (valódi RQ worker):** `GenerationJob.project_id` oszlop + Alembic-migráció (`e5a1b2c3d4f6`); `POST /ai/index/async` a meglévő `ai` RQ-sorra enqueue-ol; valódi RQ worker-job (`app/jobs/index_job.py`, saját session, pending→running→done/failed állapotgép, maszkolt hiba, provider-hiányban no-op); FE `indexProjectAsync` + `getJob` + `useRebuildIndex` poll-hook + „RAG index" kártya a Beállításokban. Ez bizonyítja a valódi worker-infrát (az interaktív generálás szándékosan szinkron marad).
 
 ### Feature-ök #1–#5
 - **#1 Sorozat-scope Codex:** `Series` entitás (Project alatt) + `Book.series_id` + `CodexEntry.series_id`; a Codex scope-toggle (Projekt/Sorozat) `?series_id=`-szal szűr; sorozat-kezelő UI.
@@ -60,6 +61,8 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
 - `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
 - **Teszt-keményítés + valódi biztonsági javítás:** egy adverszariális teszt-audit kiderítette, hogy a catch-all 500-handler `str(exc)`-et visszhangzott (kivétel-üzenetbe ágyazott titok kiszivárgott a kliensnek) — javítva generikus üzenetre + szerver-oldali logra **mindkét** appban; emellett egy valódi `word_count`-archiváltat-is-számol bug + több üres teszt javítva (mindegyik mutation-proven).
+- **Codebase-health refaktorok:** `safe_error` deduplikálva az `alexandria_core.core.errors`-ba (a per-app másolatok törölve, az `apps/api`-é halott kód volt); közös `idString` primitív (`apps/web/lib/api/schema-primitives.ts`); `resolveBookById` párhuzamosítva; halott group-by dropdown eltávolítva; `exportQueryKeys.book()` factory (hardcode-olt cross-domain query-key kiváltva); kitchen-sink dev-galéria production buildből kizárva; az `ACTION_INSTRUCTION` rewrite-promptok kiemelve a React-komponensből az `apps/web/lib/ai/action-instructions.ts`-be (CLAUDE.md-megfelelőség).
+- **Valódi per-teszt DB-izoláció:** mindkét conftest `db_session`-je `join_transaction_mode="create_savepoint"`-ot használ egy külső, teardownnál visszagörgetett tranzakción belül; egy követő javítás átveszi a pysqlite `BEGIN`-kibocsátását, mert a savepoint az aiosqlite-on néma NO-OP volt (a commitolt sorok átszivárogtak a tesztek közt a default SQLite-backenden — a CI csak azért volt zöld, mert Postgresen fut). Mutation-proven cross-teszt szivárgás-őr: `apps/api/tests/integration/test_db_isolation.py`. Ez lezárja a korábbi sorrend-függő CI-bukások okát.
 
 ---
 
@@ -67,13 +70,13 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
 Prioritás: **P1-maradék** = kis, V1-záró tételek · **P2** = magas user-érték · **P3** = később / nagy spec.
 
+> **Lezárt P1-tételek (lásd b):** RQ async worker → **KÉSZ** (valódi RQ index-job bizonyítja a worker-infrát) · Lighthouse CI gate → **KÉSZ** (advisory, non-blocking job).
+
 ### P1-maradék (kicsi)
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| RQ async worker | Valódi aszinkron worker hosszú/batch jobokhoz; jelenleg a worker stub, az interaktív AI szinkron | BE (`apps/ai`) + infra |
 | Provider health-check befejezése | Ollama ping véglegesítése (a `/providers/{id}/test` már létezik) | BE (`apps/ai`) |
-| Lighthouse CI gate | Perf/a11y budget-gate a CI-ban (a `docs/16` follow-upként dokumentálja) | infra (CI) |
 
 ### P2 (magas user-érték)
 
@@ -103,9 +106,8 @@ Prioritás: **P1-maradék** = kis, V1-záró tételek · **P2** = magas user-ér
 
 ## d) Javasolt következő kör
 
-A leg-ésszerűbb következő lépések, érték/kockázat arány szerint:
+A leg-ésszerűbb következő lépések, érték/kockázat arány szerint (az RQ worker és a Lighthouse gate immár KÉSZ — lásd b):
 
-1. **P1-maradék kis tételek bezárása** — **RQ async worker** (a stub valódivá tétele a hosszú/batch jobokhoz) és a **Lighthouse CI gate** (a `docs/16` follow-upja). Mindkettő jól körülhatárolt, alacsony kockázatú, és a meglévő infrastruktúrára épül.
-2. **Magas user-értékű P2:** **Codex → Kutatás (RAG Q&A)** — a retrieval-infra már kész, „csak" az interaktív Q&A-réteget kell rákötni; és a **kép-pipeline** (media-asset tábla + feltöltés + EPUB-embed), ami a vizuális tartalmat és az EPUB-export minőségét nyitja meg.
-
-> **Megjegyzés az E2E-ről:** a Playwright kétszolgáltatásos E2E **blokkolt**, mert mindkét backend-app a top-level `app` Python-csomagnevet használja, és nincs web Dockerfile. Ezt a névütközést + a web Dockerfile-t fel kell oldani, mielőtt az E2E-kör elindulhat — ezért nem szerepel a „következő kör" javaslatban.
+1. **Codex → Kutatás (RAG Q&A)** — a retrieval-infra már kész (`EmbeddingService` + projekt-scope-olt index), „csak" az interaktív Q&A-réteget kell rákötni. Magas user-érték, alacsony infra-kockázat.
+2. **Revízió-böngésző + diff/restore** — a HITL-revíziók már perzisztálva vannak, a `DiffPane` is létezik; egy revízió-lista + diff/restore felület zárja a human-in-the-loop hurkot a felületen.
+3. **E2E feloldása** — a Playwright kétszolgáltatásos E2E **blokkolt**, mert mindkét backend-app a top-level `app` Python-csomagnevet használja, és nincs web Dockerfile. A csomagnév-ütközés + a web Dockerfile feloldása nyitja meg az E2E-kört.
