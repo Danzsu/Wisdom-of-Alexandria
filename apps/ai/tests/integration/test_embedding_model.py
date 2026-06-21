@@ -9,6 +9,7 @@ is skipped automatically on SQLite.
 import uuid
 
 import pytest
+from alexandria_core.core.config import EMBEDDING_DIM
 from alexandria_core.models.book import Book
 from alexandria_core.models.embedding import Embedding
 from alexandria_core.models.project import Project
@@ -34,6 +35,13 @@ async def _make_book(db_session) -> tuple[uuid.UUID, uuid.UUID]:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    IS_POSTGRES,
+    reason="JSON-fallback round-trip is the SQLite tier; the real vector(N) "
+    "round-trip is covered by test_embedding_vector_round_trips_on_postgres. "
+    "Arbitrary-width vectors cannot be stored in the fixed vector(EMBEDDING_DIM) "
+    "column on PostgreSQL.",
+)
 async def test_embedding_inserts_and_round_trips_vector_on_sqlite(db_session):
     project_id, book_id = await _make_book(db_session)
     entity_id = uuid.uuid4()
@@ -79,9 +87,9 @@ async def test_embedding_unique_entity_constraint(db_session):
             entity_type="scene",
             entity_id=entity_id,
             content_hash="h1",
-            embedding=[1.0, 2.0],
+            embedding=[1.0] * EMBEDDING_DIM,
             model_name="m",
-            dim=2,
+            dim=EMBEDDING_DIM,
         )
     )
     await db_session.commit()
@@ -93,9 +101,9 @@ async def test_embedding_unique_entity_constraint(db_session):
             entity_type="scene",
             entity_id=entity_id,
             content_hash="h2",
-            embedding=[3.0, 4.0],
+            embedding=[2.0] * EMBEDDING_DIM,
             model_name="m",
-            dim=2,
+            dim=EMBEDDING_DIM,
         )
     )
     with pytest.raises(IntegrityError):

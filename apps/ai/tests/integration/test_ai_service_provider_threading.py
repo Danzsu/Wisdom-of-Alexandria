@@ -155,16 +155,32 @@ async def test_no_provider_falls_back_to_ollama(db_session):
 
 @pytest.mark.integration
 async def test_failed_generation_persists_sanitized_failed_job(db_session):
-    import uuid
-
+    from alexandria_core.models.book import Book
+    from alexandria_core.models.chapter import Chapter
     from alexandria_core.models.generation_job import GenerationJob, JobStatus
+    from alexandria_core.models.project import Project
+    from alexandria_core.models.scene import Scene
     from sqlalchemy import select
 
     service = _real_service()
 
-    # A unique scene_id so the persisted job is unambiguously identifiable on
-    # the shared session-scoped engine (other tests also create rewrite jobs).
-    scene_id = uuid.uuid4()
+    # rewrite() creates a GenerationJob with this scene_id, and that column is a
+    # real FK to scenes — a synthetic UUID violates the constraint on PostgreSQL
+    # (SQLite has FKs off). Seed a real scene; its fresh id is still unique on the
+    # shared session-scoped engine, so the job stays unambiguously identifiable.
+    project = Project(title="Hiba projekt")
+    db_session.add(project)
+    await db_session.flush()
+    book = Book(project_id=project.id, title="Hiba konyv")
+    db_session.add(book)
+    await db_session.flush()
+    chapter = Chapter(book_id=book.id, title="Hiba fejezet")
+    db_session.add(chapter)
+    await db_session.flush()
+    scene = Scene(chapter_id=chapter.id, title="Hiba jelenet", content="x")
+    db_session.add(scene)
+    await db_session.commit()
+    scene_id = scene.id
     # A multi-line, secret-bearing, oversized failure from the provider layer.
     raw = "boom internal\nSECRET=sk-leak-9999\n" + ("x" * 5000)
     with patch(

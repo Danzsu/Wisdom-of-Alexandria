@@ -14,6 +14,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
+from alexandria_core.core.config import EMBEDDING_DIM
 from alexandria_core.models.book import Book
 from alexandria_core.models.chapter import Chapter
 from alexandria_core.models.character import Character
@@ -37,8 +38,13 @@ from app.services.model_router import ModelRouter
 EMBED_MODEL = "openai/text-embedding-3-small"
 
 
-def _mock_router(dim: int = 4) -> ModelRouter:
-    """A ModelRouter whose ``embed`` returns one deterministic vector per input."""
+def _mock_router(dim: int = EMBEDDING_DIM) -> ModelRouter:
+    """A ModelRouter whose ``embed`` returns one deterministic vector per input.
+
+    Vectors are the production width (``EMBEDDING_DIM``) so the rows insert into
+    the real ``vector(EMBEDDING_DIM)`` column on PostgreSQL too — a smaller dim
+    only survives SQLite's JSON fallback, which silently ignores width.
+    """
     router = AsyncMock(spec=ModelRouter)
 
     async def _embed(texts, model, db=None, **kwargs):
@@ -573,9 +579,9 @@ async def _seed_scope_embedding(
         entity_type="codex",
         entity_id=entry.id,
         content_hash=f"h-{label}",
-        embedding=[0.0, 0.0, 0.0, 0.0],
+        embedding=[0.0] * EMBEDDING_DIM,
         model_name=EMBED_MODEL,
-        dim=4,
+        dim=EMBEDDING_DIM,
     )
     db.add(emb)
     await db.commit()

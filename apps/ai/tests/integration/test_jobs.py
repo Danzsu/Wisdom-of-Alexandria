@@ -93,10 +93,12 @@ async def test_list_jobs_filter_by_scene_id(
 ):
     from alexandria_core.models.generation_job import GenerationJob
 
-    # The AI service has no domain (projects/scenes) endpoints — those live in
-    # apps/api. ``list_jobs`` filters jobs by the ``scene_id`` column with no FK
-    # join, so a synthetic UUID exercises the filter exactly the same way.
-    scene_id = uuid.uuid4()
+    # ``list_jobs`` filters by the ``scene_id`` column (no FK join in the query),
+    # but generation_jobs.scene_id IS a real FK to scenes — so a synthetic UUID
+    # violates the constraint on PostgreSQL (SQLite has FKs off by default). Seed
+    # a real scene; the filter behaviour is identical, just FK-valid everywhere.
+    _book, _chapter, scene = await _seed_book(db_session, "Szuro")
+    scene_id = scene.id
 
     job_with_scene = GenerationJob(job_type="rewrite", status="done", scene_id=scene_id)
     job_without_scene = GenerationJob(job_type="summarize", status="done")

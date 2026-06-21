@@ -27,9 +27,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pgvector.sqlalchemy import Vector as _PGVector
-from sqlalchemy import JSON
+from sqlalchemy import JSON, Float
 from sqlalchemy.sql.elements import ColumnElement
-from sqlalchemy.types import TypeDecorator, UserDefinedType
+from sqlalchemy.types import TypeDecorator
 
 # Default embedding width recommendation: OpenAI ``text-embedding-3-small``
 # (1536-dim). Kept here as the canonical place the column dimension is sourced.
@@ -93,28 +93,15 @@ class Vector(TypeDecorator):
 def cosine_distance(column: ColumnElement, query: Sequence[float]) -> ColumnElement:
     """Cosine-distance ordering expression for similarity search (PG-only).
 
-    Emits ``embedding <=> CAST(:q AS vector)`` on PostgreSQL. The B2b retrieval
-    query orders ascending by this (0 = identical). Not supported on SQLite; the
-    similarity tests that use it are ``@pytest.mark.postgres``.
+    Emits ``embedding <=> :q`` on PostgreSQL, where ``:q`` is the query vector
+    bound as a ``list[float]`` and typed with the column's own ``Vector`` type —
+    so its bind chain (``process_bind_param`` -> the pgvector wire format)
+    renders the RHS, exactly as pgvector's native ``cosine_distance`` comparator
+    does. The B2b retrieval query orders ascending by this (0 = identical).
+
+    Binding a list (NOT a pre-stringified ``"[...]"`` literal) is essential: the
+    literal would be re-processed by ``process_bind_param`` -> ``_to_float_list``
+    and rejected as a ``str``. Not supported on SQLite; the similarity tests that
+    use it are ``@pytest.mark.postgres``.
     """
-    # Delegate to pgvector's operator implementation when the column is a real
-    # pgvector column; otherwise build the operator explicitly so this remains
-    # usable even when the column was declared via this TypeDecorator.
-    op = getattr(column, "cosine_distance", None)
-    if callable(op):
-        return op(list(query))
-    # Fallback: explicit operator against a casted vector literal.
-    return column.op("<=>", return_type=_VectorLiteral())(_as_vector_literal(query))
-
-
-class _VectorLiteral(UserDefinedType):
-    """Minimal type used only to render the RHS as a vector literal in fallback."""
-
-    cache_ok = True
-
-    def get_col_spec(self, **kw):  # pragma: no cover - DDL not used for literal
-        return "vector"
-
-
-def _as_vector_literal(query: Sequence[float]) -> str:
-    return "[" + ",".join(str(float(x)) for x in query) + "]"
+    return column.op("<=>", return_type=Float)(list(query))

@@ -43,12 +43,12 @@ Contract fields the AI side writes and the domain side reads
   * prompt_version  -> populated      (provenance: which prompt version)
   * job_id          -> linked         (provenance: the GenerationJob)
 """
-import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from alexandria_core.models.book import Book
 from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.generation_job import GenerationJob, JobStatus
 from alexandria_core.models.project import Project
 from alexandria_core.models.revision import Revision
 from alexandria_core.models.scene import Scene
@@ -89,7 +89,14 @@ async def test_save_revision_upholds_hitl_contract_against_real_db(db_session: A
     """REAL save_revision against the test DB persists an unapproved, scene-linked
     Revision carrying every provenance field the domain side reads on approve."""
     scene = await _make_scene(db_session)
-    job_id = uuid.uuid4()
+    # revisions.job_id is a real FK to generation_jobs, so the job must exist
+    # (the contract literally links a Revision to its producing GenerationJob).
+    # A bare UUID survives SQLite (FKs off by default) but violates the FK on
+    # PostgreSQL — persist a real job and link to it.
+    job = GenerationJob(scene_id=scene.id, job_type="rewrite", status=JobStatus.DONE)
+    db_session.add(job)
+    await db_session.commit()
+    job_id = job.id
 
     rev = await revision_service.save_revision(
         db_session,
