@@ -34,6 +34,10 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/kit/toast";
 import { Icon } from "@/components/kit/icon";
+import {
+  ACTION_INSTRUCTION,
+  type RewriteActionKind,
+} from "@/lib/ai/action-instructions";
 import { hu } from "@/lib/i18n/hu";
 import { useEditorStore, type SelectionSnapshot } from "@/lib/stores/editor-store";
 import {
@@ -89,24 +93,10 @@ function mapContextEntities(
   }));
 }
 
-/** The single-revision AI actions surfaced in the action grid / bubble menu. */
-export type AiActionKind =
-  | "rewrite"
-  | "expand"
-  | "compress"
-  | "dialog"
-  | "fix"
-  | "continue"
-  | "generate";
-
-/** Instruction text the backend `rewrite` prompt expects for each grid action. */
-const ACTION_INSTRUCTION: Record<Exclude<AiActionKind, "continue" | "generate">, string> = {
-  rewrite: "Írd át a kijelölt szöveget, megőrizve a jelentését és a stílusát.",
-  expand: "Bővítsd ki a kijelölt szöveget több részlettel és érzékletességgel.",
-  compress: "Tömörítsd a kijelölt szöveget, megtartva a lényeget.",
-  dialog: "Alakítsd át a kijelölt szöveget élő, természetes párbeszéddé.",
-  fix: "Javítsd a kijelölt szöveg nyelvtanát, központozását és gördülékenységét.",
-};
+/** The single-revision AI actions surfaced in the action grid / bubble menu.
+ * The rewrite-family kinds come from the action-instruction catalog; `continue`
+ * and `generate` insert at the cursor and carry no canned instruction. */
+export type AiActionKind = RewriteActionKind | "continue" | "generate";
 
 /** A result awaiting the user's Accept / Reject decision (a pending Revision). */
 export interface PendingResult {
