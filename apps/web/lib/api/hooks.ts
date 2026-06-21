@@ -28,6 +28,7 @@ import {
 } from "@tanstack/react-query";
 import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks, updateBook } from "./books";
+import { exportQueryKeys } from "./export-hooks";
 import { importDocx, type BookImportSummary } from "./imports";
 import {
   exportBackup,
@@ -332,8 +333,10 @@ export function useUpdateBook(): UseMutationResult<
       });
       // The sidebar resolves the active book via `resolveBookById`, cached under
       // the export key by bookId; refresh it so the new series_id is reflected.
+      // Use the export key FACTORY (not a hand-written literal) so this cannot
+      // drift from exportQueryKeys.book().
       await queryClient.invalidateQueries({
-        queryKey: ["export", "book", updated.id],
+        queryKey: exportQueryKeys.book(updated.id),
       });
     },
   });

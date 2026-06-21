@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { notFound } from "next/navigation";
 import {
   AlertTriangle,
   Archive,
@@ -161,6 +162,9 @@ const DIFF_SUGGESTION: DiffSegment[] = [
 ];
 
 export default function KitchenSinkPage() {
+  // Dev-only component gallery — never reachable in a production build (keeps it
+  // out of the prod route surface + bundle crawl). NODE_ENV is inlined at build.
+  if (process.env.NODE_ENV === "production") notFound();
   const [seg, setSeg] = useState("grid");
   const [view, setView] = useState("rács");
   const [tab, setTab] = useState("reszletek");
