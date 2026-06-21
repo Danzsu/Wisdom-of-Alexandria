@@ -186,11 +186,12 @@ def mock_research_svc():
 
 @pytest.mark.integration
 async def test_research_endpoint_returns_answer_and_chips(
-    client: AsyncClient, auth_headers: dict, mock_research_svc
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession, mock_research_svc
 ):
+    project_id = await _make_project(db_session)
     resp = await client.post(
         "/api/v1/ai/research",
-        json={"question": "Ki Szelene?", "project_id": str(uuid.uuid4())},
+        json={"question": "Ki Szelene?", "project_id": str(project_id)},
         headers=auth_headers,
     )
     assert resp.status_code == 200
@@ -211,13 +212,29 @@ async def test_research_endpoint_requires_auth(client: AsyncClient):
 
 
 @pytest.mark.integration
-async def test_research_endpoint_error_is_sanitized_502(
+async def test_research_endpoint_nonexistent_project_is_422(
     client: AsyncClient, auth_headers: dict, mock_research_svc
 ):
-    mock_research_svc.research.side_effect = Exception("boom\nSECRET-leak")
+    """A bogus project_id must be a clean 422 (validated before the job), never an
+    opaque 502 from a FK violation, and the service is never invoked."""
     resp = await client.post(
         "/api/v1/ai/research",
         json={"question": "Ki Szelene?", "project_id": str(uuid.uuid4())},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+    mock_research_svc.research.assert_not_called()
+
+
+@pytest.mark.integration
+async def test_research_endpoint_error_is_sanitized_502(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession, mock_research_svc
+):
+    project_id = await _make_project(db_session)
+    mock_research_svc.research.side_effect = Exception("boom\nSECRET-leak")
+    resp = await client.post(
+        "/api/v1/ai/research",
+        json={"question": "Ki Szelene?", "project_id": str(project_id)},
         headers=auth_headers,
     )
     assert resp.status_code == 502

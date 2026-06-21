@@ -222,6 +222,9 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     continue-on-error: true
+    # Only boot the full stack once the unit gates pass (advisory, so it never
+    # blocks; `needs` just avoids wasting a stack boot on a failing commit).
+    needs: [backend, frontend]
 
     services:
       postgres:

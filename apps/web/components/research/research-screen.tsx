@@ -106,7 +106,7 @@ export function ResearchScreen({ bookId }: ResearchScreenProps) {
                 />
               ) : (
                 <p className="mt-4 text-[12px] text-text-muted">
-                  {hu.research.noProviderNote}
+                  {hu.research.noCitations}
                 </p>
               )}
             </article>

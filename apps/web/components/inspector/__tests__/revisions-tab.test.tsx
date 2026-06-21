@@ -62,6 +62,33 @@ describe("RevisionsTab", () => {
     await waitFor(() => expect(approves.length).toBe(1));
   });
 
+  it("Reject calls the reject endpoint", async () => {
+    const rejects: string[] = [];
+    server.use(
+      http.post(`${base}/revisions/:id/reject`, ({ params }) => {
+        rejects.push(String(params.id));
+        return HttpResponse.json({
+          id: String(params.id),
+          scene_id: SCENE_ACTIVE.id,
+          job_id: null,
+          content: "x",
+          approved: false,
+          revision_type: "rewrite",
+          model_name: null,
+          prompt_version: null,
+          created_at: "2026-06-15T11:00:00Z",
+          updated_at: "2026-06-15T11:00:00Z",
+        });
+      }),
+    );
+    renderWithProviders(<RevisionsTab />);
+    const rejectButtons = await screen.findAllByRole("button", {
+      name: hu.revisions.reject,
+    });
+    await userEvent.click(rejectButtons[0]);
+    await waitFor(() => expect(rejects.length).toBe(1));
+  });
+
   it("shows the empty state when the scene has no revisions", async () => {
     server.use(http.get(`${base}/revisions`, () => HttpResponse.json([])));
     renderWithProviders(<RevisionsTab />);

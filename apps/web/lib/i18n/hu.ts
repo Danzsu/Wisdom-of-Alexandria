@@ -1348,7 +1348,7 @@ export const hu = {
     emptyTitle: "Tegyél fel egy kérdést",
     emptyHint: "Pl. „Milyen kapcsolatban áll Szelene és a Nagykönyvtár?” — a válasz a Codex és a kézirat alapján készül.",
     errorRetry: "A kérdés megválaszolása nem sikerült. Próbáld újra.",
-    noProviderNote: "Nincs beágyazási szolgáltató beállítva — a válasz a Codex-kontextus nélkül készült.",
+    noCitations: "A válasz nem hivatkozik konkrét Codex-bejegyzésre.",
     questionAria: "Kutatási kérdés",
   },
   /** Book-route placeholder screens (M2 verifiable nav; real screens later). */

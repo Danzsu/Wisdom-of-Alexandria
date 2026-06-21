@@ -36,4 +36,18 @@ describe("diffWords", () => {
     expect(diffWords("", "új").suggestion.some((s) => s.type === "addition")).toBe(true);
     expect(diffWords("régi", "").original.some((s) => s.type === "deletion")).toBe(true);
   });
+
+  it("degrades huge inputs to a whole-replacement diff (no O(n*m) blowup)", () => {
+    // > MAX_DIFF_CHARS combined → must NOT build the LCS matrix; returns a single
+    // deletion + single addition, still loss-free, and returns fast.
+    const before = "a ".repeat(120_000); // ~240k chars
+    const after = "b ".repeat(120_000);
+    const start = Date.now();
+    const { original, suggestion } = diffWords(before, after);
+    expect(Date.now() - start).toBeLessThan(1000); // would hang if LCS ran
+    expect(original).toEqual([{ type: "deletion", text: before }]);
+    expect(suggestion).toEqual([{ type: "addition", text: after }]);
+    expect(join(original)).toBe(before);
+    expect(join(suggestion)).toBe(after);
+  });
 });

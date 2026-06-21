@@ -44,7 +44,7 @@ describe("ResearchScreen", () => {
     await ask("Kérdés");
 
     await waitFor(() =>
-      expect(screen.getByText(hu.research.noProviderNote)).toBeInTheDocument(),
+      expect(screen.getByText(hu.research.noCitations)).toBeInTheDocument(),
     );
   });
 

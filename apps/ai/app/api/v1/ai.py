@@ -166,7 +166,9 @@ class IndexRequest(BaseModel):
 class ResearchRequest(BaseModel):
     """A free-form Codex/manuscript Q&A question, grounded via RAG (P2)."""
 
-    question: str
+    # Bounded: an unbounded question inflates the LLM + embedding-query cost; the
+    # cap is generous for a real question but blocks pathological input.
+    question: str = Field(min_length=1, max_length=8000)
     project_id: uuid.UUID
     # Optional book/scene context: when given, retrieval is series-scoped to that
     # book's series (project-global + that series), else project-wide.
@@ -453,6 +455,11 @@ async def research(
     - RAG/embeddings unconfigured → the model still answers from the question
       alone (empty context_entities), never an error.
     """
+    # Validate the project exists BEFORE the job is created — otherwise a bogus
+    # id would FK-violate on the job insert and surface as an opaque 502. Done
+    # OUTSIDE the try so the 422 is not re-wrapped by the 502 handler below.
+    if await db.get(Project, data.project_id) is None:
+        raise HTTPException(status_code=422, detail="project_id does not exist")
     try:
         answer, _job, context_entities = await svc.research(
             db,

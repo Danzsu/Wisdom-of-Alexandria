@@ -31,7 +31,22 @@ function mergePush(
   }
 }
 
+/**
+ * Above this combined character count we skip the O(n·m) LCS (which would
+ * allocate a multi-GB matrix and freeze the tab) and fall back to a plain
+ * whole-replacement diff. Generous for real scenes; a guard, not a normal path.
+ */
+const MAX_DIFF_CHARS = 200_000;
+
 export function diffWords(before: string, after: string): WordDiff {
+  if (before.length + after.length > MAX_DIFF_CHARS) {
+    // Degrade to a whole-replacement view — still correct (deletion of all old,
+    // addition of all new), just not word-granular, and O(n) instead of O(n·m).
+    return {
+      original: before ? [{ type: "deletion", text: before }] : [],
+      suggestion: after ? [{ type: "addition", text: after }] : [],
+    };
+  }
   const a = tokenize(before);
   const b = tokenize(after);
   const n = a.length;
