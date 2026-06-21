@@ -14,7 +14,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["node_modules/**", ".next/**"],
+    // e2e/** is Playwright (its own runner), not vitest — keep it out of the unit run.
+    exclude: ["node_modules/**", ".next/**", "e2e/**"],
     css: true,
   },
 });

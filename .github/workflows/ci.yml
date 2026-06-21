@@ -212,16 +212,100 @@ jobs:
         run: git diff --exit-code -- packages/shared/openapi packages/shared/src
 
   # ---------------------------------------------------------------------------
-  # TODO (future milestones — intentionally NOT implemented in C0):
-  #
-  #   e2e:
-  #     Playwright E2E against a running web + api stack (CLAUDE.md target).
-  #     Blocked today by: (a) apps/api and apps/ai both declare the Python
-  #     package name `app`, so they cannot be installed side-by-side in one
-  #     image without renaming; (b) there is no web Dockerfile yet. Resolve both
-  #     before standing up a two-service compose for E2E.
-  #
-  #   deploy:
-  #     Runs only after e2e passes -> Vercel (web) + Cloud Run (api). Deferred
-  #     until E2E exists and deployment targets/secrets are provisioned.
+  # E2E (Playwright): boots the full stack as SEPARATE processes — api + ai +
+  # web — and runs the browser smoke against the running web app. The apps/api +
+  # apps/ai `app` package name collision is a NON-issue here: each backend runs
+  # in its own process (cwd resolves its own local `app`), so no rename or web
+  # Dockerfile is needed. ADVISORY (continue-on-error) for now: it's the E2E
+  # foundation; harden the journeys + flip to a required gate once stable.
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: forgewriter
+          POSTGRES_PASSWORD: forgewriter
+          POSTGRES_DB: forgewriter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forgewriter"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    env:
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      DATABASE_URL: postgresql+asyncpg://forgewriter:forgewriter@localhost:5432/forgewriter
+      REDIS_URL: redis://localhost:6379
+      OLLAMA_BASE_URL: http://localhost:11434
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_AI_URL: http://localhost:8001
+      E2E_BASE_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install workspaces
+        run: |
+          uv sync
+          corepack pnpm install --frozen-lockfile
+
+      - name: Generate provider encryption key
+        run: |
+          KEY=$(uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "PROVIDER_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Migrate the database
+        run: uv run --directory apps/api alembic upgrade head
+
+      - name: Start the backend services (api + ai)
+        run: |
+          uv run --directory apps/api uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
+          uv run --directory apps/ai uvicorn app.main:app --port 8001 > /tmp/ai.log 2>&1 &
+
+      - name: Build + start the web app
+        run: |
+          corepack pnpm -C apps/web build
+          corepack pnpm -C apps/web start > /tmp/web.log 2>&1 &
+
+      - name: Wait for the stack to be ready
+        run: |
+          for url in http://localhost:8000/health http://localhost:8001/health http://localhost:3000; do
+            for i in $(seq 1 60); do
+              if curl -sSf "$url" >/dev/null 2>&1; then echo "ready: $url"; break; fi
+              if [ "$i" = "60" ]; then echo "TIMEOUT: $url"; cat /tmp/api.log /tmp/ai.log /tmp/web.log; exit 1; fi
+              sleep 2
+            done
+          done
+
+      - name: Run Playwright E2E
+        working-directory: apps/web
+        run: |
+          corepack pnpm dlx playwright@1.49.1 install --with-deps chromium
+          corepack pnpm dlx playwright@1.49.1 test
+
+  # ---------------------------------------------------------------------------
+  # TODO (future):
+  #   deploy: runs only after e2e passes -> Vercel (web) + Cloud Run (api).
+  #   Deferred until E2E is a required gate + deployment targets/secrets exist.
   # ---------------------------------------------------------------------------

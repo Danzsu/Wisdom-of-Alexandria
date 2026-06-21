@@ -25,6 +25,12 @@ postgres_data/
 # Lighthouse CI (P1L-2) — local/CI report output
 .lighthouseci/
 
+# Playwright E2E — local/CI artifacts
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
 # IDE
 .vscode/
 .idea/
