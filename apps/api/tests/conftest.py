@@ -13,6 +13,7 @@ os.environ.setdefault(
 
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     create_async_engine,
@@ -32,6 +33,21 @@ async def engine_fixture():
     from alexandria_core.models.base import Base  # noqa: F401
 
     test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    if not IS_POSTGRES:
+        # aiosqlite/pysqlite emits its OWN implicit BEGIN and does not wrap DML in
+        # a real transaction, which makes the db_session savepoint fixture's outer
+        # transaction a no-op — committed rows then leak across tests (proven by
+        # test_db_isolation.py). Take over transaction control per the SQLAlchemy
+        # pysqlite recipe: disable the driver's autobegin, then emit BEGIN
+        # ourselves so the outer begin()/rollback() is a real transaction.
+        @event.listens_for(test_engine.sync_engine, "connect")
+        def _sqlite_disable_autobegin(dbapi_conn, _record):
+            dbapi_conn.isolation_level = None
+
+        @event.listens_for(test_engine.sync_engine, "begin")
+        def _sqlite_emit_begin(conn):
+            conn.exec_driver_sql("BEGIN")
+
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield test_engine
