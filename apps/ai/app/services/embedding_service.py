@@ -86,6 +86,23 @@ class SyncResult:
     deleted: int = 0  # stale / hidden embeddings removed
     skipped: int = 0  # unchanged content (hash cache hit) — no re-embed
     capped: bool = False  # True if max_items stopped us short
+    # True only for a no-op run where RAG was unconfigured (no embedding
+    # provider) — set by callers, never by sync_project itself (a real run has
+    # a provider). Lives here so the counts wire shape is defined in ONE place.
+    skipped_no_provider: bool = False
+
+    def as_dict(self) -> dict[str, int | bool]:
+        """Canonical serializable counts. Single source of the shape shared by
+        ``GenerationJob.output_data`` (async index job) and the ``IndexResult``
+        response body (sync ``/ai/index``), so a new count field is added once."""
+        return {
+            "indexed": self.indexed,
+            "updated": self.updated,
+            "deleted": self.deleted,
+            "skipped": self.skipped,
+            "capped": self.capped,
+            "skipped_no_provider": self.skipped_no_provider,
+        }
 
 
 @dataclass

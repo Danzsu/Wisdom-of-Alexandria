@@ -22,7 +22,7 @@ from alexandria_core.models.generation_job import JobStatus
 
 from app.core.errors import safe_error
 from app.services.crud_generation_job import get_job
-from app.services.embedding_service import EmbeddingService, embedding_service
+from app.services.embedding_service import EmbeddingService, SyncResult, embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -72,26 +72,12 @@ async def _run_index_job(
             if model is None:
                 # RAG unconfigured (no embedding provider) — a no-op success, not
                 # an error (cloud embeddings are optional).
-                job.output_data = {
-                    "indexed": 0,
-                    "updated": 0,
-                    "deleted": 0,
-                    "skipped": 0,
-                    "capped": False,
-                    "skipped_no_provider": True,
-                }
+                result = SyncResult(skipped_no_provider=True)
             else:
                 result = await embeddings.sync_project(
                     db, job.project_id, embedding_model=model
                 )
-                job.output_data = {
-                    "indexed": result.indexed,
-                    "updated": result.updated,
-                    "deleted": result.deleted,
-                    "skipped": result.skipped,
-                    "capped": result.capped,
-                    "skipped_no_provider": False,
-                }
+            job.output_data = result.as_dict()
             job.status = JobStatus.DONE
             await db.commit()
         except Exception as exc:

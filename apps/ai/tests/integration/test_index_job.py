@@ -9,7 +9,6 @@ the dotted-path producer/consumer contract.
 
 import importlib
 import uuid
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -18,7 +17,7 @@ from alexandria_core.models.project import Project
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.jobs.index_job import _run_index_job, run_index_job
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import EmbeddingService, SyncResult
 
 
 def _factory(engine_fixture):
@@ -30,7 +29,9 @@ def _factory(engine_fixture):
 
 
 def _sync_result(indexed=0, updated=0, deleted=0, skipped=0, capped=False):
-    return SimpleNamespace(
+    # A real SyncResult (not a stand-in) so the job's result.as_dict() path is
+    # exercised exactly as production hits it.
+    return SyncResult(
         indexed=indexed, updated=updated, deleted=deleted, skipped=skipped, capped=capped
     )
 

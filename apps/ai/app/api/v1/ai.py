@@ -14,7 +14,11 @@ from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
 from app.services.crud_generation_job import create_index_job
 from app.services.crud_provider import list_providers
-from app.services.embedding_service import EmbeddingService, embedding_service
+from app.services.embedding_service import (
+    EmbeddingService,
+    SyncResult,
+    embedding_service,
+)
 from app.services.job_queue import enqueue_index_job
 from app.services.provider_service import list_provider_models
 
@@ -226,6 +230,19 @@ class ContinuityResult(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+
+def _resolve_project_id(
+    query_param: uuid.UUID | None, body: IndexRequest | None
+) -> uuid.UUID:
+    """Resolve the index target project id from the query param (preferred) or the
+    request body, raising a 422 when neither is given. Shared by the sync + async
+    index endpoints so the resolution + error contract stays in one place."""
+    resolved = query_param or (body.project_id if body else None)
+    if resolved is None:
+        raise HTTPException(status_code=422, detail="project_id is required")
+    return resolved
+
+
 @router.post("/rewrite", response_model=AIResult)
 async def rewrite(
     data: RewriteRequest,
@@ -436,28 +453,13 @@ async def index_project(
     zeroed counts with ``skipped_no_provider=True`` (a 200, not an error — cloud
     embeddings are optional).
     """
-    resolved_project_id = project_id or (body.project_id if body else None)
-    if resolved_project_id is None:
-        raise HTTPException(status_code=422, detail="project_id is required")
+    resolved_project_id = _resolve_project_id(project_id, body)
     try:
         model = await svc.resolve_embedding_model(db)
         if model is None:
-            return IndexResult(
-                indexed=0,
-                updated=0,
-                deleted=0,
-                skipped=0,
-                capped=False,
-                skipped_no_provider=True,
-            )
+            return IndexResult(**SyncResult(skipped_no_provider=True).as_dict())
         result = await svc.sync_project(db, resolved_project_id, embedding_model=model)
-        return IndexResult(
-            indexed=result.indexed,
-            updated=result.updated,
-            deleted=result.deleted,
-            skipped=result.skipped,
-            capped=result.capped,
-        )
+        return IndexResult(**result.as_dict())
     except Exception as e:
         # Roll back so the request session is clean, then surface a sanitized
         # 502 (consistent with the other AI endpoints).
@@ -487,9 +489,7 @@ async def index_project_async(
     If the queue cannot be reached, the job is marked failed (so it never
     dangles as forever-pending) and a sanitized 502 is returned.
     """
-    resolved_project_id = project_id or (body.project_id if body else None)
-    if resolved_project_id is None:
-        raise HTTPException(status_code=422, detail="project_id is required")
+    resolved_project_id = _resolve_project_id(project_id, body)
 
     # Validate the project exists BEFORE creating the job. Otherwise a bogus id
     # would either raise a FK IntegrityError on PostgreSQL (surfacing as an opaque
