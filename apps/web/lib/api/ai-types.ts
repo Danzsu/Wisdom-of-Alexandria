@@ -60,6 +60,9 @@ export type RevisionRead = z.infer<typeof revisionReadSchema>;
  * ------------------------------------------------------------------------- */
 export const generationJobReadSchema = z.object({
   id: idString,
+  // Set for project-level jobs (the async RAG index rebuild); null for the
+  // scene/chapter-scoped generation jobs.
+  project_id: idString.nullable(),
   scene_id: idString.nullable(),
   chapter_id: idString.nullable(),
   job_type: z.string(),

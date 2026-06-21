@@ -302,6 +302,7 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
           },
           job: {
             id: "job-delayed",
+            project_id: null,
             scene_id: SCENE_ACTIVE.id,
             chapter_id: null,
             job_type: "rewrite",

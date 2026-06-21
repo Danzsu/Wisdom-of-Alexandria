@@ -282,6 +282,7 @@ describe("AI calls carry the persisted generation params", () => {
           },
           job: {
             id: "j1",
+            project_id: null,
             scene_id: null,
             chapter_id: null,
             job_type: "rewrite",

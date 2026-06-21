@@ -13,9 +13,27 @@ class JobStatus:
     FAILED = "failed"
 
 
+class JobType:
+    """Known ``GenerationJob.job_type`` values. Free ``str`` on the wire, but
+    these constants keep producer + consumer aligned (e.g. the async RAG index
+    job uses ``INDEX``)."""
+
+    INDEX = "index"
+
+
 class GenerationJob(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "generation_jobs"
 
+    # Project scope. Set for project-level jobs (e.g. the async RAG index
+    # rebuild) so they can be located + polled per project. NULL for the
+    # scene/chapter-scoped generation jobs. CASCADE so a deleted project takes
+    # its jobs with it.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     scene_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("scenes.id", ondelete="SET NULL"),

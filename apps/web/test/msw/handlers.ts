@@ -27,6 +27,7 @@ import {
   makeCodexRelation,
   makeContinuityResult,
   makeDescribeResult,
+  makeIndexJob,
   makePlotline,
   makePlotlineScene,
   makeProvider,
@@ -1667,6 +1668,24 @@ export const handlers = [
     }
     return new HttpResponse(null, { status: 204 });
   }),
+
+  /* ---- Async RAG index (P1L-1). POST enqueues a pending INDEX job; GET
+   * /jobs/{id} polls it. The default GET returns a DONE index job with counts so
+   * a basic rebuild flow resolves; tests override with `server.use(...)` to
+   * exercise the running / no-provider / failed paths. ---- */
+  http.post(`${aiBase}/ai/index/async`, () =>
+    HttpResponse.json(makeIndexJob("pending"), { status: 202 }),
+  ),
+
+  http.get(`${aiBase}/jobs/:jobId`, ({ params }) =>
+    HttpResponse.json(
+      makeIndexJob(
+        "done",
+        { indexed: 3, updated: 1, deleted: 0, skipped: 2, skipped_no_provider: false },
+        String(params.jobId),
+      ),
+    ),
+  ),
 
   /* ---- Revision approval (the human-in-the-loop accept) ---- */
   http.post(

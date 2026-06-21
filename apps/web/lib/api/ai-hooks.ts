@@ -10,6 +10,7 @@
  * logic lives here + in `lib/api/ai.ts`; components only render state and fire
  * callbacks.
  */
+import { useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -22,12 +23,13 @@ import {
   createSnippet,
   describe,
   generateScene,
+  indexProjectAsync,
   listModels,
   resolveProjectIdForBook,
   rewrite,
   writeContinue,
 } from "./ai";
-import { listJobs } from "./jobs";
+import { getJob, listJobs } from "./jobs";
 import type {
   AIDescribeResult,
   AIResult,
@@ -48,6 +50,7 @@ export const aiQueryKeys = {
   models: ["ai", "models"] as const,
   bookProject: (bookId: string) => ["ai", "book-project", bookId] as const,
   jobs: (bookId: string) => ["jobs", bookId] as const,
+  job: (jobId: string) => ["jobs", "one", jobId] as const,
 };
 
 /* ---------------------------------------------------------------------------
@@ -138,6 +141,71 @@ export function useModels(): UseQueryResult<ModelsResponse, Error> {
     // Models change rarely; keep them fresh for the session.
     staleTime: 5 * 60_000,
   });
+}
+
+/* ---------------------------------------------------------------------------
+ * Async RAG index rebuild (P1L-1) — enqueue + poll a background project re-index
+ * ------------------------------------------------------------------------- */
+
+/** How often the rebuild poll re-checks the job while it runs (ms). */
+const REBUILD_POLL_INTERVAL_MS = 1_500;
+
+/** What {@link useRebuildIndex} exposes to the Settings RAG-index card. */
+export interface RebuildIndexState {
+  /** Start a rebuild for the project (no-op until a project id is known). */
+  trigger: () => void;
+  /** The latest job view (pending → running → done/failed), or null pre-trigger. */
+  job: GenerationJobRead | null;
+  /** True from trigger until the job reaches a terminal (done/failed) state. */
+  isRunning: boolean;
+  /** Enqueue or poll error, whichever is active (null when healthy). */
+  error: Error | null;
+}
+
+/**
+ * Enqueue an async project RAG re-index and poll it to completion. The enqueue
+ * returns a `pending` job; we then poll `GET /jobs/{id}` every ~1.5s until the
+ * status is `done`/`failed`, at which point polling stops. The worker writes the
+ * index counts (or `skipped_no_provider`) into `job.output_data`, which the card
+ * renders. Errors surface via `error` — never swallowed.
+ */
+export function useRebuildIndex(
+  projectId: string | undefined,
+): RebuildIndexState {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const enqueue = useMutation({
+    mutationFn: () => indexProjectAsync(projectId as string),
+    onSuccess: (job) => setJobId(job.id),
+  });
+
+  const poll = useQuery({
+    queryKey: aiQueryKeys.job(jobId ?? "__none__"),
+    queryFn: () => getJob(jobId as string),
+    enabled: Boolean(jobId),
+    // Poll until terminal, then stop (false). A background tab pauses polling.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "done" || status === "failed"
+        ? false
+        : REBUILD_POLL_INTERVAL_MS;
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  // Freshest view: the poll once we have an id, else the enqueue's pending job.
+  const job = poll.data ?? enqueue.data ?? null;
+  const terminal = job?.status === "done" || job?.status === "failed";
+  const isRunning = (enqueue.isPending || Boolean(jobId)) && !terminal;
+
+  return {
+    trigger: () => {
+      if (projectId) enqueue.mutate();
+    },
+    job,
+    isRunning,
+    error: enqueue.error ?? poll.error ?? null,
+  };
 }
 
 /** Resolve the owning project id for a book (cached). Disabled until a book id. */

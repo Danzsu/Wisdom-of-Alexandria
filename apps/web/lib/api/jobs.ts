@@ -52,6 +52,18 @@ export async function listJobs(
   return generationJobListSchema.parse(data);
 }
 
+/**
+ * Fetch a single generation job by id (drift-validated). Used to POLL an async
+ * job (e.g. the RAG index rebuild) until it reaches done/failed. Errors
+ * (non-2xx / transport / parse) throw via `apiFetch` — never swallowed.
+ */
+export async function getJob(jobId: string): Promise<GenerationJobRead> {
+  const data = await apiFetch<unknown>(`/jobs/${jobId}`, {
+    baseUrl: AI_BASE_URL,
+  });
+  return generationJobReadSchema.parse(data);
+}
+
 /** Delete a generation job (the backend answers 204; apiFetch returns null). */
 export async function deleteJob(jobId: string): Promise<void> {
   await apiFetch<unknown>(`/jobs/${jobId}`, {

@@ -7,6 +7,7 @@ import { hu } from "@/lib/i18n/hu";
 import { useModels } from "@/lib/api/ai-hooks";
 import { useProviders } from "@/lib/api/providers-hooks";
 import { GenerationSection } from "./generation-section";
+import { RagIndexSection } from "./rag-index-section";
 import type { SettingsSubpage } from "./types";
 
 export interface SettingsHubProps {
@@ -77,6 +78,8 @@ export function SettingsHub({ onNavigate }: SettingsHubProps) {
       </div>
 
       <GenerationSection />
+
+      <RagIndexSection />
 
       <SectionEyebrow as="h3" className="mb-2.5 mt-7">
         {hu.settings.dataLabel}

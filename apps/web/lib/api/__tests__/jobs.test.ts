@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { AI_BASE_URL } from "@/lib/api/client";
-import { listJobs, deleteJob } from "@/lib/api/jobs";
+import { listJobs, deleteJob, getJob } from "@/lib/api/jobs";
 import { countFailedJobs } from "@/lib/api/ai-hooks";
-import { FAROSZ_BOOK, JOBS_FIXTURE } from "@/test/msw/fixtures";
+import { FAROSZ_BOOK, JOBS_FIXTURE, makeIndexJob } from "@/test/msw/fixtures";
 
 /** AI service base — `/jobs` lives here after the Alexandria split. */
 const aiBase = `${AI_BASE_URL}/api/v1`;
@@ -66,6 +66,28 @@ describe("lib/api/jobs", () => {
     expect(jobs).toHaveLength(JOBS_FIXTURE.length);
     // The failed job is first (created_at desc), mirroring the fixture order.
     expect(jobs[0]?.status).toBe("failed");
+  });
+
+  it("getJob fetches a single job by id from the AI base (drift-validated)", async () => {
+    let seenUrl: string | null = null;
+    server.use(
+      http.get(`${AI_BASE_URL}/api/v1/jobs/:jobId`, ({ request, params }) => {
+        seenUrl = request.url;
+        return HttpResponse.json(
+          makeIndexJob(
+            "done",
+            { indexed: 2, updated: 0, deleted: 0, skipped: 0, skipped_no_provider: false },
+            String(params.jobId),
+          ),
+        );
+      }),
+    );
+    const job = await getJob("job-index-9");
+    expect(seenUrl).toContain(AI_BASE_URL);
+    expect(seenUrl).toContain("/jobs/job-index-9");
+    expect(job.id).toBe("job-index-9");
+    expect(job.status).toBe("done");
+    expect(job.output_data).toMatchObject({ indexed: 2 });
   });
 
   it("listJobs throws on a contract drift (missing required field)", async () => {

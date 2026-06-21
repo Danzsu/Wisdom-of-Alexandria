@@ -34,6 +34,7 @@ import {
   aiDescribeResultSchema,
   aiResultSchema,
   continuityResultSchema,
+  generationJobReadSchema,
   modelsResponseSchema,
   revisionReadSchema,
   snippetCreateSchema,
@@ -43,6 +44,7 @@ import {
   type ContinuityResult,
   type DescribeRequest,
   type GenerateSceneRequest,
+  type GenerationJobRead,
   type ModelsResponse,
   type RevisionRead,
   type RewriteRequest,
@@ -142,6 +144,28 @@ export async function checkContinuity(
     baseUrl: AI_BASE_URL,
   });
   return continuityResultSchema.parse(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * Async RAG index (P1L-1) — enqueue a background project re-index
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Enqueue an async project RAG re-index. Returns the queued GenerationJob
+ * (status `pending`) immediately; poll {@link getJob} until it reaches
+ * done/failed (the worker writes the index counts into `output_data`). The
+ * worker resolves the embedding provider — when none is configured the job
+ * completes as a no-op (`output_data.skipped_no_provider === true`), never an
+ * error. `project_id` is sent as a query param (the endpoint's preferred form).
+ */
+export async function indexProjectAsync(
+  projectId: string,
+): Promise<GenerationJobRead> {
+  const data = await apiFetch<unknown>(
+    `/ai/index/async?project_id=${encodeURIComponent(projectId)}`,
+    { method: "POST", baseUrl: AI_BASE_URL },
+  );
+  return generationJobReadSchema.parse(data);
 }
 
 /* ---------------------------------------------------------------------------

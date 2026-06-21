@@ -1023,6 +1023,24 @@ export const hu = {
     maxTokensAria: "Max tokenek",
     modelRouterNote:
       "A modellnevek a ModelRouter konfigurációból érkeznek — a felületen sosem hardcode-oltak.",
+    /** RAG index rebuild (P1L-1) — async background re-index of Codex + kézirat. */
+    ragIndexLabel: "RAG index",
+    ragIndexTitle: "Index újraépítése",
+    ragIndexHint:
+      "A Codex és a kézirat újraindexelése a pontosabb AI-kontextusért. A háttérben fut.",
+    ragIndexButton: "Index újraépítése",
+    ragIndexButtonAria: "A projekt RAG indexének újraépítése",
+    ragIndexRunning: "Indexelés folyamatban…",
+    ragIndexDone: (counts: {
+      indexed: number;
+      updated: number;
+      deleted: number;
+      skipped: number;
+    }) =>
+      `Kész: ${counts.indexed} új, ${counts.updated} frissített, ${counts.deleted} törölt, ${counts.skipped} kihagyott.`,
+    ragIndexNoProvider:
+      "Nincs beágyazási szolgáltató beállítva — az indexelés kimaradt.",
+    ragIndexError: "Az indexelés nem sikerült. Próbáld újra később.",
     /** Adatkezelés section (V1+ stubs). */
     dataLabel: "Adatkezelés",
     archiveTitle: "Archívum",

@@ -7,11 +7,12 @@ import {
   createSnippet,
   describe as describeApi,
   generateScene,
+  indexProjectAsync,
   listModels,
   resolveProjectIdForBook,
   rewrite,
 } from "@/lib/api/ai";
-import { FAROSZ_BOOK, FAROSZ_PROJECT } from "@/test/msw/fixtures";
+import { FAROSZ_BOOK, FAROSZ_PROJECT, makeIndexJob } from "@/test/msw/fixtures";
 
 /** AI service base — `/ai/*` handlers live here after the Alexandria split. */
 const aiBase = `${AI_BASE_URL}/api/v1`;
@@ -96,6 +97,7 @@ describe("lib/api/ai", () => {
           },
           job: {
             id: "job-nocx",
+            project_id: null,
             scene_id: null,
             chapter_id: null,
             job_type: "rewrite",
@@ -136,6 +138,7 @@ describe("lib/api/ai", () => {
           },
           job: {
             id: "job-unk",
+            project_id: null,
             scene_id: null,
             chapter_id: null,
             job_type: "rewrite",
@@ -189,6 +192,25 @@ describe("lib/api/ai", () => {
 
   it("resolveProjectIdForBook throws when no project owns the book", async () => {
     await expect(resolveProjectIdForBook("unknown-book")).rejects.toThrow();
+  });
+
+  it("indexProjectAsync POSTs to the AI base with project_id and parses the job", async () => {
+    let seenUrl: string | null = null;
+    let seenMethod: string | null = null;
+    server.use(
+      http.post(`${aiBase}/ai/index/async`, ({ request }) => {
+        seenUrl = request.url;
+        seenMethod = request.method;
+        return HttpResponse.json(makeIndexJob("pending"), { status: 202 });
+      }),
+    );
+    const job = await indexProjectAsync(FAROSZ_PROJECT.id);
+    expect(seenMethod).toBe("POST");
+    expect(seenUrl).toContain(AI_BASE_URL);
+    expect(seenUrl).toContain(`project_id=${FAROSZ_PROJECT.id}`);
+    // Drift-validated parse: job_type + status come back as the queued index job.
+    expect(job.job_type).toBe("index");
+    expect(job.status).toBe("pending");
   });
 
   it("propagates AI errors (never swallowed)", async () => {

@@ -8,6 +8,7 @@ class GenerationJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    project_id: uuid.UUID | None
     scene_id: uuid.UUID | None
     chapter_id: uuid.UUID | None
     job_type: str

@@ -58,6 +58,7 @@ _COLUMNS_ADDED_LATER = {
     # aliases/role -> a1c4d7e9f2b3 ; series_id -> c3a1b2c3d4e5
     "codex_entries": {"aliases", "role", "series_id"},
     "books": {"series_id"},  # -> c3a1b2c3d4e5
+    "generation_jobs": {"project_id"},  # -> e5a1b2c3d4f6 (async RAG index job)
 }
 
 

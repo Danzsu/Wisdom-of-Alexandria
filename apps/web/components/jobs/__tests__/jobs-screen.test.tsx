@@ -75,6 +75,7 @@ describe("JobsScreen (AI feladatok)", () => {
         HttpResponse.json([
           {
             id: "job-weird-1",
+            project_id: null,
             scene_id: null,
             chapter_id: null,
             job_type: "teleport_scene",

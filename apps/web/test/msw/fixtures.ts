@@ -492,6 +492,7 @@ let revisionSeq = 0;
 function makeJob(jobType: string, model: string): GenerationJobRead {
   return {
     id: `job-${jobType}-${revisionSeq}`,
+    project_id: null,
     scene_id: SCENE_ACTIVE.id,
     chapter_id: null,
     job_type: jobType,
@@ -500,6 +501,34 @@ function makeJob(jobType: string, model: string): GenerationJobRead {
     prompt_version: "1.0",
     input_data: {},
     output_data: {},
+    error_message: null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/**
+ * Build an INDEX-type `GenerationJobRead` (P1L-1 async RAG index). Project-scoped
+ * (`project_id` set, `scene_id`/`chapter_id` null) — mirrors how the worker
+ * persists an index job. ``outputData`` carries the counts (or
+ * `skipped_no_provider`) the Settings card renders on completion.
+ */
+export function makeIndexJob(
+  status: string,
+  outputData: Record<string, unknown> | null = null,
+  id = "job-index-1",
+): GenerationJobRead {
+  return {
+    id,
+    project_id: FAROSZ_PROJECT.id,
+    scene_id: null,
+    chapter_id: null,
+    job_type: "index",
+    status,
+    model_name: null,
+    prompt_version: null,
+    input_data: null,
+    output_data: outputData,
     error_message: null,
     created_at: NOW,
     updated_at: NOW,
@@ -696,6 +725,7 @@ export function maskKey(key: string): string {
  * ------------------------------------------------------------------------- */
 export const JOB_DONE: GenerationJobRead = {
   id: "job-done-1",
+  project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
   job_type: "rewrite",
@@ -711,6 +741,7 @@ export const JOB_DONE: GenerationJobRead = {
 
 export const JOB_RUNNING: GenerationJobRead = {
   id: "job-running-1",
+  project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
   job_type: "generate_scene",
@@ -726,6 +757,7 @@ export const JOB_RUNNING: GenerationJobRead = {
 
 export const JOB_FAILED: GenerationJobRead = {
   id: "job-failed-1",
+  project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
   job_type: "describe",

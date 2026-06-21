@@ -2,6 +2,7 @@ import uuid
 
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
+from alexandria_core.models.generation_job import JobStatus
 from alexandria_core.schemas.revision import RevisionRead
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -10,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import safe_error
 from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
+from app.services.crud_generation_job import create_index_job
 from app.services.crud_provider import list_providers
 from app.services.embedding_service import EmbeddingService, embedding_service
+from app.services.job_queue import enqueue_index_job
 from app.services.provider_service import list_provider_models
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -462,6 +465,46 @@ async def index_project(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Indexing failed: {safe_error(e)}",
         )
+
+
+@router.post("/index/async", response_model=GenerationJobRead, status_code=status.HTTP_202_ACCEPTED)
+async def index_project_async(
+    project_id: uuid.UUID | None = None,
+    body: IndexRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> GenerationJobRead:
+    """Enqueue an async project RAG re-index onto the worker queue.
+
+    Returns the queued ``GenerationJob`` (status ``pending``) immediately;
+    poll ``GET /jobs/{id}`` for progress (the worker flips it to running →
+    done/failed and writes the index counts into ``output_data``). The worker
+    resolves the embedding provider — when none is configured the job completes
+    as a no-op (``output_data.skipped_no_provider = true``), never an error.
+
+    ``project_id`` may be given as a query param (preferred) or in the body.
+    If the queue cannot be reached, the job is marked failed (so it never
+    dangles as forever-pending) and a sanitized 502 is returned.
+    """
+    resolved_project_id = project_id or (body.project_id if body else None)
+    if resolved_project_id is None:
+        raise HTTPException(status_code=422, detail="project_id is required")
+
+    job = await create_index_job(db, resolved_project_id)
+    try:
+        enqueue_index_job(job.id)
+    except Exception as e:
+        # The job row exists but could not be queued (e.g. Redis unreachable).
+        # Mark it failed so it is not stuck PENDING forever, then surface a
+        # sanitized 502. Never leak the underlying connection error verbatim.
+        job.status = JobStatus.FAILED
+        job.error_message = "A feladat sorba állítása nem sikerült."
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not enqueue index job: {safe_error(e)}",
+        )
+    return GenerationJobRead.model_validate(job)
 
 
 @router.post("/chapters/{chapter_id}/summarize", response_model=AIResult)

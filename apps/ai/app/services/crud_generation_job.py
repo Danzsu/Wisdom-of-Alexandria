@@ -1,7 +1,7 @@
 import uuid
 
 from alexandria_core.models.chapter import Chapter
-from alexandria_core.models.generation_job import GenerationJob
+from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
 from alexandria_core.models.scene import Scene
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 async def get_job(db: AsyncSession, job_id: uuid.UUID) -> GenerationJob | None:
     return await db.get(GenerationJob, job_id)
+
+
+async def create_index_job(db: AsyncSession, project_id: uuid.UUID) -> GenerationJob:
+    """Create a PENDING project-scoped RAG index job and persist it.
+
+    The async ``POST /ai/index/async`` endpoint creates this, then enqueues it
+    for the RQ worker; the worker flips it to running/done/failed. Committed +
+    refreshed so the caller gets a server-populated row (id, timestamps) to
+    return and the worker can immediately load it by id.
+    """
+    job = GenerationJob(
+        project_id=project_id,
+        job_type=JobType.INDEX,
+        status=JobStatus.PENDING,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
 
 
 async def list_jobs(

@@ -111,6 +111,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/index/async": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Index Project Async
+         * @description Enqueue an async project RAG re-index onto the worker queue.
+         *
+         *     Returns the queued ``GenerationJob`` (status ``pending``) immediately;
+         *     poll ``GET /jobs/{id}`` for progress (the worker flips it to running →
+         *     done/failed and writes the index counts into ``output_data``). The worker
+         *     resolves the embedding provider — when none is configured the job completes
+         *     as a no-op (``output_data.skipped_no_provider = true``), never an error.
+         *
+         *     ``project_id`` may be given as a query param (preferred) or in the body.
+         *     If the queue cannot be reached, the job is marked failed (so it never
+         *     dangles as forever-pending) and a sanitized 502 is returned.
+         */
+        post: operations["index_project_async_api_v1_ai_index_async_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/models": {
         parameters: {
             query?: never;
@@ -461,6 +491,8 @@ export interface components {
             output_data: {
                 [key: string]: unknown;
             } | null;
+            /** Project Id */
+            project_id: string | null;
             /** Prompt Version */
             prompt_version: string | null;
             /** Scene Id */
@@ -900,6 +932,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IndexResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_project_async_api_v1_ai_index_async_post: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IndexRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJobRead"];
                 };
             };
             /** @description Validation Error */
