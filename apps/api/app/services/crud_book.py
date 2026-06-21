@@ -1,7 +1,8 @@
 import uuid
 
 from alexandria_core.models.book import Book
-from sqlalchemy import select
+from alexandria_core.models.plotline import Plotline
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.book import BookCreate, BookUpdate
@@ -50,5 +51,15 @@ async def update_book(db: AsyncSession, book: Book, data: BookUpdate) -> Book:
 
 
 async def delete_book(db: AsyncSession, book: Book) -> None:
+    # A plotline scoped to this book must NOT be deleted with it — it falls back
+    # to project-wide scope (book_id -> NULL). The DB-level FK is
+    # ``ON DELETE SET NULL`` (authoritative on PostgreSQL), but we ALSO null the
+    # reference explicitly here so the behaviour is deterministic and portable
+    # regardless of whether the backend enforces FK ON DELETE actions (SQLite
+    # does not unless ``PRAGMA foreign_keys`` is on). Plotlines are NEVER deleted
+    # with the book — only detached.
+    await db.execute(
+        update(Plotline).where(Plotline.book_id == book.id).values(book_id=None)
+    )
     await db.delete(book)
     await db.commit()

@@ -1,6 +1,8 @@
 import uuid
 
+from alexandria_core.models.plotline_scene import PlotlineScene
 from alexandria_core.models.scene import Scene
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +51,15 @@ async def update_scene(db: AsyncSession, scene: Scene, data: SceneUpdate) -> Sce
 
 
 async def delete_scene(db: AsyncSession, scene: Scene) -> None:
+    # A scene's plotline associations must go with it (the scene leaves every
+    # plotline it was attached to) but the plotlines themselves survive. The
+    # DB-level FK is ``ON DELETE CASCADE`` (authoritative on PostgreSQL), but we
+    # ALSO remove the links explicitly here so the behaviour is deterministic and
+    # portable regardless of whether the backend enforces FK ON DELETE actions
+    # (SQLite does not unless ``PRAGMA foreign_keys`` is on).
+    await db.execute(
+        sa_delete(PlotlineScene).where(PlotlineScene.scene_id == scene.id)
+    )
     await db.delete(scene)
     await db.commit()
 

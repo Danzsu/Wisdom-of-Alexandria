@@ -43,7 +43,14 @@ depends_on: str | Sequence[str] | None = None
 
 # Tables introduced by LATER revisions — excluded from the initial schema so the
 # migration that owns each one creates it exactly once.
-_TABLES_ADDED_LATER = {"providers", "embeddings", "series"}
+_TABLES_ADDED_LATER = {
+    "providers",
+    "embeddings",
+    "series",
+    # plotlines + plotline_scenes -> d4a1b2c3e5f6 (Plotline domain)
+    "plotlines",
+    "plotline_scenes",
+}
 
 # Columns added by LATER revisions to base tables — dropped from the in-memory
 # copy here so the owning ALTER migration adds them exactly once.
