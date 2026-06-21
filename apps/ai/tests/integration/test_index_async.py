@@ -86,6 +86,29 @@ async def test_index_async_requires_auth(client: AsyncClient):
 
 
 @pytest.mark.integration
+async def test_index_async_nonexistent_project_is_422_not_500(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """A project_id that does not exist must be a clean 422 — never an opaque 500
+    (PostgreSQL FK violation) and never a silently-enqueued job for a missing
+    project (SQLite, FKs off). No job row should be created."""
+    ghost = uuid.uuid4()
+    with patch("app.api.v1.ai.enqueue_index_job") as mock_enqueue:
+        resp = await client.post(
+            f"/api/v1/ai/index/async?project_id={ghost}", headers=auth_headers
+        )
+    assert resp.status_code == 422
+    mock_enqueue.assert_not_called()  # nothing queued for a nonexistent project
+    # No GenerationJob row leaked for the ghost project.
+    count = (
+        await db_session.execute(
+            select(GenerationJob).where(GenerationJob.project_id == ghost)
+        )
+    ).scalars().all()
+    assert count == []
+
+
+@pytest.mark.integration
 async def test_index_async_enqueue_failure_marks_job_failed(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):

@@ -196,11 +196,19 @@ export function useRebuildIndex(
   // Freshest view: the poll once we have an id, else the enqueue's pending job.
   const job = poll.data ?? enqueue.data ?? null;
   const terminal = job?.status === "done" || job?.status === "failed";
-  const isRunning = (enqueue.isPending || Boolean(jobId)) && !terminal;
+  // `enqueue.isPending` must DOMINATE: on a SECOND trigger after a finished run,
+  // `terminal` is still true (stale prior job) until the new id arrives, so
+  // gating solely on `!terminal` would wrongly read false during the in-flight
+  // enqueue. Once a job id exists we fall back to its non-terminal status.
+  const isRunning = enqueue.isPending || (Boolean(jobId) && !terminal);
 
   return {
     trigger: () => {
-      if (projectId) enqueue.mutate();
+      if (!projectId) return;
+      // Clear the previous job so its terminal status/counts don't linger while
+      // the new rebuild is enqueued (the new id arrives via onSuccess).
+      setJobId(null);
+      enqueue.mutate();
     },
     job,
     isRunning,

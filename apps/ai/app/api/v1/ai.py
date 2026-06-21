@@ -3,6 +3,7 @@ import uuid
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
 from alexandria_core.models.generation_job import JobStatus
+from alexandria_core.models.project import Project
 from alexandria_core.schemas.revision import RevisionRead
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -489,6 +490,13 @@ async def index_project_async(
     resolved_project_id = project_id or (body.project_id if body else None)
     if resolved_project_id is None:
         raise HTTPException(status_code=422, detail="project_id is required")
+
+    # Validate the project exists BEFORE creating the job. Otherwise a bogus id
+    # would either raise a FK IntegrityError on PostgreSQL (surfacing as an opaque
+    # 500) or — on SQLite, where FKs are off — silently enqueue a job for a
+    # nonexistent project. An explicit 422 is correct + consistent on both.
+    if await db.get(Project, resolved_project_id) is None:
+        raise HTTPException(status_code=422, detail="project_id does not exist")
 
     job = await create_index_job(db, resolved_project_id)
     try:
