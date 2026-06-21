@@ -1,7 +1,13 @@
 import "@testing-library/jest-dom/vitest";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, expect } from "vitest";
 import { cleanup } from "@testing-library/react";
+import * as axeMatchers from "vitest-axe/matchers";
 import { server } from "./test/msw/server";
+
+// Register the axe-core matcher (`toHaveNoViolations`) for the a11y test gate
+// (UX-4b). See test/a11y.ts for the shared `expectNoA11yViolations` helper and
+// the documented rule config (color-contrast off under jsdom).
+expect.extend(axeMatchers);
 import {
   resetCodexStore,
   resetPlanStore,
