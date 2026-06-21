@@ -1193,6 +1193,12 @@ export const hu = {
     codexSidebarAria: "Codex",
     /** Codex list placeholder copy — the list is filled in M6. */
     codexComingSoon: "A Codex-lista az M6-ban érkezik.",
+    /** Tablet/phone toggle: open the left structure pane (tree / codex) drawer. */
+    openTreeDrawerAria: "Fejezetek megnyitása",
+    /** Tablet/phone toggle: open the right AI-inspector drawer. */
+    openInspectorDrawerAria: "AI segéd megnyitása",
+    /** Generic close-drawer action (overlay scrim + drawer close button). */
+    closeDrawerAria: "Bezárás",
   },
   /** Reusable kit-component default labels. */
   kit: {

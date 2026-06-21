@@ -8,6 +8,7 @@ function resetStore() {
     commandOpen: false,
     shortcutsOpen: false,
     howItWorksOpen: false,
+    shellDrawer: null,
     sparkActive: false,
   });
 }
@@ -51,6 +52,44 @@ describe("useUIStore", () => {
       useUIStore.getState().setMenu("user");
       useUIStore.getState().closeMenus();
       expect(useUIStore.getState().openMenu).toBeNull();
+    });
+  });
+
+  describe("shell drawers (UX-4a, single-open)", () => {
+    it("openShellDrawer opens a single drawer", () => {
+      useUIStore.getState().openShellDrawer("tree");
+      expect(useUIStore.getState().shellDrawer).toBe("tree");
+    });
+
+    it("opening a drawer closes any other (mutually exclusive)", () => {
+      useUIStore.getState().openShellDrawer("tree");
+      useUIStore.getState().openShellDrawer("inspector");
+      expect(useUIStore.getState().shellDrawer).toBe("inspector");
+    });
+
+    it("toggleShellDrawer opens then closes the same drawer", () => {
+      useUIStore.getState().toggleShellDrawer("inspector");
+      expect(useUIStore.getState().shellDrawer).toBe("inspector");
+      useUIStore.getState().toggleShellDrawer("inspector");
+      expect(useUIStore.getState().shellDrawer).toBeNull();
+    });
+
+    it("toggleShellDrawer switches between drawers", () => {
+      useUIStore.getState().toggleShellDrawer("tree");
+      useUIStore.getState().toggleShellDrawer("inspector");
+      expect(useUIStore.getState().shellDrawer).toBe("inspector");
+    });
+
+    it("opening a drawer closes any open menu", () => {
+      useUIStore.getState().setMenu("tools");
+      useUIStore.getState().openShellDrawer("tree");
+      expect(useUIStore.getState().openMenu).toBeNull();
+    });
+
+    it("closeShellDrawer clears the open drawer", () => {
+      useUIStore.getState().openShellDrawer("tree");
+      useUIStore.getState().closeShellDrawer();
+      expect(useUIStore.getState().shellDrawer).toBeNull();
     });
   });
 

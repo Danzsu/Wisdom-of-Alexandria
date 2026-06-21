@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Users, SlidersHorizontal } from "lucide-react";
+import { Search, Users, SlidersHorizontal, PanelLeft, PanelRight } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { Icon } from "@/components/kit/icon";
 import { ThemeToggle } from "@/components/kit/theme-toggle";
@@ -22,6 +22,14 @@ export interface TopBarProps {
   isWrite: boolean;
   /** Active book id (from the route) — drives breadcrumb/settings navigation. */
   bookId: string | null;
+  /**
+   * Whether the responsive left-pane (chapter tree / codex) drawer toggle is
+   * available for this route. The button is itself CSS-hidden at/above `lg`
+   * (the pane is inline there); this only gates whether the route HAS a pane.
+   */
+  showTreeToggle?: boolean;
+  /** Whether the responsive AI-inspector drawer toggle is available (Write). */
+  showInspectorToggle?: boolean;
 }
 
 /**
@@ -31,9 +39,17 @@ export interface TopBarProps {
  * pill, a Share pill (in-book stub → toast), the search trigger (opens the
  * command palette), the theme toggle, a settings button and the user menu.
  */
-export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
+export function TopBar({
+  inBook,
+  isWrite,
+  bookId,
+  showTreeToggle = false,
+  showInspectorToggle = false,
+}: Readonly<TopBarProps>) {
   const navTo = useNavTo();
   const openCommand = useUIStore((s) => s.openCommand);
+  const shellDrawer = useUIStore((s) => s.shellDrawer);
+  const toggleShellDrawer = useUIStore((s) => s.toggleShellDrawer);
   // The active model is config-driven (same /ai/models source the StatusBar +
   // inspector use); never a hardcoded model name.
   const models = useInspectorModels();
@@ -41,6 +57,22 @@ export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
 
   return (
     <header className="relative z-10 flex h-topbar flex-none items-center gap-3 border-b border-border bg-surface px-3.5">
+      {/* Responsive left-pane (chapter tree / codex) drawer toggle. Hidden at
+          and above `lg` (the pane is inline there); only the small-screen layout
+          surfaces it. aria-expanded/aria-controls describe the drawer it opens. */}
+      {showTreeToggle ? (
+        <button
+          type="button"
+          aria-label={hu.shell.openTreeDrawerAria}
+          aria-expanded={shellDrawer === "tree"}
+          aria-controls="shell-drawer-tree"
+          onClick={() => toggleShellDrawer("tree")}
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text lg:hidden"
+        >
+          <Icon icon={PanelLeft} size={16} />
+        </button>
+      ) : null}
+
       {/* Brand → projects */}
       <button
         type="button"
@@ -124,6 +156,21 @@ export function TopBar({ inBook, isWrite, bookId }: TopBarProps) {
         </button>
 
         <ThemeToggle />
+
+        {/* Responsive AI-inspector drawer toggle (Write route). Hidden ≥ lg
+            where the inspector is inline. */}
+        {showInspectorToggle ? (
+          <button
+            type="button"
+            aria-label={hu.shell.openInspectorDrawerAria}
+            aria-expanded={shellDrawer === "inspector"}
+            aria-controls="shell-drawer-inspector"
+            onClick={() => toggleShellDrawer("inspector")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text lg:hidden"
+          >
+            <Icon icon={PanelRight} size={16} />
+          </button>
+        ) : null}
 
         <button
           type="button"

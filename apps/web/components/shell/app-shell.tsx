@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useShellChrome } from "@/lib/use-shell-chrome";
+import { useShellChrome, type ShellChrome } from "@/lib/use-shell-chrome";
 import { useEditorStore } from "@/lib/stores/editor-store";
 import { hu } from "@/lib/i18n/hu";
 import { TopBar } from "./top-bar";
@@ -20,6 +20,8 @@ import {
 } from "@/components/onboarding/how-it-works";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
 import { AiGenerationProvider } from "@/components/inspector/ai-generation-context";
+import { ShellDrawer } from "./shell-drawer";
+import { useUIStore } from "@/lib/stores/ui-store";
 
 /**
  * Persistent application shell rendered once by the `(app)` layout. Lays out:
@@ -41,10 +43,39 @@ import { AiGenerationProvider } from "@/components/inspector/ai-generation-conte
  *
  * The route children render into the `<main>` area.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+/**
+ * Resolve the left structure pane (tree on Write, codex on Codex) plus the
+ * drawer metadata it needs below `lg`. The rail is intentionally NOT a drawer —
+ * it stays inline (it is already compact at 56px). Returns null when the left
+ * side hosts the rail (or nothing).
+ */
+function leftPaneFor(sidebar: ShellChrome["leftSidebar"]): {
+  node: ReactNode;
+  label: string;
+  widthClass: string;
+} | null {
+  if (sidebar === "tree") {
+    return {
+      node: <ChapterTree />,
+      label: hu.write.chapterTreeAria,
+      widthClass: "w-tree",
+    };
+  }
+  if (sidebar === "codex") {
+    return {
+      node: <CodexSidebar />,
+      label: hu.shell.codexSidebarAria,
+      widthClass: "w-codex-sidebar",
+    };
+  }
+  return null;
+}
+
+export function AppShell({ children }: { readonly children: ReactNode }) {
   const chrome = useShellChrome();
   const focusOn = useEditorStore((s) => s.focusOn);
   const toggleFocus = useEditorStore((s) => s.toggleFocus);
+  const closeShellDrawer = useUIStore((s) => s.closeShellDrawer);
   // Focus mode only applies on the Write route (it's the only route with the
   // toggle / a manuscript to focus on).
   const focusMode = chrome.isWrite && focusOn;
@@ -59,29 +90,75 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusMode, toggleFocus]);
 
+  // The responsive drawers only make sense while their pane is part of the
+  // route's chrome. Entering focus mode (which hides ALL chrome) closes any open
+  // drawer so a stray overlay can't survive into distraction-free writing.
+  useEffect(() => {
+    if (focusMode) closeShellDrawer();
+  }, [focusMode, closeShellDrawer]);
+
+  const leftPane = leftPaneFor(chrome.leftSidebar);
+  // The left structure pane collapses into a drawer below `lg`; the rail does
+  // not. The inspector drawer only exists on the Write route.
+  const hasLeftDrawer = chrome.showRail && !focusMode && leftPane !== null;
+  const hasInspectorDrawer = chrome.isWrite && !focusMode;
+  const showLeftSide = chrome.showRail && !focusMode;
+
+  // The left side: the inline structure pane (desktop; `max-lg:hidden` so the
+  // drawer takes over below `lg`), or the always-inline rail. Resolved here so
+  // the body JSX below stays a flat list rather than nested conditionals.
+  let leftSide: ReactNode = null;
+  if (showLeftSide && leftPane) {
+    // `max-lg:hidden` keeps the desktop layout as the unprefixed BASE, so jsdom
+    // (no min-width matchMedia) still renders it inline — existing tests green.
+    leftSide = <div className="flex max-lg:hidden">{leftPane.node}</div>;
+  } else if (showLeftSide) {
+    // The rail only renders inside a book, so bookId is always present here; the
+    // `?? ""` keeps the prop type strict without a non-null assertion.
+    leftSide = (
+      <IconRail bookId={chrome.bookId ?? ""} activeSegment={chrome.segment} />
+    );
+  }
+
   const body = (
     <div className="flex min-h-0 flex-1">
-      {chrome.showRail && !focusMode ? (
-        chrome.leftSidebar === "tree" ? (
-          <ChapterTree />
-        ) : chrome.leftSidebar === "codex" ? (
-          <CodexSidebar />
-        ) : (
-          // The rail only renders inside a book, so bookId is always present
-          // here; the `?? ""` keeps the prop type strict without a non-null !.
-          <IconRail bookId={chrome.bookId ?? ""} activeSegment={chrome.segment} />
-        )
-      ) : null}
+      {leftSide}
 
       <main className="flex min-w-0 flex-1 flex-col">{children}</main>
 
-      {chrome.isWrite && !focusMode ? (
+      {hasInspectorDrawer ? (
         <aside
           aria-label={hu.shell.aiInspectorAria}
-          className="flex w-inspector flex-none flex-col border-l border-border bg-surface"
+          className="flex w-inspector flex-none flex-col border-l border-border bg-surface max-lg:hidden"
         >
           <InspectorPanel />
         </aside>
+      ) : null}
+
+      {/* Below `lg` the same panes live in slide-in drawers (Radix Dialog:
+          focus-trapped, Esc/scrim-closable, labelled). They are closed on
+          desktop (their toggles are CSS-hidden ≥ lg), so the inline panes above
+          are what desktop / jsdom render. */}
+      {hasLeftDrawer && leftPane ? (
+        <ShellDrawer
+          id="tree"
+          side="left"
+          label={leftPane.label}
+          widthClass={leftPane.widthClass}
+        >
+          {leftPane.node}
+        </ShellDrawer>
+      ) : null}
+
+      {hasInspectorDrawer ? (
+        <ShellDrawer
+          id="inspector"
+          side="right"
+          label={hu.shell.aiInspectorAria}
+          widthClass="w-inspector"
+        >
+          <InspectorPanel />
+        </ShellDrawer>
       ) : null}
     </div>
   );
@@ -93,6 +170,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           inBook={chrome.inBook}
           isWrite={chrome.isWrite}
           bookId={chrome.bookId}
+          showTreeToggle={hasLeftDrawer}
+          showInspectorToggle={hasInspectorDrawer}
         />
       )}
 

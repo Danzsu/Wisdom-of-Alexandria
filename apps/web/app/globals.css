@@ -259,6 +259,26 @@ select:focus-visible,
   }
 }
 
+/* Responsive shell drawers (UX-4a): transform-only edge slide. Suppressed in
+   the component under prefers-reduced-motion (the class is simply not applied). */
+@keyframes woaSlideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes woaSlideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes woaToastPop {
   0% {
     opacity: 0;

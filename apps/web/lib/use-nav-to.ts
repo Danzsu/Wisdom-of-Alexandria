@@ -16,14 +16,18 @@ export function useNavTo() {
   const triggerSpark = useUIStore((s) => s.triggerSpark);
   const closeMenus = useUIStore((s) => s.closeMenus);
   const closeCommand = useUIStore((s) => s.closeCommand);
+  const closeShellDrawer = useUIStore((s) => s.closeShellDrawer);
 
   return useCallback(
     (href: string) => {
       closeMenus();
       closeCommand();
+      // Navigating from inside a responsive drawer (e.g. tapping a scene in the
+      // tree drawer) dismisses it so the content the user navigated to is shown.
+      closeShellDrawer();
       triggerSpark();
       router.push(href);
     },
-    [router, triggerSpark, closeMenus, closeCommand],
+    [router, triggerSpark, closeMenus, closeCommand, closeShellDrawer],
   );
 }

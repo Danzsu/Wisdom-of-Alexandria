@@ -7,6 +7,14 @@ import { create } from "zustand";
  */
 export type MenuId = "user" | "tools" | "project";
 
+/**
+ * Identifier of the single open responsive shell drawer (UX-4a), or `null`.
+ * Below the `lg` breakpoint the left structure pane (chapter tree / codex) and
+ * the right AI inspector collapse into mutually-exclusive slide-in drawers; only
+ * one may be open at a time so they never fight for the viewport.
+ */
+export type ShellDrawerId = "tree" | "inspector";
+
 /** Auto-clear delay (ms) for the navigation sparkfield — matches `woaSpark`. */
 export const SPARK_DURATION_MS = 1100;
 
@@ -19,6 +27,12 @@ interface UIState {
   shortcutsOpen: boolean;
   /** Whether the "Hogyan működik" onboarding scroll-narrative is open. */
   howItWorksOpen: boolean;
+  /**
+   * The single open responsive shell drawer (UX-4a), or `null` when none is
+   * open. Mutually exclusive (one viewport, one drawer). Desktop (≥ lg) never
+   * opens these — the panes are inline there — so the value stays `null`.
+   */
+  shellDrawer: ShellDrawerId | null;
   /** Transient flag driving the navigation sparkfield. */
   sparkActive: boolean;
 
@@ -46,6 +60,13 @@ interface UIState {
   /** Close the "Hogyan működik" onboarding narrative. */
   closeHowItWorks: () => void;
 
+  /** Open the given responsive shell drawer (closing any other drawer). */
+  openShellDrawer: (drawer: ShellDrawerId) => void;
+  /** Toggle a shell drawer: open it if closed, close it if it is the open one. */
+  toggleShellDrawer: (drawer: ShellDrawerId) => void;
+  /** Close any open shell drawer. */
+  closeShellDrawer: () => void;
+
   /** Fire the sparkfield; it auto-clears after `SPARK_DURATION_MS`. */
   triggerSpark: () => void;
   /** Clear the sparkfield (called by the auto-clear timer / on unmount). */
@@ -68,6 +89,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   commandOpen: false,
   shortcutsOpen: false,
   howItWorksOpen: false,
+  shellDrawer: null,
   sparkActive: false,
 
   setMenu: (menu) => set({ openMenu: menu }),
@@ -99,6 +121,16 @@ export const useUIStore = create<UIState>((set, get) => ({
       openMenu: null,
     }),
   closeHowItWorks: () => set({ howItWorksOpen: false }),
+
+  // The shell drawers are mutually exclusive (one viewport). Opening one always
+  // closes any other, and closes the menus so a flyout doesn't linger behind it.
+  openShellDrawer: (drawer) => set({ shellDrawer: drawer, openMenu: null }),
+  toggleShellDrawer: (drawer) =>
+    set((state) => ({
+      shellDrawer: state.shellDrawer === drawer ? null : drawer,
+      openMenu: null,
+    })),
+  closeShellDrawer: () => set({ shellDrawer: null }),
 
   triggerSpark: () => {
     if (sparkTimer !== null) {

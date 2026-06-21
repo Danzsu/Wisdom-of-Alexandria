@@ -147,7 +147,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
   return (
     <nav
       aria-label={hu.shell.railAria}
-      className="flex w-rail flex-none flex-col items-center gap-1 border-r border-border bg-bg-subtle py-2.5"
+      className="flex w-rail flex-none flex-col items-center gap-1 overflow-y-auto border-r border-border bg-bg-subtle py-2.5"
     >
       {RAIL_ITEMS.map((item) => {
         const active = item.segment === activeSegment;
