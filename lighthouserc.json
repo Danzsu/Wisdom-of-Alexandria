@@ -1,0 +1,26 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "corepack pnpm -C apps/web start",
+      "startServerReadyPattern": "Ready in",
+      "startServerReadyTimeout": 60000,
+      "url": ["http://localhost:3000/"],
+      "numberOfRuns": 1,
+      "settings": {
+        "preset": "desktop"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.5 }],
+        "categories:accessibility": ["warn", { "minScore": 0.9 }],
+        "categories:best-practices": ["warn", { "minScore": 0.9 }],
+        "categories:seo": ["warn", { "minScore": 0.8 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  }
+}

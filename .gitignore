@@ -22,6 +22,9 @@ dist/
 .env
 postgres_data/
 
+# Lighthouse CI (P1L-2) — local/CI report output
+.lighthouseci/
+
 # IDE
 .vscode/
 .idea/

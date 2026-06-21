@@ -128,6 +128,48 @@ jobs:
         run: corepack pnpm -C apps/web test
 
   # ---------------------------------------------------------------------------
+  # Lighthouse CI (P1L-2): ADVISORY performance / a11y / best-practices / SEO
+  # signal on the built web app. `continue-on-error: true` makes it NON-BLOCKING
+  # — a regression surfaces as a soft warning + an uploaded report artifact, but
+  # never fails the pipeline or gates a deploy. Assertions are `warn`-level
+  # (see lighthouserc.json), so the job is informational by design.
+  # ---------------------------------------------------------------------------
+  lighthouse:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build web
+        run: corepack pnpm -C apps/web build
+
+      # lhci boots `next start`, audits the URLs in lighthouserc.json, and writes
+      # reports to .lighthouseci. Pulled ephemerally via dlx so the lockfile is
+      # untouched. Chrome is preinstalled on the ubuntu-latest runner.
+      - name: Run Lighthouse CI
+        run: corepack pnpm dlx @lhci/cli@0.14.x autorun
+
+      - name: Upload Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
   # Shared-types freshness: the committed OpenAPI-generated types in
   # `packages/shared` are the FE↔BE contract. Re-run the generation pipeline
   # (per-app OpenAPI dump + openapi-typescript) against the current backend and
