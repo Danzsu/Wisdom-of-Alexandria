@@ -231,6 +231,41 @@ export interface paths {
         patch: operations["update_api_v1_codex_progressions__progression_id__patch"];
         trace?: never;
     };
+    "/api/v1/plotlines/{plotline_id}/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenes */
+        get: operations["list_scenes_api_v1_plotlines__plotline_id__scenes_get"];
+        put?: never;
+        /** Attach */
+        post: operations["attach_api_v1_plotlines__plotline_id__scenes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plotlines/{plotline_id}/scenes/{scene_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach */
+        delete: operations["detach_api_v1_plotlines__plotline_id__scenes__scene_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -243,6 +278,38 @@ export interface paths {
         put?: never;
         /** Create */
         post: operations["create_api_v1_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore
+         * @description Restore a JSON backup file into a brand-new project.
+         *
+         *     The upload is the JSON envelope produced by ``GET .../backup``. Errors map to
+         *     clear HTTP codes (never a 500 traceback):
+         *
+         *       * empty upload          -> 400
+         *       * over the size cap     -> 413
+         *       * not valid JSON        -> 400
+         *       * malformed / wrong
+         *         version / shape       -> 422 (BackupError)
+         *
+         *     The restore is transactional — a failure rolls back, leaving no orphan
+         *     project.
+         */
+        post: operations["restore_api_v1_projects_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -266,6 +333,30 @@ export interface paths {
         head?: never;
         /** Update */
         patch: operations["update_api_v1_projects__project_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Backup
+         * @description Download a project's whole graph as a JSON backup file.
+         *
+         *     Ownership-checked (a missing/foreign project → 404, matching the existing
+         *     single-user pattern). Provider secrets / embeddings / jobs / revisions are
+         *     excluded by the serializer.
+         */
+        get: operations["backup_api_v1_projects__project_id__backup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/projects/{project_id}/books": {
@@ -476,6 +567,43 @@ export interface paths {
         head?: never;
         /** Update */
         patch: operations["update_api_v1_projects__project_id__locations__location_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/plotlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List All */
+        get: operations["list_all_api_v1_projects__project_id__plotlines_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_v1_projects__project_id__plotlines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/plotlines/{plotline_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get One */
+        get: operations["get_one_api_v1_projects__project_id__plotlines__plotline_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete */
+        delete: operations["delete_api_v1_projects__project_id__plotlines__plotline_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update */
+        patch: operations["update_api_v1_projects__project_id__plotlines__plotline_id__patch"];
         trace?: never;
     };
     "/api/v1/projects/{project_id}/series": {
@@ -868,6 +996,11 @@ export interface components {
             scope: string;
             /** Username */
             username: string;
+        };
+        /** Body_restore_api_v1_projects_restore_post */
+        Body_restore_api_v1_projects_restore_post: {
+            /** File */
+            file: string;
         };
         /** BookCreate */
         BookCreate: {
@@ -1403,6 +1536,124 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /** PlotlineCreate */
+        PlotlineCreate: {
+            /** Book Id */
+            book_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
+            /**
+             * Plotline Type
+             * @enum {string}
+             */
+            plotline_type: "main_plot" | "subplot" | "character_arc" | "romance" | "mystery" | "antagonist_plan" | "world_conflict";
+            /**
+             * Status
+             * @default planning
+             * @enum {string}
+             */
+            status: "planning" | "active" | "resolved" | "abandoned";
+            /** Title */
+            title: string;
+        };
+        /** PlotlineRead */
+        PlotlineRead: {
+            /** Book Id */
+            book_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Order Index */
+            order_index: number;
+            /** Plotline Type */
+            plotline_type: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PlotlineSceneCreate */
+        PlotlineSceneCreate: {
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
+            /**
+             * Scene Id
+             * Format: uuid
+             */
+            scene_id: string;
+        };
+        /** PlotlineSceneRead */
+        PlotlineSceneRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Order Index */
+            order_index: number;
+            /**
+             * Plotline Id
+             * Format: uuid
+             */
+            plotline_id: string;
+            /**
+             * Scene Id
+             * Format: uuid
+             */
+            scene_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PlotlineUpdate */
+        PlotlineUpdate: {
+            /** Book Id */
+            book_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Order Index */
+            order_index?: number | null;
+            /** Plotline Type */
+            plotline_type?: ("main_plot" | "subplot" | "character_arc" | "romance" | "mystery" | "antagonist_plan" | "world_conflict") | null;
+            /** Status */
+            status?: ("planning" | "active" | "resolved" | "abandoned") | null;
+            /** Title */
+            title?: string | null;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Description */
@@ -1457,6 +1708,47 @@ export interface components {
             language?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * RestoreSummary
+         * @description Result of a successful restore: the new project + restored-entity counts.
+         *
+         *     ``project_id`` is a FRESH id (a restore creates a copy, never a move).
+         */
+        RestoreSummary: {
+            /** Beat Count */
+            beat_count: number;
+            /** Book Count */
+            book_count: number;
+            /** Chapter Count */
+            chapter_count: number;
+            /** Character Count */
+            character_count: number;
+            /** Codex Entry Count */
+            codex_entry_count: number;
+            /** Codex Progression Count */
+            codex_progression_count: number;
+            /** Codex Relation Count */
+            codex_relation_count: number;
+            /** Location Count */
+            location_count: number;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Scene Count */
+            scene_count: number;
+            /** Series Count */
+            series_count: number;
+            /** Snippet Count */
+            snippet_count: number;
+            /** Style Guide Count */
+            style_guide_count: number;
+            /** Title */
+            title: string;
+            /** Worldbuilding Count */
+            worldbuilding_count: number;
         };
         /**
          * RevisionRead
@@ -2561,6 +2853,102 @@ export interface operations {
             };
         };
     };
+    list_scenes_api_v1_plotlines__plotline_id__scenes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plotline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineSceneRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_api_v1_plotlines__plotline_id__scenes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plotline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlotlineSceneCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineSceneRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_api_v1_plotlines__plotline_id__scenes__scene_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plotline_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_all_api_v1_projects_get: {
         parameters: {
             query?: {
@@ -2613,6 +3001,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_api_v1_projects_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_restore_api_v1_projects_restore_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreSummary"];
                 };
             };
             /** @description Validation Error */
@@ -2708,6 +3129,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    backup_api_v1_projects__project_id__backup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -3566,6 +4018,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_api_v1_projects__project_id__plotlines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_v1_projects__project_id__plotlines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlotlineCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_api_v1_projects__project_id__plotlines__plotline_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plotline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_api_v1_projects__project_id__plotlines__plotline_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plotline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_api_v1_projects__project_id__plotlines__plotline_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plotline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlotlineUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotlineRead"];
                 };
             };
             /** @description Validation Error */

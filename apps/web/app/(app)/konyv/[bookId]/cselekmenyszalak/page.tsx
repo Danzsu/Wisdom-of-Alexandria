@@ -1,12 +1,14 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+"use client";
 
-/** Cselekményszálak (Subplots) placeholder — filled in M10 (V1). */
+/**
+ * Cselekményszálak (subplots) screen (Plotline-b). The plotlines are
+ * project-scoped, but the route only carries `bookId`, so the screen resolves
+ * the owning project via `useBookProjectId` (mirroring Kapcsolatok / Idősor).
+ */
+import { useParams } from "next/navigation";
+import { PlotlinesScreen } from "@/components/plotlines/plotlines-screen";
+
 export default function CselekmenyszalakPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.cselekmenyszalakLabel}
-      hint={hu.placeholders.cselekmenyszalakHint}
-    />
-  );
+  const params = useParams<{ bookId: string }>();
+  return <PlotlinesScreen bookId={params?.bookId} />;
 }

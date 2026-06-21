@@ -18,6 +18,8 @@ import type {
   CodexRelationRead as GenCodexRelationRead,
   Expect,
   MatchesContract,
+  PlotlineRead as GenPlotlineRead,
+  PlotlineSceneRead as GenPlotlineSceneRead,
   ProjectRead as GenProjectRead,
   SceneRead as GenSceneRead,
   SeriesRead as GenSeriesRead,
@@ -397,6 +399,96 @@ export type CodexRelationUpdate = z.infer<typeof codexRelationUpdateSchema>;
 export const codexRelationListSchema = z.array(codexRelationReadSchema);
 
 /* ---------------------------------------------------------------------------
+ * Plotline — mirrors app/schemas/plotline.py (Plotline-a; Cselekményszálak).
+ * PROJECT-scoped (`/projects/{pid}/plotlines`) with an OPTIONAL `book_id` scope
+ * (null = project-wide). `plotline_type` + `status` are stored as plain strings
+ * server-side (the Pydantic layer validates the allowed sets), so we keep them
+ * as `z.string()` in the Read schema and narrow the create/update unions below.
+ * Scenes attach via the flat `/plotlines/{id}/scenes` link router; a link is a
+ * `PlotlineSceneRead` row (plotline_id + scene_id + order_index).
+ * ------------------------------------------------------------------------- */
+
+/** The allowed plotline types (mirrors `PlotlineType`). */
+export const PLOTLINE_TYPES = [
+  "main_plot",
+  "subplot",
+  "character_arc",
+  "romance",
+  "mystery",
+  "antagonist_plan",
+  "world_conflict",
+] as const;
+export type PlotlineType = (typeof PLOTLINE_TYPES)[number];
+
+/** The allowed plotline statuses (mirrors `PlotlineStatus`). */
+export const PLOTLINE_STATUSES = [
+  "planning",
+  "active",
+  "resolved",
+  "abandoned",
+] as const;
+export type PlotlineStatus = (typeof PLOTLINE_STATUSES)[number];
+
+/** A plotline as returned by the API (`PlotlineRead`). */
+export const plotlineReadSchema = z.object({
+  id: idString,
+  project_id: idString,
+  book_id: idString.nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  plotline_type: z.string(),
+  status: z.string(),
+  order_index: z.number().int(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type PlotlineRead = z.infer<typeof plotlineReadSchema>;
+
+/** Request body for creating a plotline (`PlotlineCreate`). */
+export const plotlineCreateSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().nullable().optional(),
+  plotline_type: z.enum(PLOTLINE_TYPES),
+  status: z.enum(PLOTLINE_STATUSES).default("planning"),
+  book_id: idString.nullable().optional(),
+  order_index: z.number().int().default(0),
+});
+export type PlotlineCreate = z.infer<typeof plotlineCreateSchema>;
+
+/** Request body for patching a plotline (`PlotlineUpdate`). All fields optional. */
+export const plotlineUpdateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().nullable().optional(),
+  plotline_type: z.enum(PLOTLINE_TYPES).optional(),
+  status: z.enum(PLOTLINE_STATUSES).optional(),
+  book_id: idString.nullable().optional(),
+  order_index: z.number().int().optional(),
+});
+export type PlotlineUpdate = z.infer<typeof plotlineUpdateSchema>;
+
+export const plotlineListSchema = z.array(plotlineReadSchema);
+
+/** A plotline↔scene link as returned by the API (`PlotlineSceneRead`). */
+export const plotlineSceneReadSchema = z.object({
+  id: idString,
+  plotline_id: idString,
+  scene_id: idString,
+  order_index: z.number().int(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type PlotlineSceneRead = z.infer<typeof plotlineSceneReadSchema>;
+
+/** Request body for attaching a scene to a plotline (`PlotlineSceneCreate`). */
+export const plotlineSceneCreateSchema = z.object({
+  scene_id: idString,
+  order_index: z.number().int().default(0),
+});
+export type PlotlineSceneCreate = z.infer<typeof plotlineSceneCreateSchema>;
+
+export const plotlineSceneListSchema = z.array(plotlineSceneReadSchema);
+
+/* ---------------------------------------------------------------------------
  * Beat — mirrors app/schemas/beat.py (BeatRead / BeatCreate). Scene-scoped.
  * ------------------------------------------------------------------------- */
 
@@ -459,6 +551,13 @@ export type CoreContractTies = [
     MatchesContract<
       z.infer<typeof codexRelationReadSchema>,
       GenCodexRelationRead
+    >
+  >,
+  Expect<MatchesContract<z.infer<typeof plotlineReadSchema>, GenPlotlineRead>>,
+  Expect<
+    MatchesContract<
+      z.infer<typeof plotlineSceneReadSchema>,
+      GenPlotlineSceneRead
     >
   >,
 ];

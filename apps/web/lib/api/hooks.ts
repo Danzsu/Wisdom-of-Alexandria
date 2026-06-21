@@ -64,6 +64,15 @@ import {
   listCodexRelations,
   updateCodexRelation,
 } from "./codex-relations";
+import {
+  attachScene,
+  createPlotline,
+  deletePlotline,
+  detachScene,
+  listPlotlineScenes,
+  listPlotlines,
+  updatePlotline,
+} from "./plotlines";
 import type {
   BeatCreate,
   BeatRead,
@@ -79,6 +88,11 @@ import type {
   CodexRelationCreate,
   CodexRelationRead,
   CodexRelationUpdate,
+  PlotlineCreate,
+  PlotlineRead,
+  PlotlineSceneCreate,
+  PlotlineSceneRead,
+  PlotlineUpdate,
   ProjectCreate,
   ProjectRead,
   SceneCreate,
@@ -105,6 +119,12 @@ export const queryKeys = {
   // segment so it never collides with the codex-entry caches above.
   projectRelations: (projectId: string) =>
     ["projects", projectId, "codex-relations"] as const,
+  // Plotline-b — the project's plotlines (Cselekményszálak) + the per-plotline
+  // attached-scene link list (flat scene router, keyed by plotline id).
+  projectPlotlines: (projectId: string) =>
+    ["projects", projectId, "plotlines"] as const,
+  plotlineScenes: (plotlineId: string) =>
+    ["plotlines", plotlineId, "scenes"] as const,
   bookChapters: (bookId: string) => ["books", bookId, "chapters"] as const,
   chapterScenes: (chapterId: string) =>
     ["chapters", chapterId, "scenes"] as const,
@@ -1204,6 +1224,159 @@ export function useDeleteCodexRelation(): UseMutationResult<
     onSuccess: (_data, { projectId }) =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectRelations(projectId),
+      }),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Plotline hooks (Plotline-b Cselekményszálak). Project-scoped; every plotline
+ * mutation invalidates the project's plotline list. Scene attach/detach
+ * additionally invalidates the per-plotline scene-link list so the plotline's
+ * chips re-render. Errors propagate via the query/mutation `error` (a
+ * cross-project attach 400 surfaces here, never swallowed).
+ * ------------------------------------------------------------------------- */
+
+/** List a project's plotlines. Disabled until a project id is present. */
+export function usePlotlines(
+  projectId: string | undefined,
+): UseQueryResult<PlotlineRead[], Error> {
+  return useQuery({
+    queryKey: queryKeys.projectPlotlines(projectId ?? "__none__"),
+    queryFn: () => listPlotlines(projectId as string),
+    enabled: Boolean(projectId),
+  });
+}
+
+/** List the scenes attached to a plotline. Disabled until an id is present. */
+export function usePlotlineScenes(
+  plotlineId: string | undefined,
+): UseQueryResult<PlotlineSceneRead[], Error> {
+  return useQuery({
+    queryKey: queryKeys.plotlineScenes(plotlineId ?? "__none__"),
+    queryFn: () => listPlotlineScenes(plotlineId as string),
+    enabled: Boolean(plotlineId),
+  });
+}
+
+/** Input for the plotline-create mutation (project id + body). */
+export interface CreatePlotlineInput {
+  projectId: string;
+  data: PlotlineCreate;
+}
+
+/**
+ * Create a plotline under a project; invalidates the project's plotline list on
+ * success so the screen picks up the new card. Returns the created plotline.
+ */
+export function useCreatePlotline(): UseMutationResult<
+  PlotlineRead,
+  Error,
+  CreatePlotlineInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, data }: CreatePlotlineInput) =>
+      createPlotline(projectId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectPlotlines(created.project_id),
+      }),
+  });
+}
+
+/** Input for the plotline-update mutation (project + plotline id + patch). */
+export interface UpdatePlotlineInput {
+  projectId: string;
+  plotlineId: string;
+  patch: PlotlineUpdate;
+}
+
+/** Patch a plotline; invalidates the project's plotline list on success. */
+export function useUpdatePlotline(): UseMutationResult<
+  PlotlineRead,
+  Error,
+  UpdatePlotlineInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, plotlineId, patch }: UpdatePlotlineInput) =>
+      updatePlotline(projectId, plotlineId, patch),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectPlotlines(updated.project_id),
+      }),
+  });
+}
+
+/** Input for the plotline-delete mutation (project + plotline id). */
+export interface DeletePlotlineInput {
+  projectId: string;
+  plotlineId: string;
+}
+
+/** Delete a plotline; invalidates the project's plotline list on success. */
+export function useDeletePlotline(): UseMutationResult<
+  void,
+  Error,
+  DeletePlotlineInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, plotlineId }: DeletePlotlineInput) =>
+      deletePlotline(projectId, plotlineId),
+    onSuccess: (_data, { projectId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projectPlotlines(projectId),
+      }),
+  });
+}
+
+/** Input for the scene-attach mutation (plotline id + body). */
+export interface AttachPlotlineSceneInput {
+  plotlineId: string;
+  data: PlotlineSceneCreate;
+}
+
+/**
+ * Attach a scene to a plotline; invalidates the per-plotline scene-link list so
+ * the plotline's chips re-render. A cross-project scene → 400 propagates as the
+ * mutation `error` (surfaced by the caller, never swallowed).
+ */
+export function useAttachPlotlineScene(): UseMutationResult<
+  PlotlineSceneRead,
+  Error,
+  AttachPlotlineSceneInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ plotlineId, data }: AttachPlotlineSceneInput) =>
+      attachScene(plotlineId, data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.plotlineScenes(created.plotline_id),
+      }),
+  });
+}
+
+/** Input for the scene-detach mutation (plotline id + scene id). */
+export interface DetachPlotlineSceneInput {
+  plotlineId: string;
+  sceneId: string;
+}
+
+/** Detach a scene from a plotline; invalidates the per-plotline scene-link list. */
+export function useDetachPlotlineScene(): UseMutationResult<
+  void,
+  Error,
+  DetachPlotlineSceneInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ plotlineId, sceneId }: DetachPlotlineSceneInput) =>
+      detachScene(plotlineId, sceneId),
+    onSuccess: (_data, { plotlineId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.plotlineScenes(plotlineId),
       }),
   });
 }

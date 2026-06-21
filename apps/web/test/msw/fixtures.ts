@@ -9,6 +9,10 @@ import type {
   ChapterRead,
   CodexEntryRead,
   CodexRelationRead,
+  PlotlineCreate,
+  PlotlineRead,
+  PlotlineSceneCreate,
+  PlotlineSceneRead,
   ProjectRead,
   SceneRead,
   SeriesCreate,
@@ -364,6 +368,97 @@ export function makeCodexRelation(
     to_entity_id: body.to_entity_id ?? "",
     relation_type: body.relation_type ?? "kapcsolat",
     description: body.description ?? null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/* ---------------------------------------------------------------------------
+ * Plotline fixtures (Plotline-b Cselekményszálak). Two plotlines under the
+ * Fárosz project: a project-wide main plot and a book-scoped subplot. The main
+ * plot starts with one attached scene (the book's first scene) so the chip +
+ * detach round-trips have seed data.
+ * ------------------------------------------------------------------------- */
+export const PLOTLINE_MAIN: PlotlineRead = {
+  id: "p1aaaaaa-1111-1111-1111-111111111111",
+  project_id: FAROSZ_PROJECT.id,
+  book_id: null,
+  title: "A Fárosz fénye",
+  description: "A világítótorony titka, ami az egész történetet mozgatja.",
+  plotline_type: "main_plot",
+  status: "active",
+  order_index: 0,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+export const PLOTLINE_SUBPLOT: PlotlineRead = {
+  id: "p2bbbbbb-2222-2222-2222-222222222222",
+  project_id: FAROSZ_PROJECT.id,
+  book_id: FAROSZ_BOOK.id,
+  title: "Szelene és a tiltott termek",
+  description: null,
+  plotline_type: "subplot",
+  status: "planning",
+  order_index: 1,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+export const PLOTLINES_FIXTURE: PlotlineRead[] = [
+  PLOTLINE_MAIN,
+  PLOTLINE_SUBPLOT,
+];
+
+/** Seed scene links keyed by plotline id (the main plot owns the first scene). */
+export const PLOTLINE_SCENES_FIXTURE: Record<string, PlotlineSceneRead[]> = {
+  [PLOTLINE_MAIN.id]: [
+    {
+      id: "pls-main-first",
+      plotline_id: PLOTLINE_MAIN.id,
+      scene_id: SCENE_FIRST.id,
+      order_index: 0,
+      created_at: NOW,
+      updated_at: NOW,
+    },
+  ],
+  [PLOTLINE_SUBPLOT.id]: [],
+};
+
+let plotlineSeq = 0;
+let plotlineSceneSeq = 0;
+
+/** Build a `PlotlineRead` echo for a POST /projects/{pid}/plotlines body. */
+export function makePlotline(
+  projectId: string,
+  body: PlotlineCreate,
+): PlotlineRead {
+  plotlineSeq += 1;
+  return {
+    id: `plotline-new-${plotlineSeq}`,
+    project_id: projectId,
+    book_id: body.book_id ?? null,
+    title: body.title,
+    description: body.description ?? null,
+    plotline_type: body.plotline_type,
+    status: body.status ?? "planning",
+    order_index: body.order_index ?? 0,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/** Build a `PlotlineSceneRead` echo for a POST /plotlines/{id}/scenes body. */
+export function makePlotlineScene(
+  plotlineId: string,
+  body: PlotlineSceneCreate,
+): PlotlineSceneRead {
+  plotlineSceneSeq += 1;
+  return {
+    id: `pls-new-${plotlineSceneSeq}`,
+    plotline_id: plotlineId,
+    scene_id: body.scene_id,
+    order_index: body.order_index ?? 0,
     created_at: NOW,
     updated_at: NOW,
   };

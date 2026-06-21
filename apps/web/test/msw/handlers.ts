@@ -14,6 +14,8 @@ import {
   FAROSZ_RELATIONS,
   JOBS_FIXTURE,
   MODELS_FIXTURE,
+  PLOTLINES_FIXTURE,
+  PLOTLINE_SCENES_FIXTURE,
   PROJECTS_FIXTURE,
   PROVIDERS_FIXTURE,
   SCENE_BEATS_FIXTURE,
@@ -25,6 +27,8 @@ import {
   makeCodexRelation,
   makeContinuityResult,
   makeDescribeResult,
+  makePlotline,
+  makePlotlineScene,
   makeProvider,
   makeRevision,
   makeScene,
@@ -44,6 +48,11 @@ import type {
   CodexRelationCreate,
   CodexRelationRead,
   CodexRelationUpdate,
+  PlotlineCreate,
+  PlotlineRead,
+  PlotlineSceneCreate,
+  PlotlineSceneRead,
+  PlotlineUpdate,
   ProjectRead,
   SceneCreate,
   SceneRead,
@@ -250,6 +259,135 @@ relationStore.seed();
 /** Reset the in-memory CodexRelation store (call in a test's beforeEach). */
 export function resetRelationStore(): void {
   relationStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory Plotline store (Plotline-b Cselekményszálak) — stateful CRUD plus a
+ * per-plotline scene-link store, so the screen tests exercise the real
+ * list → create → attach → detach → delete round-trips. Seeded from
+ * PLOTLINES_FIXTURE + PLOTLINE_SCENES_FIXTURE. The set of scenes that legally
+ * belong to the (single) Fárosz project is the union of SCENES_BY_CHAPTER; an
+ * attach of any other scene id is rejected 400 (mirrors the backend's
+ * cross-project guard). Call `resetPlotlineStore()` in a test's beforeEach.
+ * ------------------------------------------------------------------------- */
+const plotlineStore = {
+  byProject: new Map<string, PlotlineRead[]>(),
+  // Scene links keyed by plotline id.
+  scenesByPlotline: new Map<string, PlotlineSceneRead[]>(),
+  // Scene ids that belong to the Fárosz project (for the cross-project guard).
+  projectSceneIds: new Set<string>(),
+
+  seed(): void {
+    this.byProject = new Map<string, PlotlineRead[]>();
+    this.byProject.set(
+      FAROSZ_PROJECT.id,
+      PLOTLINES_FIXTURE.map((p) => ({ ...p })),
+    );
+    this.scenesByPlotline = new Map<string, PlotlineSceneRead[]>();
+    for (const [plotlineId, links] of Object.entries(
+      PLOTLINE_SCENES_FIXTURE,
+    )) {
+      this.scenesByPlotline.set(
+        plotlineId,
+        links.map((l) => ({ ...l })),
+      );
+    }
+    this.projectSceneIds = new Set<string>();
+    for (const scenes of Object.values(SCENES_BY_CHAPTER)) {
+      for (const scene of scenes) this.projectSceneIds.add(scene.id);
+    }
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(projectId: string): PlotlineRead[] {
+    return [...(this.byProject.get(projectId) ?? [])].sort(
+      (a, b) => a.order_index - b.order_index,
+    );
+  },
+
+  ownerProjectOf(plotlineId: string): string | undefined {
+    for (const [projectId, list] of this.byProject.entries()) {
+      if (list.some((p) => p.id === plotlineId)) return projectId;
+    }
+    return undefined;
+  },
+
+  create(projectId: string, body: PlotlineCreate): PlotlineRead {
+    const created = makePlotline(projectId, body);
+    const list = this.byProject.get(projectId) ?? [];
+    list.push(created);
+    this.byProject.set(projectId, list);
+    this.scenesByPlotline.set(created.id, []);
+    return created;
+  },
+
+  update(
+    projectId: string,
+    plotlineId: string,
+    patch: PlotlineUpdate,
+  ): PlotlineRead | undefined {
+    const list = this.byProject.get(projectId);
+    if (!list) return undefined;
+    const index = list.findIndex((p) => p.id === plotlineId);
+    if (index === -1) return undefined;
+    const merged: PlotlineRead = {
+      ...list[index],
+      ...patch,
+      updated_at: "2026-06-21T12:00:00Z",
+    };
+    list[index] = merged;
+    return merged;
+  },
+
+  remove(projectId: string, plotlineId: string): boolean {
+    const list = this.byProject.get(projectId);
+    if (!list) return false;
+    const index = list.findIndex((p) => p.id === plotlineId);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    this.scenesByPlotline.delete(plotlineId);
+    return true;
+  },
+
+  listScenes(plotlineId: string): PlotlineSceneRead[] {
+    return [...(this.scenesByPlotline.get(plotlineId) ?? [])].sort(
+      (a, b) => a.order_index - b.order_index,
+    );
+  },
+
+  /** True when a scene id does NOT belong to the plotline's project. */
+  isCrossProjectScene(sceneId: string): boolean {
+    return !this.projectSceneIds.has(sceneId);
+  },
+
+  attachScene(
+    plotlineId: string,
+    body: PlotlineSceneCreate,
+  ): PlotlineSceneRead {
+    const created = makePlotlineScene(plotlineId, body);
+    const links = this.scenesByPlotline.get(plotlineId) ?? [];
+    links.push(created);
+    this.scenesByPlotline.set(plotlineId, links);
+    return created;
+  },
+
+  detachScene(plotlineId: string, sceneId: string): boolean {
+    const links = this.scenesByPlotline.get(plotlineId);
+    if (!links) return false;
+    const index = links.findIndex((l) => l.scene_id === sceneId);
+    if (index === -1) return false;
+    links.splice(index, 1);
+    return true;
+  },
+};
+plotlineStore.seed();
+
+/** Reset the in-memory Plotline store (call in a test's beforeEach). */
+export function resetPlotlineStore(): void {
+  plotlineStore.reset();
 }
 
 /* ---------------------------------------------------------------------------
@@ -1206,6 +1344,106 @@ export const handlers = [
       if (!ok) {
         return HttpResponse.json(
           { detail: "Relation not found" },
+          { status: 404 },
+        );
+      }
+      return new HttpResponse(null, { status: 204 });
+    },
+  ),
+
+  /* ---- Plotlines (Plotline-b Cselekményszálak). Project-scoped CRUD + a flat
+   * scene-link router (attach/detach/list). ---- */
+  http.get(`${base}/projects/:projectId/plotlines`, ({ params }) =>
+    HttpResponse.json(plotlineStore.list(String(params.projectId))),
+  ),
+
+  http.post(
+    `${base}/projects/:projectId/plotlines`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as PlotlineCreate;
+      const created = plotlineStore.create(String(params.projectId), body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.patch(
+    `${base}/projects/:projectId/plotlines/:plotlineId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as PlotlineUpdate;
+      const updated = plotlineStore.update(
+        String(params.projectId),
+        String(params.plotlineId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Plotline not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(
+    `${base}/projects/:projectId/plotlines/:plotlineId`,
+    ({ params }) => {
+      const ok = plotlineStore.remove(
+        String(params.projectId),
+        String(params.plotlineId),
+      );
+      if (!ok) {
+        return HttpResponse.json(
+          { detail: "Plotline not found" },
+          { status: 404 },
+        );
+      }
+      return new HttpResponse(null, { status: 204 });
+    },
+  ),
+
+  /* ---- Plotline ↔ scene links (flat router; no project prefix). ---- */
+  http.get(`${base}/plotlines/:plotlineId/scenes`, ({ params }) => {
+    const plotlineId = String(params.plotlineId);
+    if (!plotlineStore.ownerProjectOf(plotlineId)) {
+      return HttpResponse.json({ detail: "Plotline not found" }, { status: 404 });
+    }
+    return HttpResponse.json(plotlineStore.listScenes(plotlineId));
+  }),
+
+  http.post(
+    `${base}/plotlines/:plotlineId/scenes`,
+    async ({ params, request }) => {
+      const plotlineId = String(params.plotlineId);
+      if (!plotlineStore.ownerProjectOf(plotlineId)) {
+        return HttpResponse.json(
+          { detail: "Plotline not found" },
+          { status: 404 },
+        );
+      }
+      const body = (await request.json()) as PlotlineSceneCreate;
+      // Cross-project scene → 400 (mirrors the backend's scope guard).
+      if (plotlineStore.isCrossProjectScene(body.scene_id)) {
+        return HttpResponse.json(
+          { detail: "Scene belongs to a different project" },
+          { status: 400 },
+        );
+      }
+      const created = plotlineStore.attachScene(plotlineId, body);
+      return HttpResponse.json(created, { status: 201 });
+    },
+  ),
+
+  http.delete(
+    `${base}/plotlines/:plotlineId/scenes/:sceneId`,
+    ({ params }) => {
+      const ok = plotlineStore.detachScene(
+        String(params.plotlineId),
+        String(params.sceneId),
+      );
+      if (!ok) {
+        return HttpResponse.json(
+          { detail: "Scene is not attached to this plotline" },
           { status: 404 },
         );
       }

@@ -11,6 +11,7 @@ expect.extend(axeMatchers);
 import {
   resetCodexStore,
   resetPlanStore,
+  resetPlotlineStore,
   resetRelationStore,
 } from "./test/msw/handlers";
 
@@ -29,6 +30,7 @@ afterEach(() => {
   resetPlanStore();
   resetCodexStore();
   resetRelationStore();
+  resetPlotlineStore();
 });
 
 afterAll(() => {

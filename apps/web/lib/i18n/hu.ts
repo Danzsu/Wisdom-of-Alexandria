@@ -722,6 +722,96 @@ export const hu = {
     listAriaLabel: "Történet idősor",
   },
   /**
+   * Cselekményszálak (subplots, Plotline-b). Plotline cards grouped by type,
+   * each with a status pill + attached-scene chips deep-linking to the Write
+   * view. Copy is original.
+   */
+  plotlines: {
+    /** Screen states. */
+    loading: "Cselekményszálak betöltése…",
+    error: "Nem sikerült betölteni a cselekményszálakat",
+    retry: "Újrapróbálkozás",
+    /** Empty state (no plotlines yet). */
+    emptyTitle: "Még nincs cselekményszál",
+    emptyHint:
+      "A főcselekmény, a mellékszálak és a karakterívek itt rajzolódnak ki — típus szerint csoportosítva. Hozd létre az elsőt, és a könyv szövete kialakul.",
+    emptyCta: "Első cselekményszál",
+    /** Toolbar. */
+    title: "Cselekményszálak",
+    addNew: "Új cselekményszál",
+    count: (n: number) =>
+      n === 1 ? "1 cselekményszál" : `${n} cselekményszál`,
+    /** Region landmark label for the grouped list. */
+    listAriaLabel: "Cselekményszálak listája",
+    /** Plotline-type labels (the grouping headers). */
+    type: {
+      main_plot: "Főcselekmény",
+      subplot: "Mellékszál",
+      character_arc: "Karakterív",
+      romance: "Romantikus szál",
+      mystery: "Rejtély",
+      antagonist_plan: "Antagonista terve",
+      world_conflict: "Világkonfliktus",
+    } as Record<string, string>,
+    /** Status pill labels. */
+    status: {
+      planning: "Tervezés",
+      active: "Aktív",
+      resolved: "Lezárva",
+      abandoned: "Elvetve",
+    } as Record<string, string>,
+    /** Per-card scene section. */
+    scenesHeading: "Kapcsolódó jelenetek",
+    noScenes: "Még nincs hozzárendelt jelenet.",
+    attachScene: "Jelenet hozzárendelése",
+    detachSceneAria: (title: string) => `${title} eltávolítása`,
+    openSceneAria: (title: string) => `${title} — megnyitás írásra`,
+    /** Card actions. */
+    editAria: (title: string) => `${title} szerkesztése`,
+    deleteAria: (title: string) => `${title} törlése`,
+    bookScopeLabel: "Könyvhöz kötve",
+    projectScopeLabel: "Egész projekt",
+    deleted: "Cselekményszál törölve",
+    deleteError: "A cselekményszál törlése sikertelen",
+    deleteConfirmTitle: (title: string) => `„${title}” törlése?`,
+    deleteConfirmBody:
+      "A cselekményszál és a hozzá rendelt jelenet-kapcsolatok véglegesen törlődnek. A jelenetek maguk megmaradnak.",
+    deleteConfirm: "Törlés",
+    /** Create / edit modal. */
+    modalCreateTitle: "Új cselekményszál",
+    modalEditTitle: "Cselekményszál szerkesztése",
+    modalTitleLabel: "Cím",
+    modalTitlePlaceholder: "pl. A könyvtár titka",
+    modalTypeLabel: "Típus",
+    modalStatusLabel: "Státusz",
+    modalDescriptionLabel: "Leírás",
+    modalDescriptionPlaceholder: "Néhány mondat a szálról — opcionális…",
+    modalBookScopeLabel: "Hatókör",
+    modalBookScopeProject: "Egész projekt",
+    modalTitleRequired: "A cím kötelező.",
+    modalCancel: "Mégse",
+    modalCreate: "Létrehozás",
+    modalSave: "Mentés",
+    createdToast: "Cselekményszál létrehozva",
+    updatedToast: "Cselekményszál frissítve",
+    createError: "Nem sikerült létrehozni a cselekményszálat",
+    updateError: "Nem sikerült frissíteni a cselekményszálat",
+    /** Attach-scene modal. */
+    attachModalTitle: "Jelenet hozzárendelése",
+    attachModalSceneLabel: "Jelenet",
+    attachModalScenePlaceholder: "Válassz jelenetet…",
+    attachModalNoScenes:
+      "Ehhez a könyvhöz még nincs jelenet, amit hozzárendelhetnél.",
+    attachModalRequired: "Válassz egy jelenetet.",
+    attachModalSubmit: "Hozzárendelés",
+    attachedToast: "Jelenet hozzárendelve",
+    attachError: "Nem sikerült hozzárendelni a jelenetet",
+    detachedToast: "Jelenet eltávolítva",
+    detachError: "Nem sikerült eltávolítani a jelenetet",
+    /** Chip fallback when an attached scene id no longer resolves in the tree. */
+    unknownScene: "Ismeretlen jelenet",
+  },
+  /**
    * Plan Board (`Alexandria App.dc.html` showplan ~line 817). Mode pills, view
    * toggle (Rács / Mátrix / Vázlat), density toggle, the SceneCard, act/chapter
    * headers, the bottom action bar. Copy is verbatim from the prototype.
@@ -1219,8 +1309,6 @@ export const hu = {
     attekintesHint: "Az Áttekintés az M10-ben érkezik.",
     chatLabel: "Chat",
     chatHint: "A Chat az M10-ben érkezik.",
-    cselekmenyszalakLabel: "Cselekményszálak",
-    cselekmenyszalakHint: "A Cselekményszálak az M10-ben érkezik.",
     hangokLabel: "Hangkönyvtár",
     hangokHint: "A Hangkönyvtár az M11-ben (V2) érkezik.",
     promptokLabel: "Prompt Library",
