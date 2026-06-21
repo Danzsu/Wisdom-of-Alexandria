@@ -339,6 +339,7 @@ export const hu = {
     tabAi: "AI",
     tabCodex: "Codex",
     tabBeats: "Beatek",
+    tabRevisions: "Revíziók",
     tabWarnings: "Figyelm.",
     tabMeta: "Meta",
     tabBarAria: "AI segéd panelek",
@@ -1320,6 +1321,20 @@ export const hu = {
     saveAsSnippet: "Mentés Snippetként",
     /** Theme toggle aria-label / title. */
     themeToggle: "Téma váltása",
+  },
+  /** Revíziók (revision browser) inspector tab. */
+  revisions: {
+    loading: "Revíziók betöltése",
+    error: "A revíziók betöltése nem sikerült.",
+    noScene: "Nyiss meg egy jelenetet a revíziók megtekintéséhez.",
+    empty: "Ehhez a jelenethez még nincs AI-revízió.",
+    currentLabel: "Jelenlegi",
+    revisionLabel: "Revízió",
+    appliedBadge: "Alkalmazva",
+    restore: "Visszaállítás",
+    reject: "Elvetés",
+    restoredToast: "A revízió visszaállítva a jelenetbe.",
+    rejectedToast: "A revízió elvetve.",
   },
   /** Kutatás (Codex/manuscript RAG Q&A) screen. */
   research: {

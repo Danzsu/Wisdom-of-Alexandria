@@ -41,8 +41,14 @@ export type BeatWords = "200" | "400" | "600";
 export const FONT_SIZE_MIN = 13;
 export const FONT_SIZE_MAX = 24;
 
-/** The five AI-inspector tabs (vertical icon+label rail). */
-export type InspectorTab = "ai" | "codex" | "beats" | "warnings" | "meta";
+/** The AI-inspector tabs (vertical icon+label rail). */
+export type InspectorTab =
+  | "ai"
+  | "codex"
+  | "beats"
+  | "revisions"
+  | "warnings"
+  | "meta";
 
 /**
  * A snapshot of the manuscript selection at the moment an AI action is

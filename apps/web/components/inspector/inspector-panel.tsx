@@ -7,6 +7,7 @@ import { InspectorTabBar } from "./inspector-tab-bar";
 import { AiTab } from "./ai-tab";
 import { CodexTab } from "./codex-tab";
 import { BeatsTab } from "./beats-tab";
+import { RevisionsTab } from "./revisions-tab";
 import { WarningsTab } from "./warnings-tab";
 import { MetaTab } from "./meta-tab";
 
@@ -31,6 +32,7 @@ export function InspectorPanel() {
           {inspectorTab === "ai" ? <AiTab /> : null}
           {inspectorTab === "codex" ? <CodexTab /> : null}
           {inspectorTab === "beats" ? <BeatsTab /> : null}
+          {inspectorTab === "revisions" ? <RevisionsTab /> : null}
           {inspectorTab === "warnings" ? <WarningsTab /> : null}
           {inspectorTab === "meta" ? <MetaTab /> : null}
         </div>

@@ -1695,6 +1695,25 @@ export const handlers = [
     ),
   ),
 
+  /* ---- Revision browser (list + reject) + approval (accept). ---- */
+  http.get(`${base}/revisions`, () =>
+    HttpResponse.json([
+      { ...makeRevision("rewrite", AI_GENERATED_TEXT, MODELS_FIXTURE.default), id: "rev-a" },
+      {
+        ...makeRevision("generate_scene", "Egy másik változat.", MODELS_FIXTURE.default),
+        id: "rev-b",
+      },
+    ]),
+  ),
+
+  http.post(`${base}/revisions/:revisionId/reject`, ({ params }) =>
+    HttpResponse.json({
+      ...makeRevision("rewrite", AI_GENERATED_TEXT, MODELS_FIXTURE.default),
+      id: String(params.revisionId),
+      approved: false,
+    }),
+  ),
+
   /* ---- Revision approval (the human-in-the-loop accept) ---- */
   http.post(
     `${base}/revisions/:revisionId/approve`,
