@@ -4,6 +4,34 @@ Ez a dokumentum összegyűjti azokat a funkciókat és **backend-bővítéseket*
 
 Prioritás: **P1** = V1-hez kell · **P2** = V2 · **P3** = később.
 
+> **Az élő, autoritatív állapot- és roadmap-leírás: [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md).** Az alábbi tervezési próza történeti kontextus; a tényleges állapotot a `docs/17` (és az alábbi „Frissítés" szekció) írja felül.
+
+---
+
+## Frissítés (2026-06-16) — további lezárt tételek ✅
+
+A `docs/14` „0. szekció" (2026-06-15) snapshot óta a következő, ott még „hátravan"-ként listázott tételek **ELKÉSZÜLTEK**. A teszt-állás és a CI-zöld tény autoritatívan a `docs/17`-ben van (apps/api 491 · apps/ai 243 · apps/web 624, GitHub Actions zöld).
+
+- ✅ **DOCX/EPUB export Pandoc-on + DOCX import pipeline** (5/12) — pandoc subprocess, hangos hibakezelés, api Dockerfile + CI.
+- ✅ **Projekt-aggregátumok** (7) — `book_count` + `word_count` a `ProjectRead`-en (archivált jelenetek KIZÁRVA), projekt-kártyákon.
+- ✅ **RAG Codex + kézirat felett pgvectoron** (10) — dialektus-tudatos `Vector` + `Embedding` modell + `ModelRouter.embed()` + `EmbeddingService`; RAG-kontextus a rewrite/generate-scene/write-continue promptokban; `context_entities` chipek a result-kártyán.
+- ✅ **RAG sorozat-tudatosság** (10) — `Embedding.series_id`; más sorozat codexe/kézirata nem szivárog be.
+- ✅ **Folytonosság-ellenőrző** (10) — `POST /ai/continuity` (jelenet-scope, RAG-kontextus, strukturált severity/message/entity) + valódi Warnings tab.
+- ✅ **Élő AI-jobs képernyő + nav-badge** (10) — book-scope `GET /jobs` + polling (interaktív AI szinkron marad).
+- ✅ **Projekt JSON backup/restore** (12) — teljes-gráf verziózott export (titkok/embeddingek/jobs/revisions kizárva) + tranzakcionális restore FK-remappel.
+- ✅ **Sorozat-scope Codex** (12) — `Series` entitás + `Book.series_id` + `CodexEntry.series_id`; scope-toggle `?series_id=`-szal; sorozat-kezelő UI.
+- ✅ **Cselekményszálak** (új) — `Plotline` + `PlotlineScene` + CRUD + Cselekményszálak képernyő.
+- ✅ **Kapcsolatok relationship graph** (10) — `CodexRelation` FE + egyedi SVG force-graph (d3-force, GSAP).
+- ✅ **Idősor** (10) — fejezet/jelenet idősor a könyv-fából (GSAP spine-draw).
+- ✅ **`packages/shared` OpenAPI-típusok** — `MatchesContract` fordításidős guard a Zod-sémákhoz; CI freshness-check.
+- ✅ **C0 — GitHub Actions CI** + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva (`alembic upgrade head` működik).
+- ✅ **Teljes UI/UX-kör (UX-1…UX-4b)** — anti-pattern javítások, shortcut overlay, focus-paragraph mód, persistent AI-job indikátor, Framer Motion + GSAP onboarding, responsive tablet-first shell, axe-core a11y gate.
+- ✅ **Teszt-keményítés + valódi biztonsági javítás** — a catch-all 500-handler `str(exc)`-szivárgása javítva (generikus üzenet + szerver-log) **mindkét** appban; `word_count`-archiváltat-is-számol bug + üres tesztek javítva (mutation-proven).
+
+Az **1–6. pont** (Provider config, generálási paraméterek, Codex aliases/role, cross-chapter move, export-tartomány, provider-teszt) már a `docs/14` „0. szekció"-ban lezárult.
+
+A **valódi maradék backlog** (P1-maradék / P2 / P3) a `docs/17` „Roadmap" szekciójában él táblázatosan.
+
 ---
 
 ## 0. Megvalósított állapot — backend szétválasztás + P1 gapek lezárva (2026-06-15) ✅
@@ -191,10 +219,12 @@ A prototípus több AI-vezérelt képernyője mock/üres-állapotot mutat, mert 
 
 ## Összefoglaló — backend-munka prioritás szerint
 
+> Frissítve (2026-06-16): az alábbi tábla a **valódi maradék backlogot** tükrözi. A korábban P1-ben szereplő tételek (1–7 + RAG/continuity/jobs + import + JSON backup + series Codex) **elkészültek** — lásd a fenti „Frissítés" szekciót és a `docs/17`-et. A `docs/17` „Roadmap" szekciója a részletes, scope-olt élő tábla.
+
 | Prioritás | Tétel |
 |---|---|
-| **P1** | Provider/API-kulcs config (1) · generálási paraméterek (2) · Codex aliases/role (3) · cross-chapter move (4) · export tartomány + DOCX/EPUB (5) · health-check (6) · provider/health endpointok · RAG/continuity/jobs alapok (10) · import (DOCX) · JSON backup · series Codex |
-| **P2** | Projekt-aggregátumok (7) · kép-pipeline (8) · PDF export · MCP · presets/reasoning/NSFW · Ollama modell-letöltés · tezaurusz/vizualizáció |
-| **P3** | Hang-domain + EPUB-3 media-overlay (9, saját spec) · kollaboráció (11) · marketplace/launch-kit |
+| **P1-maradék** | Valódi RQ async worker (hosszú/batch job; az interaktív AI szinkron) · provider health-check befejezése (Ollama ping; a `/providers/{id}/test` már van) · Lighthouse CI gate |
+| **P2** | Codex → Kutatás (RAG Q&A — retrieval kész, a Q&A nincs bekötve) · CodexProgression UI + timeline progresszió-overlay · kép-pipeline (8) · PDF export · MCP · presets/reasoning/NSFW · Ollama modell-letöltés · tezaurusz/vizualizáció/vázlat-sablonok/daily-spark · UX-4c Figma MCP · Plotline lane-vizualizáció |
+| **P3** | Hang-domain + EPUB-3 media-overlay (9, saját spec) · kollaboráció (11) · E2E (Playwright kétszolgáltatás — BLOKKOLT a `app` csomagnév-ütközés + hiányzó web Dockerfile miatt) · marketplace/launch-kit |
 
-> A **provider/API-kulcs konfiguráció (1. pont)** a kiemelt következő backend-feladat: ez teszi valódivá a Beállítások → Cloud felületet és teszi lehetővé a felhő-modellek (Gemini/Claude/OpenRouter) tényleges használatát a `ModelRouter`-en át.
+> A korábbi „provider/API-kulcs konfiguráció a kiemelt következő feladat" megjegyzés már **teljesült** (1. pont kész). A javasolt következő kör (kis P1-maradék + magas-értékű P2) a `docs/17` „Javasolt következő kör" szekciójában él.

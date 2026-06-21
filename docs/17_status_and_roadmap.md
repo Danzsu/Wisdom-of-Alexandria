@@ -1,0 +1,111 @@
+# 17 — Állapot és roadmap (élő)
+
+Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol más doc (pl. `docs/14`) korábbi tervezési prózát tartalmaz, ott az ottani szöveg történeti kontextus — a tényleges állapotot mindig ez a fájl írja felül.
+
+---
+
+## a) Jelenlegi állapot (2026-06-16)
+
+**Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
+
+**Teszt-állás (autoritatív szám):**
+
+| Csomag | Tesztek | Megjegyzés |
+|---|---|---|
+| `apps/api` | **491** | +3 pandoc-skip lokálisan; CI-ban futnak |
+| `apps/ai` | **243** | +6 pgvector-skip lokálisan; CI-ban futnak |
+| `apps/web` | **624** | — |
+
+ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
+
+**CI:** a `feat/alexandria-ui` ág fel van pusholva originra, és a **GitHub Actions CI ZÖLD**: backend ruff + `alembic upgrade head` Postgresen + pytest (pgvector + pandoc) · frontend type-check / lint / vitest · shared-types frissesség-check.
+
+**Branch/push:** `feat/alexandria-ui` @ origin, zöld CI. Commit/push/branch nélkül — ez a doc-kör csak Markdown.
+
+---
+
+## b) Mi készült el
+
+### Backend domain (`apps/api`)
+- Teljes CRUD: projects / books / chapters / scenes / beats / codex / characters / locations / worldbuilding / snippets / style_guide / relations / progressions / auth / exports + revisions (list + approve/reject = a human-in-the-loop, ami a Scene-t mutálja). Nulla AI-import.
+- Cross-chapter jelenet-mozgatás (`POST /chapters/{cid}/scenes/{id}/move`), kaszkád-helyes `order_index`.
+- Export-tartomány (`scope=book|chapter|scene` + `target_id`, IDOR-biztos tulajdon-ellenőrzéssel).
+- **DOCX/EPUB export Pandoc-on** + **DOCX import pipeline** (pandoc subprocess, hangos hibakezelés; az api Dockerfile-ban + CI-ban).
+- **Projekt-aggregátumok:** `book_count` + `word_count` a `ProjectRead`-en (archivált jelenetek KIZÁRVA), a projekt-kártyákon megjelenítve.
+- **Projekt JSON backup/restore:** teljes-gráf, verziózott export (KIZÁRJA a provider-titkokat + embeddingeket + jobs/revisions sorokat) + tranzakcionális restore FK-remappel.
+
+### AI-core + RAG (`apps/ai`)
+- `ModelRouter` (provider-configból olvas) · `ai_service` · `prompt_loader` · `revision_service` · `provider_service` · `crypto`. Endpointok: `/ai/*` · `/providers/*` · `/jobs`.
+- Provider/API-kulcs config: `Provider` entitás, Fernet-titkosított kulcs (maszkolt Read, master kulcs `.env`-ből), `providers` CRUD + `/{id}/test`.
+- Generálási paraméterek (`temperature` / `max_tokens`) minden AI-request sémán, átadva a `ModelRouter`-nek.
+- **RAG Codex + kézirat felett pgvectoron:** dialektus-tudatos `Vector` típus + `Embedding` modell + `ModelRouter.embed()` (felhős embedding a provider-configból), `EmbeddingService` (projekt-scope-olt lazy index + cosine retrieve), a RAG-kontextus a rewrite / generate_scene / write_continue promptokba injektálva, `context_entities` visszaadva + chipként a result-kártyán.
+- **RAG sorozat-tudatosság:** `Embedding.series_id` — más sorozat codexe/kézirata sosem szivárog egy generálás kontextusába.
+- **Folytonosság-ellenőrző:** `POST /ai/continuity` (jelenet-scope, RAG-kontextus, strukturált severity/message/entity figyelmeztetések, robusztus JSON-parse látható figyelmeztetéssé degradálva; az infra-hibák hangosak maradnak) + a valódi Warnings tab.
+- **Élő AI-jobs képernyő + nav-badge:** book-scope `GET /jobs` + polling (az interaktív AI SZINKRON marad; az élő job-képernyő history + attention).
+
+### Feature-ök #1–#5
+- **#1 Sorozat-scope Codex:** `Series` entitás (Project alatt) + `Book.series_id` + `CodexEntry.series_id`; a Codex scope-toggle (Projekt/Sorozat) `?series_id=`-szal szűr; sorozat-kezelő UI.
+- **#2 Cselekményszálak (subplots):** `Plotline` + `PlotlineScene` link-modellek + CRUD + endpointok + same-project IDOR-konzisztencia; a Cselekményszálak képernyő (típus szerint csoportosítva, status pill-ek, scene chipek, attach/detach).
+- **#3 Kapcsolatok (relationship graph):** `CodexRelation` frontend + nyugodt, egyedi SVG force-graph (headless determinista d3-force, GSAP él-rajz).
+- **#4 Idősor (timeline):** fejezet/jelenet idősor a könyv-fából (GSAP spine-draw).
+- **#5 RAG-kontextus chipek** az AI result-kártyán (a behúzott Codex/jelenet-kontextus immár valós).
+
+### UI / UX (UX-1 … UX-4b)
+- Anti-pattern javítások: oldalsávos AI-border eltávolítva, bounce easing kivezetve.
+- Shortcut overlay, iA-Writer-szerű focus-paragraph mód, persistent AI-job indikátor a TopBarban.
+- Framer Motion adoptáció + GSAP onboarding scroll-narratíva.
+- Responsive, tablet-first shell (drawerek), axe-core a11y teszt-gate.
+
+### Minőség + CI + biztonság
+- **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
+- `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
+- **Teszt-keményítés + valódi biztonsági javítás:** egy adverszariális teszt-audit kiderítette, hogy a catch-all 500-handler `str(exc)`-et visszhangzott (kivétel-üzenetbe ágyazott titok kiszivárgott a kliensnek) — javítva generikus üzenetre + szerver-oldali logra **mindkét** appban; emellett egy valódi `word_count`-archiváltat-is-számol bug + több üres teszt javítva (mindegyik mutation-proven).
+
+---
+
+## c) Roadmap — mi van hátra
+
+Prioritás: **P1-maradék** = kis, V1-záró tételek · **P2** = magas user-érték · **P3** = később / nagy spec.
+
+### P1-maradék (kicsi)
+
+| Tétel | Scope (1 sor) | Hol |
+|---|---|---|
+| RQ async worker | Valódi aszinkron worker hosszú/batch jobokhoz; jelenleg a worker stub, az interaktív AI szinkron | BE (`apps/ai`) + infra |
+| Provider health-check befejezése | Ollama ping véglegesítése (a `/providers/{id}/test` már létezik) | BE (`apps/ai`) |
+| Lighthouse CI gate | Perf/a11y budget-gate a CI-ban (a `docs/16` follow-upként dokumentálja) | infra (CI) |
+
+### P2 (magas user-érték)
+
+| Tétel | Scope (1 sor) | Hol |
+|---|---|---|
+| Codex → Kutatás (RAG Q&A) | Interaktív Q&A a codex felett; a retrieval-infra megvan, a Q&A nincs bekötve | BE (`apps/ai`) + FE |
+| CodexProgression UI + timeline-overlay | Progresszió-szerkesztő + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
+| Kép-pipeline | Media-asset tábla + feltöltés + EPUB-embed | BE + FE + infra |
+| PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF | BE (`apps/api`) + infra |
+| MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |
+| NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |
+| Ollama in-app modell-letöltés | „Modell letöltése" a Beállítások → Local alatt | BE (`apps/ai`) + FE |
+| Tezaurusz / vizualizáció / vázlat-sablonok / daily-spark analitika | Magyar szinonima-szótár, képprompt, Save the Cat/Hős útja sablonok, writing-streak | BE + FE |
+| UX-4c Figma MCP | Design-token szinkron (a user interaktív Figma-auth-ja kell) | FE + infra |
+| Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
+
+### P3 (később / nagy spec)
+
+| Tétel | Scope (1 sor) | Hol |
+|---|---|---|
+| Audio domain + EPUB-3 media-overlay (SMIL) | Hang-szövegrész horgony-modell + SMIL exporter; saját spec kell | BE + FE + infra |
+| Kollaboráció / megosztás | Több-felhasználós, szerepkörök, presence, realtime — Auth.js átalakítás kell | BE + FE + infra |
+| E2E (Playwright, két szolgáltatás) | **BLOKKOLT**: mindkét app a top-level `app` csomagnevet használja + nincs web Dockerfile — előbb ezeket kell feloldani | infra |
+| Marketplace / launch | Launch-kit, marketplace | termék |
+
+---
+
+## d) Javasolt következő kör
+
+A leg-ésszerűbb következő lépések, érték/kockázat arány szerint:
+
+1. **P1-maradék kis tételek bezárása** — **RQ async worker** (a stub valódivá tétele a hosszú/batch jobokhoz) és a **Lighthouse CI gate** (a `docs/16` follow-upja). Mindkettő jól körülhatárolt, alacsony kockázatú, és a meglévő infrastruktúrára épül.
+2. **Magas user-értékű P2:** **Codex → Kutatás (RAG Q&A)** — a retrieval-infra már kész, „csak" az interaktív Q&A-réteget kell rákötni; és a **kép-pipeline** (media-asset tábla + feltöltés + EPUB-embed), ami a vizuális tartalmat és az EPUB-export minőségét nyitja meg.
+
+> **Megjegyzés az E2E-ről:** a Playwright kétszolgáltatásos E2E **blokkolt**, mert mindkét backend-app a top-level `app` Python-csomagnevet használja, és nincs web Dockerfile. Ezt a névütközést + a web Dockerfile-t fel kell oldani, mielőtt az E2E-kör elindulhat — ezért nem szerepel a „következő kör" javaslatban.

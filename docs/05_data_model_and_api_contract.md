@@ -51,8 +51,8 @@ Prefer explicit columns for important queryable fields. Use JSONB only for flexi
 ```txt
 User
   └── Project
-        ├── Series
-        ├── Book
+        ├── Series               ← IMPLEMENTED: sorozat/al-univerzum (Book + Codex scope)
+        ├── Book                 (Book.series_id → Series, nullable)
         │     └── Chapter
         │           └── Scene
         │                 └── Beat
@@ -61,17 +61,22 @@ User
         ├── Location
         ├── WorldbuildingEntry
         ├── TimelineEvent
-        ├── Plotline
+        ├── Plotline             ← IMPLEMENTED: cselekményszál (subplot)
+        │     └── PlotlineScene  ← IMPLEMENTED: Plotline↔Scene link (related_scenes[])
         ├── Relationship
-        ├── CodexRelation        ← NEW: kapcsolatok Codex entryk között
-        ├── CodexProgression     ← NEW: temporális Codex változások
-        ├── CodexEntry           (search/index layer)
-        ├── Snippet              ← NEW: félretett szövegek, töredékek
+        ├── CodexRelation        ← kapcsolatok Codex entryk között
+        ├── CodexProgression     ← temporális Codex változások (CRUD only, AI még nem szűr)
+        ├── CodexEntry           (search/index layer; + aliases/role/series_id oszlopok)
+        ├── Snippet              ← félretett szövegek, töredékek
         ├── StyleGuide
+        ├── Provider             ← IMPLEMENTED: AI-provider config (titkosított API-kulcs)
+        ├── Embedding            ← IMPLEMENTED: pgvector RAG index (project/book/series scope)
         ├── GenerationJob
         ├── Revision
         └── AIComment
 ```
+
+> **Megvalósítási megjegyzés (2026-06-16):** az élő állapot- és roadmap-leírás a [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md). Az alábbi tábla-definíciók közül a `Provider`, `Embedding`, `Series` (+ `Book.series_id`), `Plotline`, `PlotlineScene` és a `CodexEntry` `aliases`/`role`/`series_id` oszlopai **megvalósultak** (`packages/db` / `alexandria_core`). A `CodexProgression` továbbra is CRUD-only (az AI-réteg még nem szűr progresszió szerint).
 
 ## Tables
 
@@ -123,17 +128,17 @@ completed
 archived
 ```
 
-## Series
+## Series ✅ IMPLEMENTED
 
 ### Purpose
 
-Groups multiple books into a shared universe.
+Egy Project alatti al-univerzum, amely Bookokat csoportosít és a Codexet scope-olja. `project_id` CASCADE (a projekt törlése törli a sorozatait). A `Book.series_id` és a `CodexEntry.series_id` OPCIONÁLIS és `ON DELETE SET NULL` — a sorozat törlése NEM törli a könyveit/entryjeit, azok projekt-only scope-ra esnek vissza.
 
 ### Fields
 
 ```txt
 id
-project_id
+project_id          (FK projects, CASCADE)
 title
 description
 order_index
@@ -539,24 +544,23 @@ created_at
 updated_at
 ```
 
-## Plotline
+## Plotline ✅ IMPLEMENTED
 
 ### Purpose
 
-Tracks main plot, subplot, romance arc, mystery thread, etc.
+Cselekményszál (subplot / narratív szál) egy Projecten belül. `project_id` CASCADE; opcionális `book_id` `ON DELETE SET NULL` (egy szál átfoghatja a teljes projektet — `book_id` NULL — vagy egy könyvet; a könyv törlése a szálat projekt-szintre ejti vissza, nem törli). A jelenetek a `PlotlineScene` asszociáción át kapcsolódnak (a `related_scenes[]` link), a szállal együtt CASCADE-törölve.
 
 ### Fields
 
 ```txt
 id
-project_id
-book_id nullable
+project_id          (FK projects, CASCADE)
+book_id nullable    (FK books, SET NULL)
 title
 description
-type
+plotline_type       (str; az engedélyezett halmazt a séma-réteg validálja — lásd Type enum)
 status
-related_characters UUID[]
-related_scenes UUID[]
+order_index
 created_at
 updated_at
 ```
@@ -574,6 +578,23 @@ world_conflict
 other
 ```
 
+## PlotlineScene ✅ IMPLEMENTED
+
+### Purpose
+
+Asszociációs sor, amely egy Scene-t egy Plotline-hoz kapcsol (a `related_scenes[]` link). Mindkét FK CASCADE: a Plotline VAGY a Scene törlése törli a linket (a másik oldalt sosem). Egy jelenet egy adott szálhoz legfeljebb egyszer kapcsolódhat — `UniqueConstraint(plotline_id, scene_id)`.
+
+### Fields
+
+```txt
+id
+plotline_id         (FK plotlines, CASCADE)
+scene_id            (FK scenes, CASCADE)
+order_index
+created_at
+updated_at
+```
+
 ## CodexEntry
 
 ### Purpose
@@ -582,18 +603,21 @@ Generic searchable Codex abstraction.
 
 Use this as an indexed/search layer if Character, Location and WorldbuildingEntry remain separate tables.
 
+> **Megvalósítási megjegyzés (2026-06-16):** a `CodexEntry` immár valódi `aliases` (lista, recognition-nevek a kézirat név-szkenjéhez — a `Character.aliases` mintájára), `role` (egyetlen story-role, a `Character.role` mintájára) és `series_id` (opcionális sorozat-scope, FK `series`, `ON DELETE SET NULL`; NULL = projekt-globális) oszlopokkal rendelkezik. Ezek leváltották a korábbi namespace-elt `tags`-kodek interim workaroundot.
+
 ### Fields
 
 ```txt
 id
-project_id
-entity_type
-entity_id
+project_id          (FK projects, CASCADE)
+series_id nullable  (FK series, SET NULL; NULL = projekt-globális)
+entity_type         (alias az implementációban: entry_type, default "custom")
 title
 content
-summary
+aliases             (recognition-nevek; lista)
+role nullable       (egyetlen story-role)
+ai_visible BOOLEAN DEFAULT true
 tags TEXT[]
-embedding_status
 created_at
 updated_at
 ```
@@ -623,6 +647,60 @@ examples_good TEXT[]
 examples_bad TEXT[]
 created_at
 updated_at
+```
+
+## Provider ✅ IMPLEMENTED
+
+### Purpose
+
+Egy AI-provider konfigurációja (lokális Ollama vagy felhős LLM-provider). Az API-kulcs **titkosítva nyugalmi állapotban** (`api_key_encrypted`, Fernet) tárolódik; a plaintext kulcs sosem perzisztálódik, sosem kerül logba, és a Read-séma maszkolt értéket ad vissza (sosem a teljeset). A `ModelRouter` innen olvassa a kulcsokat/base URL-eket. Az `apps/ai` szolgáltatás tulajdona.
+
+### Fields
+
+```txt
+id
+type                (ollama | gemini | anthropic | openai | openrouter | custom)
+label
+api_key_encrypted nullable   (Fernet-ciphertext; lokális Ollamánál NULL)
+base_url nullable            (egyedi / OpenAI-kompatibilis végponthoz)
+default_model nullable
+embedding_model nullable     (RAG embedding-modell; felhős default text-embedding-3-small / 1536-dim)
+enabled
+created_at
+updated_at
+```
+
+## Embedding ✅ IMPLEMENTED
+
+### Purpose
+
+Egy RAG-indexelhető entitás eltárolt embedding-vektora (codex / character / location / worldbuilding / scene / chapter / styleguide). A `content_hash` engedi átugrani a változatlan tartalom újra-embeddelését; az `(entity_type, entity_id)` egyediség pontosan egy aktuális vektort tart entitásonként (újra-embeddeléskor a sor in-place frissül).
+
+**Scope:** a RAG **PROJEKT-szinten** működik — `project_id` a NEM-null elsődleges retrieval-scope minden soron. A `book_id` NULLABLE, csak kézirat-entitásoknál (scene/chapter) van kitöltve (provenance + jövőbeli per-könyv szűrő); projekt-globális entitásoknál (codex/character/location/worldbuilding/styleguide) NULL. A `series_id` NULLABLE (B3b sorozat-tudatosság): NULL = projekt-globális (minden könyv látja), kitöltve = sorozat-scope (csak az adott sorozat könyvei húzzák be); `ON DELETE SET NULL`. A retrieval `series_id IS NULL OR series_id == <aktív sorozat>` szerint szűr, így más sorozat codexe/kézirata sosem szivárog be.
+
+**Dialektus-tudatos `Vector` típus:** PostgreSQL-en valódi `vector(1536)` oszlop (cosine-distance ANN), a SQLite teszt-DB-n `JSON` tömb — így a modell mindkét backenden betöltődik `Base.metadata.create_all` alatt. `EMBEDDING_DIM = 1536`.
+
+### Fields
+
+```txt
+id
+project_id          (FK projects, CASCADE; NOT NULL — elsődleges retrieval-scope)
+book_id nullable    (FK books, CASCADE; csak scene/chapter soroknál)
+series_id nullable  (FK series, SET NULL; NULL = projekt-globális)
+entity_type         (codex | character | location | worldbuilding | scene | chapter | styleguide)
+entity_id
+content_hash        (a forrásszöveg hash-e — változatlan tartalom kihagyásához)
+embedding nullable  (Vector(1536) pgvectoron / JSON SQLite-on)
+model_name          (az embedding-modell neve)
+dim                 (a tárolt vektor-szélesség; EMBEDDING_DIM-et tükrözi)
+created_at
+updated_at
+```
+
+### Constraints
+
+```txt
+UNIQUE (entity_type, entity_id)   — pontosan egy aktuális vektor entitásonként
 ```
 
 ## GenerationJob
