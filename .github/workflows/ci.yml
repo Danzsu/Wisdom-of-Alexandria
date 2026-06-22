@@ -296,13 +296,18 @@ jobs:
       - name: Boot the stack + run Playwright E2E
         working-directory: apps/web
         run: |
+          # Dump every server log on ANY failure (not just the wait timeout) so
+          # the failing e2e run is diagnosable from the Actions UI.
+          dump() { for f in api ai web; do echo "===== /tmp/$f.log ====="; cat "/tmp/$f.log" 2>/dev/null || true; done; }
+          trap 'rc=$?; [ "$rc" -ne 0 ] && dump; exit $rc' EXIT
+
           uv run --directory ../api uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
           uv run --directory ../ai uvicorn app.main:app --port 8001 > /tmp/ai.log 2>&1 &
           corepack pnpm start > /tmp/web.log 2>&1 &
           for url in http://localhost:8000/health http://localhost:8001/health http://localhost:3000; do
             for i in $(seq 1 60); do
               if curl -sSf "$url" >/dev/null 2>&1; then echo "ready: $url"; break; fi
-              if [ "$i" = "60" ]; then echo "TIMEOUT: $url"; cat /tmp/api.log /tmp/ai.log /tmp/web.log; exit 1; fi
+              if [ "$i" = "60" ]; then echo "TIMEOUT waiting for $url"; exit 1; fi
               sleep 2
             done
           done
