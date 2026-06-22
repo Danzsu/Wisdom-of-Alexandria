@@ -286,7 +286,7 @@ jobs:
 
       - name: Install the Playwright browser
         working-directory: apps/web
-        run: corepack pnpm dlx playwright@1.49.1 install --with-deps chromium
+        run: corepack pnpm dlx @playwright/test@1.49.1 install --with-deps chromium
 
       # Start api + ai + web in the BACKGROUND and run the wait + tests in the
       # SAME step: GitHub Actions reaps a step's background processes when its
@@ -311,7 +311,7 @@ jobs:
               sleep 2
             done
           done
-          corepack pnpm dlx playwright@1.49.1 test
+          corepack pnpm dlx @playwright/test@1.49.1 test
 
   # ---------------------------------------------------------------------------
   # TODO (future):
