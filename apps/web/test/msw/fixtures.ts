@@ -92,6 +92,7 @@ export const FAROSZ_BOOK: BookRead = {
   language: "hu",
   word_count_target: 80000,
   order_index: 0,
+  author: null,
   created_at: "2026-06-14T14:32:00Z",
   updated_at: "2026-06-14T14:32:00Z",
 };

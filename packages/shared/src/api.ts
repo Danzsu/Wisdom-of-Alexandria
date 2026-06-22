@@ -1004,6 +1004,8 @@ export interface components {
         };
         /** BookCreate */
         BookCreate: {
+            /** Author */
+            author?: string | null;
             /** Description */
             description?: string | null;
             /** Genre */
@@ -1048,6 +1050,8 @@ export interface components {
         };
         /** BookRead */
         BookRead: {
+            /** Author */
+            author: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1087,6 +1091,8 @@ export interface components {
         };
         /** BookUpdate */
         BookUpdate: {
+            /** Author */
+            author?: string | null;
             /** Description */
             description?: string | null;
             /** Genre */

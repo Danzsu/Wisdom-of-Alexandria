@@ -1577,6 +1577,30 @@ export const hu = {
     successToast: "A könyv létrejött",
     errorTitle: "Nem sikerült létrehozni a könyvet",
   },
+  /**
+   * Book settings page (`/konyv/:bookId/beallitasok`) — metadata edit form.
+   * Keys referenced by the form fields and the settings page test.
+   */
+  books: {
+    settingsTitle: "Könyv beállításai",
+    settingsSubtitle: "A könyv alapadatai és metaadatai.",
+    titleLabel: "Cím",
+    titlePlaceholder: "A könyv címe",
+    genreLabel: "Műfaj",
+    genrePlaceholder: "pl. fantasy, thriller, romantikus…",
+    authorLabel: "Szerző",
+    authorPlaceholder: "A könyv szerzője",
+    save: "Mentés",
+    saving: "Mentés…",
+    saveSuccess: "Könyv beállításai mentve",
+    saveError: "A mentés sikertelen",
+    /** Loading / error states. */
+    loading: "Beállítások betöltése…",
+    loadError: "Nem sikerült betölteni a könyv adatait",
+    /** Settings page tab labels. */
+    tabBook: "Könyv",
+    tabProviders: "AI / Szolgáltatók",
+  },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
     "történelmi fantasy",

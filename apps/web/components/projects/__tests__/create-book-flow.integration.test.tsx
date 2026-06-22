@@ -83,6 +83,7 @@ function installRecordingHandlers(): RecordedCall[] {
           language: (body.language as string) ?? "hu",
           word_count_target: (body.word_count_target as number | null) ?? null,
           order_index: (body.order_index as number) ?? 0,
+          author: (body.author as string | null) ?? null,
           created_at: "2026-06-14T15:00:00Z",
           updated_at: "2026-06-14T15:00:00Z",
         },

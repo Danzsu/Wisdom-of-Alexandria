@@ -112,6 +112,7 @@ export const bookReadSchema = z.object({
   language: z.string(),
   word_count_target: z.number().int().nullable(),
   order_index: z.number().int(),
+  author: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -132,6 +133,7 @@ export const bookUpdateSchema = z.object({
   word_count_target: z.number().int().nullable().optional(),
   order_index: z.number().int().optional(),
   series_id: z.string().nullable().optional(),
+  author: z.string().max(255).nullable().optional(),
 });
 export type BookUpdate = z.infer<typeof bookUpdateSchema>;
 
@@ -144,6 +146,7 @@ export const bookCreateSchema = z.object({
   language: z.string().max(10).default("hu"),
   word_count_target: z.number().int().nullable().optional(),
   order_index: z.number().int().default(0),
+  author: z.string().max(255).nullable().optional(),
 });
 export type BookCreate = z.infer<typeof bookCreateSchema>;
 

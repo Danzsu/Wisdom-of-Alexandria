@@ -74,6 +74,7 @@ describe("NewBookWizard", () => {
             language: "hu",
             word_count_target: 80000,
             order_index: 0,
+            author: null,
             created_at: "2026-06-14T15:00:00Z",
             updated_at: "2026-06-14T15:00:00Z",
           },

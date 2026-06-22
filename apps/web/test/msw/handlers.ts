@@ -942,6 +942,7 @@ function makeBook(projectId: string, body: Partial<BookRead>): BookRead {
     language: body.language ?? "hu",
     word_count_target: body.word_count_target ?? null,
     order_index: body.order_index ?? 0,
+    author: body.author ?? null,
     created_at: now,
     updated_at: now,
   };
