@@ -19,6 +19,7 @@ class JobType:
     job uses ``INDEX``)."""
 
     INDEX = "index"
+    IMAGE = "image"
 
 
 class GenerationJob(UUIDPrimaryKey, Timestamps, Base):
