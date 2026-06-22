@@ -82,9 +82,11 @@ Prioritás: **P1-maradék** = kis, V1-záró tételek · **P2** = magas user-ér
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| Codex → Kutatás (RAG Q&A) | Interaktív Q&A a codex felett; a retrieval-infra megvan, a Q&A nincs bekötve | BE (`apps/ai`) + FE |
+| ~~Codex → Kutatás (RAG Q&A)~~ **KÉSZ** | `POST /ai/research` (grounded válasz + idézet-chipek) + a `chat` route „Kutatás" képernyője | BE (`apps/ai`) + FE |
+| ~~Revízió-böngésző + diff/restore~~ **KÉSZ** | Inspector „Revíziók" tab: szó-szintű diff + visszaállítás/elvetés | FE |
+| **Kép-generálás — Phase 1 KÉSZ** | Codex karakter/helyszín képgenerálás Nano Banana (Gemini image) modellel: `MediaAsset` modell + migráció, `Provider.image_model`, `ModelRouter.generate_image` (google-genai), konzerv stílus-presetek `{placeholder}`-ekkel, RQ async job, `/ai/images` + `/ai/media`, Codex „Képek" panel kanonikus referenciával (HITL). Forrás: **CodexEntry** (entry_type+id). Deps: `google-genai`, `Pillow`; `media_dir` config. | BE + FE |
+| Kép-generálás — Phase 2 (hátra) | **Borító-generátor**: Nano Banana Pro art (2:3, full-bleed) + app-oldali tipográfia-kompozit a KDP biztonsági zónán belül + template-ek | BE + FE |
 | CodexProgression UI + timeline-overlay | Progresszió-szerkesztő + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
-| Kép-pipeline | Media-asset tábla + feltöltés + EPUB-embed | BE + FE + infra |
 | PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF | BE (`apps/api`) + infra |
 | MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |
 | NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |

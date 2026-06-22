@@ -31,6 +31,10 @@ test-results/
 blob-report/
 .playwright/
 
+# Generated image binaries (MediaAsset filesystem store; metadata is in the DB)
+media/
+data/media/
+
 # IDE
 .vscode/
 .idea/
