@@ -628,6 +628,32 @@ export const hu = {
     createError: "Nem sikerült létrehozni a bejegyzést",
   },
   /**
+   * Képek — the AI image panel inside a Codex character/location detail
+   * (Phase 1). Generate a portrait/scene image in a chosen style, set one
+   * canonical, delete, and surface the generating/failed states.
+   */
+  images: {
+    title: "Képek",
+    generate: "Kép generálása",
+    generating: "Generálás…",
+    styleLabel: "Stílus",
+    styleLoadError: "A stílusok betöltése nem sikerült.",
+    canonicalBadge: "Kanonikus",
+    setCanonical: "Beállítás kanonikusként",
+    delete: "Törlés",
+    deleteTitle: "Kép törlése",
+    deleteDescription: "Biztosan törlöd ezt a képet? A művelet nem vonható vissza.",
+    deletedToast: "A kép törölve.",
+    canonicalToast: "A kép kanonikusként beállítva.",
+    empty: "Még nincs kép ehhez a bejegyzéshez.",
+    loadError: "A képek betöltése nem sikerült.",
+    loading: "Képek betöltése",
+    failedChip: "Sikertelen",
+    generateError: "A kép generálása nem sikerült.",
+    /** Alt text for a generated thumbnail (entry name + style label). */
+    thumbAlt: (name: string, style: string) => `${name} – ${style}`,
+  },
+  /**
    * Kapcsolatok — the relationship graph (UX-3a). The screen renders the
    * project's codex relations as a calm force/radial graph; copy covers the
    * loading / error / empty states, the create-relation modal and the side

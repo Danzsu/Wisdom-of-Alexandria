@@ -52,6 +52,7 @@ import type { CodexEntryRead } from "@/lib/api/types";
 import { cn, countWords } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { CodexEntryAvatar } from "./codex-meta";
+import { ImagePanel } from "./image-panel";
 
 type DetailTab =
   | "details"
@@ -175,7 +176,10 @@ export function CodexDetail({
         </div>
 
         {tab === "details" ? (
-          <DetailsTab entry={entry} projectId={projectId} onPatch={patch} />
+          <>
+            <DetailsTab entry={entry} projectId={projectId} onPatch={patch} />
+            <DetailImagePanel entry={entry} />
+          </>
         ) : tab === "mentions" ? (
           <MentionsTab tree={tree} needles={needles} />
         ) : tab === "tracking" ? (
@@ -723,6 +727,26 @@ function TrackingTab({
           onCheckedChange={(next) => onPatch({ ai_visible: next !== true })}
         />
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* AI image panel (Részletek tab)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Mounts the AI {@link ImagePanel} under the Részletek tab, but only for the
+ * Codex entry types the backend can illustrate (Character / Location). Returns
+ * nothing for worldbuilding / custom entries.
+ */
+function DetailImagePanel({ entry }: { entry: CodexEntryRead }) {
+  if (entry.entry_type !== "character" && entry.entry_type !== "location") {
+    return null;
+  }
+  return (
+    <div className="mt-7 border-t border-border pt-6">
+      <ImagePanel entry={entry} />
     </div>
   );
 }
