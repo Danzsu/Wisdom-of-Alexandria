@@ -104,13 +104,14 @@ export interface paths {
         put?: never;
         /**
          * Create Image
-         * @description Enqueue an image-generation job for a Codex Character/Location.
+         * @description Enqueue an image-generation job for a Codex entry (character/location).
          *
          *     Creates a ``generating`` MediaAsset + an IMAGE GenerationJob, hands the job
          *     id to the worker queue, and returns the asset (202). Poll ``GET /jobs/{id}``
          *     (the worker flips the asset to ready/failed). All validation (entity_type,
-         *     style, project existence, model availability) happens BEFORE anything is
-         *     created and OUTSIDE the try, so a 422 is never re-wrapped into a 502.
+         *     style, project existence, the referenced CodexEntry, model availability)
+         *     happens BEFORE anything is created and OUTSIDE the try, so a 422 is never
+         *     re-wrapped into a 502.
          */
         post: operations["create_image_api_v1_ai_images_post"];
         delete?: never;
