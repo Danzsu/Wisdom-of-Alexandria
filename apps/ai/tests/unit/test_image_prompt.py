@@ -122,3 +122,45 @@ def test_available_styles_location() -> None:
     assert "watercolor_location" in slugs
     assert "epic_landscape" in slugs
     assert "realistic_portrait" not in slugs
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Cover art-style presets + build_cover_prompt
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace
+
+from app.services import image_prompt
+
+
+def _book(**kw):
+    base = {"title": "A Fárosz árnyéka", "genre": "fantasy", "synopsis": "Egy könyvtáros titka."}
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_available_cover_styles_nonempty():
+    slugs = {s.slug for s in image_prompt.available_cover_styles()}
+    assert {"cover_literary", "cover_fantasy", "cover_minimal"} <= slugs
+    assert all(s.entity_type == "cover" for s in image_prompt.available_cover_styles())
+
+
+def test_build_cover_prompt_fills_tokens_and_forbids_text():
+    prompt = image_prompt.build_cover_prompt(_book(), "cover_fantasy")
+    assert "A Fárosz árnyéka" in prompt          # {title}
+    assert "fantasy" in prompt                    # {genre}
+    assert "Egy könyvtáros titka." in prompt      # {synopsis}
+    # The STYLE block must forbid in-art text (we composite typography ourselves).
+    low = prompt.lower()
+    assert "no text" in low and ("negative space" in low or "space for" in low)
+
+
+def test_build_cover_prompt_blank_fields_fall_back():
+    prompt = image_prompt.build_cover_prompt(_book(genre=None, synopsis="  "), "cover_minimal")
+    assert "{" not in prompt and "None" not in prompt
+
+
+def test_build_cover_prompt_unknown_style_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        image_prompt.build_cover_prompt(_book(), "realistic_portrait")  # a character style

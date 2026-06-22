@@ -137,3 +137,51 @@ def build_codex_prompt(entry, style: str) -> str:
         atmosphere=atmosphere,
         extra="",
     )
+
+
+# --- Cover styles (Phase 2) -------------------------------------------------
+
+COVER_STYLES: dict[str, ImageStyle] = {
+    "cover_literary": ImageStyle("cover_literary", "Irodalmi", "cover"),
+    "cover_fantasy": ImageStyle("cover_fantasy", "Fantasy", "cover"),
+    "cover_thriller": ImageStyle("cover_thriller", "Thriller", "cover"),
+    "cover_romance": ImageStyle("cover_romance", "Romantikus", "cover"),
+    "cover_minimal": ImageStyle("cover_minimal", "Minimalista", "cover"),
+}
+
+
+def _cover_styles_dir() -> Path:
+    docker = Path("/app/prompts/hu/cover_styles")
+    if docker.exists():
+        return docker
+    repo_root = Path(__file__).parent.parent.parent.parent.parent
+    return repo_root / "packages" / "prompts" / "hu" / "cover_styles"
+
+
+_cover_loader = PromptLoader(prompts_dir=_cover_styles_dir())
+
+
+def available_cover_styles() -> list[ImageStyle]:
+    """Return the registered cover art-style presets."""
+    return list(COVER_STYLES.values())
+
+
+def build_cover_prompt(book, art_style: str) -> str:
+    """Build a cover-art prompt for a Book in the given cover art-style.
+
+    ``book`` is duck-typed: ``title``, ``genre``, ``synopsis``. The art-style must
+    be a known cover style (``ValueError`` otherwise). The STYLE block forbids any
+    in-art text and requests negative space (typography is composited app-side).
+    Blank genre/synopsis fall back to graceful Hungarian phrases — never leaks a
+    ``{token}`` or the literal ``"None"``.
+    """
+    if art_style not in COVER_STYLES:
+        names = ", ".join(sorted(COVER_STYLES))
+        raise ValueError(f"Unknown cover style {art_style!r}. Valid: {names}.")
+    genre = _clean(getattr(book, "genre", None)) or "általános szépirodalom"
+    synopsis = _clean(getattr(book, "synopsis", None)) or "egy meg nem nevezett történet"
+    style_block = _cover_loader.load_system(art_style)
+    body = _cover_loader.load_user(
+        art_style, title=book.title, genre=genre, synopsis=synopsis
+    )
+    return f"{style_block} {body}"
