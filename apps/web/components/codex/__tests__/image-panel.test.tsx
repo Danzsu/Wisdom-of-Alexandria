@@ -171,4 +171,72 @@ describe("ImagePanel", () => {
     renderPanel();
     expect(await screen.findByText(hu.images.failedChip)).toBeInTheDocument();
   });
+
+  it("a failed tile offers Retry which re-POSTs a generation with the same style", async () => {
+    const user = userEvent.setup();
+    const posted: string[] = [];
+    server.use(
+      http.get(`${aiBase}/ai/images`, () =>
+        HttpResponse.json([
+          makeMediaAsset("failed", {
+            id: "media-fail",
+            style: "realistic_portrait",
+            width: null,
+            height: null,
+          }),
+        ]),
+      ),
+      http.post(`${aiBase}/ai/images`, async ({ request }) => {
+        const body = (await request.json()) as { style: string };
+        posted.push(body.style);
+        return HttpResponse.json(
+          makeMediaAsset("generating", { id: "media-retry" }),
+          { status: 202 },
+        );
+      }),
+    );
+
+    renderPanel();
+    const retry = await screen.findByRole("button", { name: hu.images.retry });
+    await user.click(retry);
+    await waitFor(() => expect(posted).toContain("realistic_portrait"));
+  });
+
+  it("a generating tile shows the generating caption", async () => {
+    server.use(
+      http.get(`${aiBase}/ai/images`, () =>
+        HttpResponse.json([makeMediaAsset("generating", { id: "media-gen" })]),
+      ),
+    );
+    renderPanel();
+    expect(
+      await screen.findByText(new RegExp(hu.images.generatingCaption)),
+    ).toBeInTheDocument();
+  });
+
+  it("the empty-state tile is clickable and triggers a generation", async () => {
+    const user = userEvent.setup();
+    const posted: string[] = [];
+    server.use(
+      http.post(`${aiBase}/ai/images`, async ({ request }) => {
+        const body = (await request.json()) as { style: string };
+        posted.push(body.style);
+        return HttpResponse.json(
+          makeMediaAsset("generating", { id: "media-empty" }),
+          { status: 202 },
+        );
+      }),
+    );
+
+    renderPanel();
+    // The styles must load first (so the picker default sets `style`), which
+    // enables the tile.
+    await screen.findByLabelText(hu.images.styleLabel);
+    const tile = await screen.findByRole("button", {
+      name: hu.images.generateFirst,
+    });
+    await waitFor(() => expect(tile).toBeEnabled());
+    await user.click(tile);
+    await waitFor(() => expect(posted.length).toBeGreaterThan(0));
+  });
 });

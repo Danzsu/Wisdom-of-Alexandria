@@ -652,6 +652,14 @@ export const hu = {
     generateError: "A kép generálása nem sikerült.",
     /** Alt text for a generated thumbnail (entry name + style label). */
     thumbAlt: (name: string, style: string) => `${name} – ${style}`,
+    /** Secondary line under the empty-state tile. */
+    emptyHint: "Válassz egy stílust, és generáld le az elsőt.",
+    /** Accessible name for the clickable empty-state tile (distinct from `generate`). */
+    generateFirst: "Első kép generálása",
+    /** Re-run generation for a failed image (same style). */
+    retry: "Újragenerálás",
+    /** Caption shown on a generating tile (alongside the shimmer). */
+    generatingCaption: "Generálás folyamatban",
   },
   /**
    * Kapcsolatok — the relationship graph (UX-3a). The screen renders the

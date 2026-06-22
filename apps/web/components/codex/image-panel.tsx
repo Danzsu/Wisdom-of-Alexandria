@@ -11,11 +11,15 @@
  * errors surface via Query state + toast, never swallowed. Hungarian copy lives
  * in `hu.images`.
  */
-import { useEffect, useState } from "react";
-import { ImageIcon, Star, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ImageIcon, RotateCcw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/kit/button";
 import { Spinner } from "@/components/kit/spinner";
+import { Skeleton } from "@/components/kit/skeleton";
 import { Icon } from "@/components/kit/icon";
+import { IconButton } from "@/components/kit/icon-button";
+import { DashedTile } from "@/components/kit/dashed-tile";
+import { Tooltip } from "@/components/kit/tooltip";
 import { ConfirmDialog } from "@/components/kit/alert-dialog";
 import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
@@ -30,6 +34,7 @@ import {
 import type { MediaAssetRead } from "@/lib/api/image-types";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { hu } from "@/lib/i18n/hu";
+import { cn } from "@/lib/utils";
 
 /**
  * Renders a ready image's thumbnail. The binary is fetched WITH the JWT in the
@@ -93,23 +98,42 @@ export function ImagePanel({ entry }: ImagePanelProps) {
     );
   }, [styles.data]);
 
+  // Generate (or re-generate) with an explicit style slug. Shared by the main
+  // button and a failed tile's Retry action.
+  const runGenerate = useCallback(
+    (styleSlug: string) => {
+      if (!styleSlug) return;
+      generate.mutate(
+        {
+          entityType: entry.entry_type,
+          entityId: entry.id,
+          projectId: entry.project_id,
+          style: styleSlug,
+        },
+        {
+          onError: (error) =>
+            toast.error(`${hu.images.generateError}: ${error.message}`),
+        },
+      );
+    },
+    [generate, entry.entry_type, entry.id, entry.project_id],
+  );
+
   function handleGenerate() {
-    if (!style) return;
-    generate.mutate(
-      {
-        entityType: entry.entry_type,
-        entityId: entry.id,
-        projectId: entry.project_id,
-        style,
-      },
-      {
-        onError: (error) =>
-          toast.error(`${hu.images.generateError}: ${error.message}`),
-      },
-    );
+    runGenerate(style);
   }
 
-  const assets = images.data ?? [];
+  /** Human label for a style slug (falls back to the slug). */
+  function styleLabelFor(slug: string | null): string {
+    if (!slug) return "";
+    return (styles.data ?? []).find((s) => s.slug === slug)?.label ?? slug;
+  }
+
+  // Canonical image first (stable sort keeps the backend's newest-first order
+  // within each group), so the "official" image leads the gallery.
+  const assets = [...(images.data ?? [])].sort(
+    (a, b) => Number(b.is_canonical) - Number(a.is_canonical),
+  );
 
   return (
     <section className="flex flex-col gap-3">
@@ -174,11 +198,25 @@ export function ImagePanel({ entry }: ImagePanelProps) {
           {hu.images.loading}
         </div>
       ) : assets.length === 0 ? (
-        <p className="m-0 text-[13px] text-text-muted">{hu.images.empty}</p>
+        <DashedTile
+          size="image"
+          aria-label={hu.images.generateFirst}
+          icon={<Icon icon={ImageIcon} size={22} />}
+          label={hu.images.empty}
+          hint={hu.images.emptyHint}
+          onClick={handleGenerate}
+          disabled={!style || generate.isPending}
+        />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
           {assets.map((asset) => (
-            <ImageTile key={asset.id} asset={asset} entryTitle={entry.title} />
+            <ImageTile
+              key={asset.id}
+              asset={asset}
+              entryTitle={entry.title}
+              styleLabel={styleLabelFor(asset.style)}
+              onRetry={() => runGenerate(asset.style ?? "")}
+            />
           ))}
         </div>
       )}
@@ -190,9 +228,15 @@ export function ImagePanel({ entry }: ImagePanelProps) {
 function ImageTile({
   asset,
   entryTitle,
+  styleLabel,
+  onRetry,
 }: {
   asset: MediaAssetRead;
   entryTitle: string;
+  /** Human label of the asset's style (for the generating caption / alt). */
+  styleLabel: string;
+  /** Re-run generation with this asset's style (failed-tile Retry). */
+  onRetry: () => void;
 }) {
   const setCanonical = useSetCanonical();
   const del = useDeleteImage();
@@ -231,59 +275,90 @@ function ImageTile({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="relative aspect-square overflow-hidden rounded-[12px] border border-border bg-surface-muted">
+    <div className="group relative flex flex-col gap-1.5">
+      <div
+        className={cn(
+          "relative aspect-square overflow-hidden rounded-[12px] border bg-surface-muted",
+          // The canonical image is emphasised with an accent ring.
+          asset.is_canonical
+            ? "border-accent ring-2 ring-accent ring-offset-1 ring-offset-surface"
+            : "border-border",
+        )}
+      >
         {asset.is_canonical ? (
-          <span className="absolute left-1.5 top-1.5 z-[1] flex h-5 items-center gap-1 rounded-full bg-accent-strong px-2 text-[10px] font-semibold text-accent-fg">
+          <span className="absolute left-1.5 top-1.5 z-[2] flex h-5 items-center gap-1 rounded-full bg-accent-strong px-2 text-[10px] font-semibold text-accent-fg">
             <Icon icon={Star} size={10} />
             {hu.images.canonicalBadge}
           </span>
         ) : null}
 
         {isGenerating ? (
-          <div className="flex h-full w-full items-center justify-center text-text-muted">
-            <Spinner size={20} />
+          // Shimmer placeholder + caption so the tile reads as "working", not stuck.
+          <div className="relative h-full w-full">
+            <Skeleton className="h-full w-full rounded-none" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center text-text-muted">
+              <Spinner size={18} />
+              <span className="px-2 text-[10px] font-medium leading-tight">
+                {styleLabel
+                  ? `${hu.images.generatingCaption} · ${styleLabel}`
+                  : hu.images.generatingCaption}
+              </span>
+            </div>
           </div>
         ) : isFailed ? (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2">
             <span className="flex h-5 items-center rounded-full bg-danger-muted px-2 text-[11px] font-semibold text-danger-text">
               {hu.images.failedChip}
             </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size={28}
+              onClick={onRetry}
+              leadingIcon={<Icon icon={RotateCcw} size={12} />}
+            >
+              {hu.images.retry}
+            </Button>
           </div>
         ) : (
           <MediaThumb
             assetId={asset.id}
-            alt={hu.images.thumbAlt(entryTitle, asset.style ?? "")}
+            alt={hu.images.thumbAlt(entryTitle, styleLabel || (asset.style ?? ""))}
           />
         )}
-      </div>
 
-      {isReady ? (
-        <div className="flex items-center gap-1.5">
-          {!asset.is_canonical ? (
-            <button
-              type="button"
-              onClick={handleSetCanonical}
-              disabled={setCanonical.isPending}
-              aria-label={hu.images.setCanonical}
-              title={hu.images.setCanonical}
-              className="flex h-7 flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-surface px-2 text-[11px] text-text-soft hover:border-accent hover:bg-accent-muted hover:text-accent-text disabled:opacity-50"
-            >
-              <Icon icon={Star} size={12} />
-              {hu.images.setCanonical}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(true)}
-            aria-label={hu.images.delete}
-            title={hu.images.delete}
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-border bg-surface text-text-muted hover:border-danger hover:bg-danger-muted hover:text-danger-text"
-          >
-            <Icon icon={Trash2} size={12} />
-          </button>
-        </div>
-      ) : null}
+        {/* Hover/focus overlay actions on a ready tile. Kept in the DOM (opacity
+            toggle) so they stay focusable + reachable by assistive tech. */}
+        {isReady ? (
+          <div className="absolute right-1.5 top-1.5 z-[2] flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {!asset.is_canonical ? (
+              <Tooltip content={hu.images.setCanonical}>
+                <IconButton
+                  variant="ai"
+                  size={26}
+                  onClick={handleSetCanonical}
+                  disabled={setCanonical.isPending}
+                  aria-label={hu.images.setCanonical}
+                  className="bg-surface/85 backdrop-blur-sm hover:bg-accent-muted"
+                >
+                  <Icon icon={Star} size={13} />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            <Tooltip content={hu.images.delete}>
+              <IconButton
+                variant="danger"
+                size={26}
+                onClick={() => setConfirmOpen(true)}
+                aria-label={hu.images.delete}
+                className="bg-surface/85 backdrop-blur-sm hover:bg-danger-muted"
+              >
+                <Icon icon={Trash2} size={13} />
+              </IconButton>
+            </Tooltip>
+          </div>
+        ) : null}
+      </div>
 
       <ConfirmDialog
         open={confirmOpen}
