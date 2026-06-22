@@ -281,18 +281,24 @@ jobs:
       - name: Migrate the database
         run: uv run --directory apps/api alembic upgrade head
 
-      - name: Start the backend services (api + ai)
-        run: |
-          uv run --directory apps/api uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
-          uv run --directory apps/ai uvicorn app.main:app --port 8001 > /tmp/ai.log 2>&1 &
+      - name: Build the web app
+        run: corepack pnpm -C apps/web build
 
-      - name: Build + start the web app
-        run: |
-          corepack pnpm -C apps/web build
-          corepack pnpm -C apps/web start > /tmp/web.log 2>&1 &
+      - name: Install the Playwright browser
+        working-directory: apps/web
+        run: corepack pnpm dlx playwright@1.49.1 install --with-deps chromium
 
-      - name: Wait for the stack to be ready
+      # Start api + ai + web in the BACKGROUND and run the wait + tests in the
+      # SAME step: GitHub Actions reaps a step's background processes when its
+      # shell exits, so servers started in an earlier step would already be dead
+      # by the time the tests run. Installed browser files (previous step) DO
+      # persist on disk — only the processes are step-scoped.
+      - name: Boot the stack + run Playwright E2E
+        working-directory: apps/web
         run: |
+          uv run --directory ../api uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
+          uv run --directory ../ai uvicorn app.main:app --port 8001 > /tmp/ai.log 2>&1 &
+          corepack pnpm start > /tmp/web.log 2>&1 &
           for url in http://localhost:8000/health http://localhost:8001/health http://localhost:3000; do
             for i in $(seq 1 60); do
               if curl -sSf "$url" >/dev/null 2>&1; then echo "ready: $url"; break; fi
@@ -300,11 +306,6 @@ jobs:
               sleep 2
             done
           done
-
-      - name: Run Playwright E2E
-        working-directory: apps/web
-        run: |
-          corepack pnpm dlx playwright@1.49.1 install --with-deps chromium
           corepack pnpm dlx playwright@1.49.1 test
 
   # ---------------------------------------------------------------------------
