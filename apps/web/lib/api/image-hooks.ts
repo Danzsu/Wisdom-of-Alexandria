@@ -9,6 +9,7 @@
  * logic lives here + in `lib/api/images.ts`; components only render state and
  * fire callbacks.
  */
+import { useEffect, useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -18,6 +19,7 @@ import {
 } from "@tanstack/react-query";
 import {
   deleteImage,
+  fetchMediaBlob,
   generateImage,
   listImageStyles,
   listImages,
@@ -140,4 +142,48 @@ export function useImageStyles(
     enabled: Boolean(entityType),
     staleTime: 5 * 60_000,
   });
+}
+
+/** Result of {@link useMediaObjectUrl}. */
+export interface MediaObjectUrl {
+  /** An object URL for the fetched blob, or `null` until it is ready. */
+  url: string | null;
+  isLoading: boolean;
+  isError: boolean;
+}
+
+/**
+ * Load a ready image's binary via an AUTHENTICATED fetch (JWT in the header,
+ * never in the URL) and expose it as an object URL for `<img src>`. The blob is
+ * cached by TanStack Query; the object URL is created/revoked in an effect tied
+ * to the blob value, so it is freed on unmount or when the blob changes (no leak).
+ * Disabled until `assetId` is known.
+ */
+export function useMediaObjectUrl(
+  assetId: string | undefined,
+  opts?: { thumb?: boolean },
+): MediaObjectUrl {
+  const thumb = opts?.thumb ?? false;
+  const query = useQuery({
+    queryKey: ["media-blob", assetId ?? "__none__", thumb],
+    queryFn: ({ signal }) =>
+      fetchMediaBlob(assetId as string, { thumb, signal }),
+    enabled: Boolean(assetId),
+    staleTime: 5 * 60_000,
+    gcTime: 5 * 60_000,
+  });
+
+  const blob = query.data ?? null;
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
+  return { url, isLoading: query.isLoading, isError: query.isError };
 }

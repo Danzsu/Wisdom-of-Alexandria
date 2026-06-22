@@ -1781,6 +1781,16 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
+  /* Serve the image binary (header-only auth in real life). Returns a tiny PNG
+   * byte payload so `fetchMediaBlob` / `useMediaObjectUrl` resolve to a Blob. */
+  http.get(`${aiBase}/ai/media/:assetId`, () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    return new HttpResponse(png, {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    });
+  }),
+
   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
    * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional
    * status filter, bounded limit, newest-first. ---- */

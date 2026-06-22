@@ -4,10 +4,10 @@ import { server } from "@/test/msw/server";
 import { AI_BASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api/client";
 import {
   deleteImage,
+  fetchMediaBlob,
   generateImage,
   listImageStyles,
   listImages,
-  mediaUrl,
   setCanonical,
 } from "@/lib/api/images";
 import { resetImageStore } from "@/test/msw/handlers";
@@ -119,28 +119,56 @@ describe("lib/api/images", () => {
     ).rejects.toThrow();
   });
 
-  describe("mediaUrl", () => {
+  describe("fetchMediaBlob", () => {
     afterEach(() => window.localStorage.removeItem(TOKEN_STORAGE_KEY));
 
-    it("contains the AI base + /ai/media/{id} + token from localStorage", () => {
+    it("sends the JWT in the Authorization HEADER (never in the URL) and returns a Blob", async () => {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, "img-token-abc");
-      const url = mediaUrl("media-42");
-      expect(url).toContain(AI_BASE_URL);
-      expect(url).toContain("/ai/media/media-42");
-      expect(url).toContain("token=img-token-abc");
+      let seenAuth: string | null = null;
+      let seenUrl = "";
+      server.use(
+        http.get(`${aiBase}/ai/media/:assetId`, ({ request }) => {
+          seenAuth = request.headers.get("Authorization");
+          seenUrl = request.url;
+          return new HttpResponse(new Uint8Array([1, 2, 3]), {
+            status: 200,
+            headers: { "Content-Type": "image/png" },
+          });
+        }),
+      );
+
+      const blob = await fetchMediaBlob("media-42");
+      expect(blob).toBeInstanceOf(Blob);
+      expect(seenAuth).toBe("Bearer img-token-abc");
+      // The token must NOT leak into the URL (the whole point of this change).
+      expect(seenUrl).toContain("/ai/media/media-42");
+      expect(seenUrl).not.toContain("token=");
     });
 
-    it("adds &thumb=1 when requesting the thumbnail", () => {
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, "tok");
-      const url = mediaUrl("media-42", { thumb: true });
-      expect(url).toContain("thumb=1");
-      expect(url).toContain("token=tok");
+    it("requests the thumbnail with ?thumb=1", async () => {
+      let seenUrl = "";
+      server.use(
+        http.get(`${aiBase}/ai/media/:assetId`, ({ request }) => {
+          seenUrl = request.url;
+          return new HttpResponse(new Uint8Array([1]), {
+            status: 200,
+            headers: { "Content-Type": "image/png" },
+          });
+        }),
+      );
+      await fetchMediaBlob("media-42", { thumb: true });
+      expect(seenUrl).toContain("thumb=1");
     });
 
-    it("omits the token when none is stored", () => {
-      const url = mediaUrl("media-42");
-      expect(url).toContain("/ai/media/media-42");
-      expect(url).not.toContain("token=");
+    it("throws an ApiError on a non-OK status (never swallowed)", async () => {
+      server.use(
+        http.get(`${aiBase}/ai/media/:assetId`, () =>
+          HttpResponse.json({ detail: "nope" }, { status: 401 }),
+        ),
+      );
+      await expect(fetchMediaBlob("media-42")).rejects.toMatchObject({
+        status: 401,
+      });
     });
   });
 });

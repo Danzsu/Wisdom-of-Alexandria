@@ -16,14 +16,12 @@ import uuid
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
 from alexandria_core.core.errors import safe_error
-from alexandria_core.core.security import decode_token
 from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
 from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.project import Project
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.media_asset import (
@@ -41,37 +39,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["images"])
 
 _ALLOWED_ENTITY_TYPES = {"character", "location"}
-
-# Header scheme used ONLY by /media. `auto_error=False` so a MISSING header does
-# not 401 before we get a chance to fall back to the `?token=` query param; we
-# raise the 401 ourselves once BOTH sources are exhausted.
-_media_oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/token", auto_error=False
-)
-
-
-def get_current_user_media(
-    header_token: str | None = Depends(_media_oauth2_scheme),
-    token: str | None = None,
-) -> str:
-    """Authenticate the /media binary endpoint from EITHER the
-    ``Authorization: Bearer`` header OR a ``?token=`` query param.
-
-    ``<img>`` tags cannot send an Authorization header, so the image URL carries
-    the JWT as a query param instead. Both sources are validated with the SAME
-    ``decode_token`` that ``get_current_user`` uses; the header wins when both
-    are present. This dependency is used ONLY by ``/media`` — every other
-    endpoint stays header-only via ``get_current_user``.
-    """
-    raw = header_token or token
-    subject = decode_token(raw) if raw else None
-    if subject is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return subject
 
 
 async def _resolve_image_model(db: AsyncSession) -> str | None:
@@ -251,12 +218,14 @@ async def serve_media(
     asset_id: uuid.UUID,
     thumb: int = 0,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(get_current_user_media),
+    _: str = Depends(get_current_user),
 ) -> FileResponse:
     """Stream a ready image's binary. ``?thumb=1`` serves the thumbnail.
 
-    AUTH: accepts the JWT via the ``Authorization`` header OR a ``?token=`` query
-    param (``<img>`` tags cannot set a header) — see {@link get_current_user_media}.
+    AUTH: header-only (``Authorization: Bearer``), same as every other endpoint.
+    The frontend fetches this binary with the JWT in the header and renders it
+    via an object URL, so the token NEVER appears in a URL/query string (no
+    secret-in-URL/log leakage).
 
     TRAVERSAL SAFETY: only the path STORED on the DB row is served (never a
     client-supplied path), and the resolved real path is additionally verified to

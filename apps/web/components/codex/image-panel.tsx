@@ -24,12 +24,48 @@ import {
   useEntityImages,
   useGenerateImage,
   useImageStyles,
+  useMediaObjectUrl,
   useSetCanonical,
 } from "@/lib/api/image-hooks";
-import { mediaUrl } from "@/lib/api/images";
 import type { MediaAssetRead } from "@/lib/api/image-types";
 import type { CodexEntryRead } from "@/lib/api/types";
 import { hu } from "@/lib/i18n/hu";
+
+/**
+ * Renders a ready image's thumbnail. The binary is fetched WITH the JWT in the
+ * Authorization header (never in the URL) and shown via an object URL, so a
+ * plain <img> is required (next/image can't carry the header) — and the token
+ * never leaks into a URL/log. Shows a spinner while loading, an error chip on
+ * failure.
+ */
+function MediaThumb({ assetId, alt }: { assetId: string; alt: string }) {
+  const { url, isLoading, isError } = useMediaObjectUrl(assetId, {
+    thumb: true,
+  });
+
+  if (isError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <span className="flex h-5 items-center rounded-full bg-danger-muted px-2 text-[11px] font-semibold text-danger-text">
+          {hu.images.failedChip}
+        </span>
+      </div>
+    );
+  }
+  if (isLoading || !url) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-text-muted">
+        <Spinner size={20} />
+      </div>
+    );
+  }
+  return (
+    // The src is an in-memory object URL (no next/image proxy possible); the
+    // authenticated fetch already happened, so the token never rides a URL.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt={alt} className="h-full w-full object-cover" />
+  );
+}
 
 export interface ImagePanelProps {
   entry: CodexEntryRead;
@@ -215,14 +251,9 @@ function ImageTile({
             </span>
           </div>
         ) : (
-          // next/image can't proxy the authenticated `?token=` media URL that
-          // `mediaUrl` builds, so a plain <img> is intentional here.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={mediaUrl(asset.id, { thumb: true })}
+          <MediaThumb
+            assetId={asset.id}
             alt={hu.images.thumbAlt(entryTitle, asset.style ?? "")}
-            loading="lazy"
-            className="h-full w-full object-cover"
           />
         )}
       </div>

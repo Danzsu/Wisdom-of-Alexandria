@@ -13,14 +13,15 @@
  *     POST   /ai/images/{id}/canonical        → MediaAssetRead
  *     DELETE /ai/images/{id}                  → 204
  *     GET    /ai/images/styles?entity_type=   → ImageStyleInfo[]
- *     GET    /ai/media/{id}[?thumb=1]         → image bytes (token via ?token=)
+ *     GET    /ai/media/{id}[?thumb=1]         → image bytes (header-only auth)
  */
 import { z } from "zod";
 import {
   AI_BASE_URL,
   API_PREFIX,
-  TOKEN_STORAGE_KEY,
+  ApiError,
   apiFetch,
+  getAuthToken,
 } from "./client";
 import {
   imageStyleInfoSchema,
@@ -120,30 +121,33 @@ export async function listImageStyles(
 }
 
 /**
- * Build the `<img src>` URL for a ready image's binary. `<img>` tags cannot send
- * an Authorization header, so the JWT rides along as a `?token=` query param
- * (the `/media` endpoint accepts EITHER the header or the query token). The
- * token is read the SAME way `client.ts` reads it from localStorage; on the
- * server (no `window`) it is omitted — the URL is only meaningful client-side.
+ * Fetch a ready image's binary as a `Blob`, sending the JWT in the
+ * `Authorization` header (NEVER in the URL — no secret-in-URL/log leakage).
+ * `<img>` tags can't set headers, so callers turn this Blob into an object URL
+ * (`URL.createObjectURL`) for `<img src>` — see `useMediaObjectUrl`. The token
+ * is resolved the SAME way `apiFetch` resolves it (`getAuthToken`). Throws an
+ * {@link ApiError} on any non-OK status or transport failure — never swallowed.
  */
-export function mediaUrl(
+export async function fetchMediaBlob(
   assetId: string,
-  opts?: { thumb?: boolean },
-): string {
-  const base = `${AI_BASE_URL}${API_PREFIX}/ai/media/${encodeURIComponent(assetId)}`;
-  const search = new URLSearchParams();
-  if (opts?.thumb) search.set("thumb", "1");
+  opts?: { thumb?: boolean; signal?: AbortSignal },
+): Promise<Blob> {
+  const path = `/ai/media/${encodeURIComponent(assetId)}${opts?.thumb ? "?thumb=1" : ""}`;
+  const url = `${AI_BASE_URL}${API_PREFIX}${path}`;
 
-  if (typeof window !== "undefined") {
-    try {
-      const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (token) search.set("token", token);
-    } catch {
-      // localStorage unavailable (private mode / disabled) — omit the token;
-      // the request then goes out unauthenticated (the backend answers 401).
-    }
+  const headers: Record<string, string> = { Accept: "image/*" };
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, { headers, signal: opts?.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiError(0, "A kép betöltése nem sikerült (hálózati hiba).");
   }
-
-  const qs = search.toString();
-  return qs.length > 0 ? `${base}?${qs}` : base;
+  if (!res.ok) {
+    throw new ApiError(res.status, `A kép betöltése sikertelen (HTTP ${res.status}).`);
+  }
+  return res.blob();
 }

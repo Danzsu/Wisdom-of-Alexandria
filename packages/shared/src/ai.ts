@@ -246,8 +246,10 @@ export interface paths {
          * Serve Media
          * @description Stream a ready image's binary. ``?thumb=1`` serves the thumbnail.
          *
-         *     AUTH: accepts the JWT via the ``Authorization`` header OR a ``?token=`` query
-         *     param (``<img>`` tags cannot set a header) — see {@link get_current_user_media}.
+         *     AUTH: header-only (``Authorization: Bearer``), same as every other endpoint.
+         *     The frontend fetches this binary with the JWT in the header and renders it
+         *     via an object URL, so the token NEVER appears in a URL/query string (no
+         *     secret-in-URL/log leakage).
          *
          *     TRAVERSAL SAFETY: only the path STORED on the DB row is served (never a
          *     client-supplied path), and the resolved real path is additionally verified to
@@ -1407,7 +1409,6 @@ export interface operations {
         parameters: {
             query?: {
                 thumb?: number;
-                token?: string | null;
             };
             header?: never;
             path: {

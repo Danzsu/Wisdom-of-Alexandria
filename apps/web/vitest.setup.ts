@@ -51,6 +51,14 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   };
 }
 
+// jsdom ships no object-URL API. `useMediaObjectUrl` turns a fetched image Blob
+// into an object URL for <img src>; stub create/revoke so that path runs in
+// tests (the URL value is opaque — only that it is set/revoked matters).
+if (typeof URL.createObjectURL === "undefined") {
+  URL.createObjectURL = () => "blob:mock/media";
+  URL.revokeObjectURL = () => {};
+}
+
 if (typeof window !== "undefined") {
   if (!window.HTMLElement.prototype.hasPointerCapture) {
     window.HTMLElement.prototype.hasPointerCapture = () => false;
