@@ -12,6 +12,7 @@ import {
   FAROSZ_CODEX,
   FAROSZ_PROJECT,
   FAROSZ_RELATIONS,
+  IMAGE_STYLES_FIXTURE,
   JOBS_FIXTURE,
   MODELS_FIXTURE,
   PLOTLINES_FIXTURE,
@@ -28,6 +29,7 @@ import {
   makeContinuityResult,
   makeDescribeResult,
   makeIndexJob,
+  makeMediaAsset,
   makePlotline,
   makeResearchResult,
   makePlotlineScene,
@@ -64,6 +66,7 @@ import type {
   SeriesUpdate,
 } from "@/lib/api/types";
 import type { DescribeRequest } from "@/lib/api/ai-types";
+import type { MediaAssetRead } from "@/lib/api/image-types";
 import type {
   ProviderCreate,
   ProviderRead,
@@ -837,6 +840,76 @@ export function resetProviderStore(): void {
  */
 export function createProviderInStore(body: ProviderCreate): ProviderRead {
   return providerStore.create(body);
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory Image store (Phase 1 AI images) — stateful so the gallery tests
+ * exercise generate → list (poll while generating) → set-canonical → delete.
+ * Keyed by `entity_type:entity_id`. Call `resetImageStore()` in beforeEach.
+ * ------------------------------------------------------------------------- */
+const imageStore = {
+  byEntity: new Map<string, MediaAssetRead[]>(),
+
+  seed(): void {
+    this.byEntity = new Map<string, MediaAssetRead[]>();
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  key(entityType: string, entityId: string): string {
+    return `${entityType}:${entityId}`;
+  },
+
+  list(entityType: string, entityId: string): MediaAssetRead[] {
+    return this.byEntity.get(this.key(entityType, entityId)) ?? [];
+  },
+
+  add(asset: MediaAssetRead): MediaAssetRead {
+    const key = this.key(asset.entity_type, asset.entity_id ?? "");
+    const list = this.byEntity.get(key) ?? [];
+    // Newest-first, mirroring the backend ordering.
+    list.unshift(asset);
+    this.byEntity.set(key, list);
+    return asset;
+  },
+
+  find(assetId: string): MediaAssetRead | undefined {
+    for (const list of this.byEntity.values()) {
+      const hit = list.find((a) => a.id === assetId);
+      if (hit) return hit;
+    }
+    return undefined;
+  },
+
+  setCanonical(assetId: string): MediaAssetRead | undefined {
+    const target = this.find(assetId);
+    if (!target) return undefined;
+    const key = this.key(target.entity_type, target.entity_id ?? "");
+    for (const a of this.byEntity.get(key) ?? []) {
+      a.is_canonical = a.id === assetId;
+    }
+    return target;
+  },
+
+  remove(assetId: string): boolean {
+    for (const [key, list] of this.byEntity.entries()) {
+      const index = list.findIndex((a) => a.id === assetId);
+      if (index !== -1) {
+        list.splice(index, 1);
+        this.byEntity.set(key, list);
+        return true;
+      }
+    }
+    return false;
+  },
+};
+imageStore.seed();
+
+/** Reset the in-memory image store (call in a test's beforeEach). */
+export function resetImageStore(): void {
+  imageStore.reset();
 }
 
 /** Build a `ProjectRead` echo for a POST /projects body. */
@@ -1647,6 +1720,66 @@ export const handlers = [
   http.post(`${aiBase}/ai/research`, () =>
     HttpResponse.json(makeResearchResult()),
   ),
+
+  /* ---- AI images (Phase 1 — generate / list / canonical / delete / styles).
+   * On the AI service base (`aiBase`). Stateful via `imageStore`: a POST adds a
+   * `generating` asset, the GET list serves it newest-first, canonical/delete
+   * mutate. The `/ai/images/styles` GET is static. ---- */
+  http.get(`${aiBase}/ai/images/styles`, ({ request }) => {
+    const entityType =
+      new URL(request.url).searchParams.get("entity_type") ?? "character";
+    return HttpResponse.json(
+      IMAGE_STYLES_FIXTURE.filter((s) => s.entity_type === entityType),
+    );
+  }),
+
+  http.get(`${aiBase}/ai/images`, ({ request }) => {
+    const url = new URL(request.url);
+    const entityType = url.searchParams.get("entity_type") ?? "";
+    const entityId = url.searchParams.get("entity_id") ?? "";
+    return HttpResponse.json(imageStore.list(entityType, entityId));
+  }),
+
+  http.post(`${aiBase}/ai/images`, async ({ request }) => {
+    const body = (await request.json()) as {
+      entity_type: string;
+      entity_id: string;
+      project_id: string;
+      style: string;
+      model?: string | null;
+    };
+    const asset = makeMediaAsset("generating", {
+      entity_type: body.entity_type,
+      entity_id: body.entity_id,
+      project_id: body.project_id,
+      style: body.style,
+      model_name: body.model ?? "gemini/imagen-3",
+    });
+    imageStore.add(asset);
+    return HttpResponse.json(asset, { status: 202 });
+  }),
+
+  http.post(`${aiBase}/ai/images/:assetId/canonical`, ({ params }) => {
+    const updated = imageStore.setCanonical(String(params.assetId));
+    if (!updated) {
+      return HttpResponse.json(
+        { detail: "media asset not found" },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(updated);
+  }),
+
+  http.delete(`${aiBase}/ai/images/:assetId`, ({ params }) => {
+    const ok = imageStore.remove(String(params.assetId));
+    if (!ok) {
+      return HttpResponse.json(
+        { detail: "media asset not found" },
+        { status: 404 },
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
 
   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
    * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional

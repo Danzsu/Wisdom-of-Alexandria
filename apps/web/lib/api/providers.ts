@@ -90,6 +90,9 @@ export const providerReadSchema = z.object({
   // slots it is a free, nullable string on the wire; not all providers expose
   // embeddings, so `null` is the common case.
   embedding_model: z.string().nullable(),
+  // The image-generation model (Phase 1). A free, nullable string on the wire;
+  // image generation is OPTIONAL so most providers leave this `null`.
+  image_model: z.string().nullable(),
   enabled: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),

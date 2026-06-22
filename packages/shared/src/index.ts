@@ -62,6 +62,9 @@ export type ResearchResult = AiSchemas["ResearchResult"];
 export type ModelInfo = AiSchemas["ModelInfo"];
 export type ModelsResponse = AiSchemas["ModelsResponse"];
 export type ProviderRead = AiSchemas["ProviderRead"];
+export type MediaAssetRead = AiSchemas["MediaAssetRead"];
+export type ImageGenerateRequest = AiSchemas["ImageGenerateRequest"];
+export type ImageStyleInfo = AiSchemas["ImageStyleInfo"];
 
 /* ---------------------------------------------------------------------------
  * Compile-time contract-tie helpers.

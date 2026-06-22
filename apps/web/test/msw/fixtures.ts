@@ -30,6 +30,10 @@ import type {
   RevisionRead,
   SnippetRead,
 } from "@/lib/api/ai-types";
+import type {
+  ImageStyleInfo,
+  MediaAssetRead,
+} from "@/lib/api/image-types";
 import type { ProviderCreate, ProviderRead } from "@/lib/api/providers";
 
 export const FAROSZ_PROJECT: ProjectRead = {
@@ -668,6 +672,7 @@ export const PROVIDER_GEMINI: ProviderRead = {
   base_url: null,
   default_model: "gemini-2.0-flash",
   embedding_model: "text-embedding-004",
+  image_model: "gemini/imagen-3",
   enabled: true,
   created_at: NOW,
   updated_at: NOW,
@@ -683,6 +688,7 @@ export const PROVIDER_OLLAMA: ProviderRead = {
   base_url: "http://localhost:11434",
   default_model: "llama3.2",
   embedding_model: null,
+  image_model: null,
   enabled: true,
   created_at: NOW,
   updated_at: NOW,
@@ -714,6 +720,8 @@ export function makeProvider(body: ProviderCreate): ProviderRead {
     // The FE provider create form does not expose embedding_model yet; the
     // backend echoes the stored value (null until set), so mirror that here.
     embedding_model: null,
+    // Likewise, image_model is not set on create (null until configured).
+    image_model: null,
     enabled: body.enabled ?? true,
     created_at: NOW,
     updated_at: NOW,
@@ -787,6 +795,55 @@ export const JOBS_FIXTURE: GenerationJobRead[] = [
   JOB_FAILED,
   JOB_RUNNING,
   JOB_DONE,
+];
+
+/* ---------------------------------------------------------------------------
+ * AI image generation (Phase 1) — mirror app/schemas/media_asset.py
+ * (MediaAssetRead / ImageStyleInfo). The safe client view NEVER carries
+ * file_path/thumb_path; the client builds the URL from `id`.
+ * ------------------------------------------------------------------------- */
+
+let mediaAssetSeq = 0;
+
+/**
+ * Build a `MediaAssetRead` echo. Defaults to a `ready` PNG for the Fárosz
+ * Szelene character; pass `status="generating"` to exercise the poll path.
+ */
+export function makeMediaAsset(
+  status = "ready",
+  overrides: Partial<MediaAssetRead> = {},
+): MediaAssetRead {
+  mediaAssetSeq += 1;
+  const ready = status === "ready";
+  return {
+    id: `media-${mediaAssetSeq}`,
+    project_id: FAROSZ_PROJECT.id,
+    entity_type: "character",
+    entity_id: "codex-szelene",
+    status,
+    mime: "image/png",
+    width: ready ? 1024 : null,
+    height: ready ? 1024 : null,
+    model_name: "gemini/imagen-3",
+    style: "realistic_portrait",
+    is_canonical: false,
+    created_at: NOW,
+    ...overrides,
+  };
+}
+
+/** Style presets for a character (mirrors GET /ai/images/styles). */
+export const IMAGE_STYLES_FIXTURE: ImageStyleInfo[] = [
+  {
+    slug: "realistic_portrait",
+    label: "Realisztikus portré",
+    entity_type: "character",
+  },
+  {
+    slug: "painterly_portrait",
+    label: "Festői portré",
+    entity_type: "character",
+  },
 ];
 
 /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */

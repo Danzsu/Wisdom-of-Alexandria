@@ -428,6 +428,69 @@ async def test_serve_media_not_ready_is_404(
 
 
 @pytest.mark.integration
+async def test_serve_media_token_query_param_authenticates(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path,
+    monkeypatch,
+):
+    """`<img>` tags cannot send an Authorization header, so /media also accepts
+    the SAME JWT via `?token=`. A valid token in the query → 200 + bytes (no
+    Authorization header sent at all)."""
+    from alexandria_core.core.config import settings as core_settings
+    from alexandria_core.core.security import create_access_token
+
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    monkeypatch.setattr(settings, "media_dir", str(media_dir))
+
+    png = b"\x89PNG\r\n\x1a\n" + b"token-served-bytes"
+    file_path = media_dir / "img.png"
+    file_path.write_bytes(png)
+
+    project_id = await _make_project(db_session)
+    character_id = await _make_character(db_session, project_id)
+    asset = await _make_asset(
+        db_session,
+        project_id,
+        character_id,
+        status="ready",
+        file_path=str(file_path),
+    )
+
+    token = create_access_token(subject=core_settings.admin_username)
+    # NO Authorization header — auth comes purely from the query param.
+    resp = await client.get(f"/api/v1/ai/media/{asset.id}?token={token}")
+    assert resp.status_code == 200
+    assert resp.content == png
+
+
+@pytest.mark.integration
+async def test_serve_media_garbage_token_query_param_is_401(
+    client: AsyncClient, db_session: AsyncSession
+):
+    project_id = await _make_project(db_session)
+    character_id = await _make_character(db_session, project_id)
+    asset = await _make_asset(db_session, project_id, character_id, status="ready")
+    resp = await client.get(
+        f"/api/v1/ai/media/{asset.id}?token=not-a-valid-jwt"
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.integration
+async def test_serve_media_no_token_at_all_is_401(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Neither an Authorization header nor a `?token=` → 401 (not 404)."""
+    project_id = await _make_project(db_session)
+    character_id = await _make_character(db_session, project_id)
+    asset = await _make_asset(db_session, project_id, character_id, status="ready")
+    resp = await client.get(f"/api/v1/ai/media/{asset.id}")
+    assert resp.status_code == 401
+
+
+@pytest.mark.integration
 async def test_serve_media_missing_is_404(client: AsyncClient, auth_headers: dict):
     resp = await client.get(
         f"/api/v1/ai/media/{uuid.uuid4()}", headers=auth_headers

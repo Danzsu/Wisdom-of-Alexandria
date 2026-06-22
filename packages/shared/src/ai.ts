@@ -86,6 +86,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Images
+         * @description List an entity's generated images, newest-first.
+         *
+         *     Both ``entity_type`` and ``entity_id`` are required query params (FastAPI
+         *     returns 422 when either is missing).
+         */
+        get: operations["list_images_api_v1_ai_images_get"];
+        put?: never;
+        /**
+         * Create Image
+         * @description Enqueue an image-generation job for a Codex Character/Location.
+         *
+         *     Creates a ``generating`` MediaAsset + an IMAGE GenerationJob, hands the job
+         *     id to the worker queue, and returns the asset (202). Poll ``GET /jobs/{id}``
+         *     (the worker flips the asset to ready/failed). All validation (entity_type,
+         *     style, project existence, model availability) happens BEFORE anything is
+         *     created and OUTSIDE the try, so a 422 is never re-wrapped into a 502.
+         */
+        post: operations["create_image_api_v1_ai_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/images/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Styles
+         * @description List the available image-prompt style presets for an entity type.
+         */
+        get: operations["list_styles_api_v1_ai_images_styles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/images/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Image
+         * @description Delete an image (row + files).
+         */
+        delete: operations["delete_image_api_v1_ai_images__asset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/images/{asset_id}/canonical": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Canonical
+         * @description Mark an image canonical (clears the flag on the entity's other images).
+         */
+        post: operations["set_canonical_api_v1_ai_images__asset_id__canonical_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/index": {
         parameters: {
             query?: never;
@@ -135,6 +228,34 @@ export interface paths {
          *     dangles as forever-pending) and a sanitized 502 is returned.
          */
         post: operations["index_project_async_api_v1_ai_index_async_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/media/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve Media
+         * @description Stream a ready image's binary. ``?thumb=1`` serves the thumbnail.
+         *
+         *     AUTH: accepts the JWT via the ``Authorization`` header OR a ``?token=`` query
+         *     param (``<img>`` tags cannot set a header) — see {@link get_current_user_media}.
+         *
+         *     TRAVERSAL SAFETY: only the path STORED on the DB row is served (never a
+         *     client-supplied path), and the resolved real path is additionally verified to
+         *     live inside ``settings.media_dir`` — anything outside is refused as a 404, so
+         *     a tampered row can never exfiltrate an arbitrary file.
+         */
+        get: operations["serve_media_api_v1_ai_media__asset_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -536,6 +657,40 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * ImageGenerateRequest
+         * @description Enqueue an image-generation job for a Codex entity.
+         */
+        ImageGenerateRequest: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Model */
+            model?: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Style */
+            style: string;
+        };
+        /**
+         * ImageStyleInfo
+         * @description A selectable image-prompt style preset.
+         */
+        ImageStyleInfo: {
+            /** Entity Type */
+            entity_type: string;
+            /** Label */
+            label: string;
+            /** Slug */
+            slug: string;
+        };
         /** IndexRequest */
         IndexRequest: {
             /** Project Id */
@@ -561,6 +716,46 @@ export interface components {
             skipped_no_provider: boolean;
             /** Updated */
             updated: number;
+        };
+        /**
+         * MediaAssetRead
+         * @description Client view of a generated image. NO file_path/thumb_path (the client
+         *     builds the URL from ``id``).
+         */
+        MediaAssetRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Entity Type */
+            entity_type: string;
+            /** Height */
+            height: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Canonical */
+            is_canonical: boolean;
+            /** Mime */
+            mime: string;
+            /** Model Name */
+            model_name: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Status */
+            status: string;
+            /** Style */
+            style: string | null;
+            /** Width */
+            width: number | null;
         };
         /** ModelInfo */
         ModelInfo: {
@@ -598,6 +793,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /** Image Model */
+            image_model?: string | null;
             /** Label */
             label: string;
             /**
@@ -648,6 +845,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Image Model */
+            image_model: string | null;
             /** Label */
             label: string;
             /** Type */
@@ -677,6 +876,8 @@ export interface components {
             embedding_model?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Image Model */
+            image_model?: string | null;
             /** Label */
             label?: string | null;
             /** Type */
@@ -975,6 +1176,162 @@ export interface operations {
             };
         };
     };
+    list_images_api_v1_ai_images_get: {
+        parameters: {
+            query: {
+                entity_type: string;
+                entity_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_image_api_v1_ai_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_styles_api_v1_ai_images_styles_get: {
+        parameters: {
+            query: {
+                entity_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStyleInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_image_api_v1_ai_images__asset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_canonical_api_v1_ai_images__asset_id__canonical_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     index_project_api_v1_ai_index_post: {
         parameters: {
             query?: {
@@ -1032,6 +1389,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerationJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    serve_media_api_v1_ai_media__asset_id__get: {
+        parameters: {
+            query?: {
+                thumb?: number;
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
