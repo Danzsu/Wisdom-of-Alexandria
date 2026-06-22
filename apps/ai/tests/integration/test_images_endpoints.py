@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 from alexandria_core.core.config import settings
-from alexandria_core.models.character import Character
+from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.generation_job import GenerationJob, JobType
 from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.project import Project
@@ -33,11 +33,13 @@ async def _make_project(db: AsyncSession) -> uuid.UUID:
 
 
 async def _make_character(db: AsyncSession, project_id: uuid.UUID) -> uuid.UUID:
-    character = Character(project_id=project_id, name="Szelene")
-    db.add(character)
+    entry = CodexEntry(
+        project_id=project_id, entry_type="character", title="Szelene"
+    )
+    db.add(entry)
     await db.commit()
-    await db.refresh(character)
-    return character.id
+    await db.refresh(entry)
+    return entry.id
 
 
 async def _make_image_provider(db: AsyncSession) -> Provider:
@@ -188,6 +190,57 @@ async def test_create_image_nonexistent_project_is_422(
                 "entity_type": "character",
                 "entity_id": str(uuid.uuid4()),
                 "project_id": str(uuid.uuid4()),
+                "style": "realistic_portrait",
+            },
+            headers=auth_headers,
+        )
+    assert resp.status_code == 422
+    mock_enqueue.assert_not_called()
+
+
+@pytest.mark.integration
+async def test_create_image_nonexistent_entity_is_422(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """A valid project but an entity_id with no matching CodexEntry → 422."""
+    project_id = await _make_project(db_session)
+    await _make_image_provider(db_session)
+    with patch("app.api.v1.images.enqueue_image_job") as mock_enqueue:
+        resp = await client.post(
+            "/api/v1/ai/images",
+            json={
+                "entity_type": "character",
+                "entity_id": str(uuid.uuid4()),
+                "project_id": str(project_id),
+                "style": "realistic_portrait",
+            },
+            headers=auth_headers,
+        )
+    assert resp.status_code == 422
+    mock_enqueue.assert_not_called()
+
+
+@pytest.mark.integration
+async def test_create_image_wrong_entry_type_is_422(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """The CodexEntry exists but its entry_type disagrees with the request → 422."""
+    project_id = await _make_project(db_session)
+    # A location entry referenced as a character.
+    entry = CodexEntry(
+        project_id=project_id, entry_type="location", title="Könyvtár"
+    )
+    db_session.add(entry)
+    await db_session.commit()
+    await db_session.refresh(entry)
+    await _make_image_provider(db_session)
+    with patch("app.api.v1.images.enqueue_image_job") as mock_enqueue:
+        resp = await client.post(
+            "/api/v1/ai/images",
+            json={
+                "entity_type": "character",
+                "entity_id": str(entry.id),
+                "project_id": str(project_id),
                 "style": "realistic_portrait",
             },
             headers=auth_headers,

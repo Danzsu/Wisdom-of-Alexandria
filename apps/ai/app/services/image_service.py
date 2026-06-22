@@ -19,8 +19,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from alexandria_core.models.character import Character
-from alexandria_core.models.location import Location
+from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.media_asset import MediaAsset
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,20 +54,24 @@ class ImageService:
         model: str,
         job_id: uuid.UUID | None = None,
     ) -> MediaAsset:
-        """Generate an image for a Character/Location and persist a READY asset.
+        """Generate an image for a Codex entry and persist a READY asset.
 
-        Reuses the entity's current canonical image (if any, and readable) as a
-        reference image so successive generations stay visually consistent.
-        Raises ``ValueError`` if the entity is missing. On ANY failure during the
-        provider call or save step, removes any partial file and re-raises (loud).
+        ``entity_id`` is a ``CodexEntry`` id; ``entity_type`` is its expected
+        ``entry_type`` ("character" | "location"). Reuses the entity's current
+        canonical image (if any, and readable) as a reference image so successive
+        generations stay visually consistent. Raises ``ValueError`` if the entry
+        is missing OR its ``entry_type`` does not match ``entity_type``. On ANY
+        failure during the provider call or save step, removes any partial file
+        and re-raises (loud).
         """
-        entity = await self._fetch_entity(db, entity_type, entity_id)
-        if entity is None:
+        entry = await db.get(CodexEntry, entity_id)
+        if entry is None or entry.entry_type != entity_type:
             raise ValueError(
-                f"{entity_type} {entity_id} not found for image generation"
+                f"codex entry {entity_id} not found or not a {entity_type} "
+                "for image generation"
             )
 
-        prompt = self._build_prompt(entity_type, entity, style)
+        prompt = image_prompt.build_codex_prompt(entry, style)
         reference = await self._canonical_reference_bytes(db, entity_type, entity_id)
 
         asset_id = uuid.uuid4()
@@ -178,22 +181,6 @@ class ImageService:
         delete_image_files(file_path, thumb_path)
 
     # ── internals ────────────────────────────────────────────────────────────
-
-    async def _fetch_entity(
-        self, db: AsyncSession, entity_type: str, entity_id: uuid.UUID
-    ):
-        if entity_type == "character":
-            return await db.get(Character, entity_id)
-        if entity_type == "location":
-            return await db.get(Location, entity_id)
-        return None
-
-    def _build_prompt(self, entity_type: str, entity, style: str) -> str:
-        if entity_type == "character":
-            return image_prompt.build_character_prompt(entity, style)
-        if entity_type == "location":
-            return image_prompt.build_location_prompt(entity, style)
-        raise ValueError(f"unsupported entity_type for image generation: {entity_type!r}")
 
     async def _canonical_reference_bytes(
         self, db: AsyncSession, entity_type: str, entity_id: uuid.UUID

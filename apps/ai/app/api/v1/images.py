@@ -17,6 +17,7 @@ from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
 from alexandria_core.core.errors import safe_error
 from alexandria_core.core.security import decode_token
+from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
 from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.project import Project
@@ -95,13 +96,14 @@ async def create_image(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> MediaAssetRead:
-    """Enqueue an image-generation job for a Codex Character/Location.
+    """Enqueue an image-generation job for a Codex entry (character/location).
 
     Creates a ``generating`` MediaAsset + an IMAGE GenerationJob, hands the job
     id to the worker queue, and returns the asset (202). Poll ``GET /jobs/{id}``
     (the worker flips the asset to ready/failed). All validation (entity_type,
-    style, project existence, model availability) happens BEFORE anything is
-    created and OUTSIDE the try, so a 422 is never re-wrapped into a 502.
+    style, project existence, the referenced CodexEntry, model availability)
+    happens BEFORE anything is created and OUTSIDE the try, so a 422 is never
+    re-wrapped into a 502.
     """
     # ── Validation (all 422s, BEFORE any create, OUTSIDE the try) ──────────────
     if data.entity_type not in _ALLOWED_ENTITY_TYPES:
@@ -122,6 +124,15 @@ async def create_image(
     # orphan (SQLite, FKs off). Done OUTSIDE the try so this 422 is not re-wrapped.
     if await db.get(Project, data.project_id) is None:
         raise HTTPException(status_code=422, detail="project_id does not exist")
+
+    # The image prompt is built from the referenced CodexEntry, so it must exist
+    # and its entry_type must match the requested entity_type. Validated here
+    # (OUTSIDE the try) so a bad reference is a clean 422, never a worker failure.
+    entry = await db.get(CodexEntry, data.entity_id)
+    if entry is None or entry.entry_type != data.entity_type:
+        raise HTTPException(
+            status_code=422, detail="codex entry not found or wrong type"
+        )
 
     model = data.model or await _resolve_image_model(db)
     if model is None:

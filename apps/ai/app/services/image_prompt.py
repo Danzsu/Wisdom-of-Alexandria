@@ -4,9 +4,10 @@ Each style preset (``packages/prompts/hu/image_styles/<slug>.md``) is a detailed
 image-prompt template: a STYLE block (lighting / composition / medium / detail
 level), a ``---`` separator, then a body template with ``{placeholder}`` tokens.
 
-The builders fill the body tokens from a Codex Character/Location row with
-graceful Hungarian fallbacks (never leaking a literal ``{token}`` and never
-injecting the literal string ``"None"``), then return
+The builder fills the body tokens from a Codex entry (``CodexEntry`` with an
+``entry_type``, ``title``, ``content`` and ``role``) with graceful Hungarian
+fallbacks (never leaking a literal ``{token}`` and never injecting the literal
+string ``"None"``), then returns
 
     STYLE block + " " + filled body
 
@@ -94,36 +95,43 @@ def _assemble(style: str, **tokens: str) -> str:
     return f"{style_block} {body}"
 
 
-def build_character_prompt(character, style: str) -> str:
-    """Build a full image prompt for a Character row in the given style."""
-    _require_style(style, "character")
+def build_codex_prompt(entry, style: str) -> str:
+    """Build a full image prompt for a Codex entry in the given style.
 
-    appearance = _clean(character.appearance) or "egy ismeretlen megjelenésű alak"
-    personality = _clean(character.personality) or "kiismerhetetlen"
-    role = _clean(character.role)
-    role_clause = f", {role}" if role else ""
+    ``entry`` is duck-typed: it must expose ``entry_type`` ("character" |
+    "location"), ``title``, ``content`` (a single freeform body) and ``role``.
 
+    The chosen ``style``'s ``entity_type`` must match ``entry.entry_type`` — a
+    mismatch (or an unknown style) raises ``ValueError`` listing the valid styles
+    for that entry_type. ``CodexEntry`` has only one freeform ``content`` field,
+    so that content is mapped into every descriptive token (the STYLE block
+    supplies the visual specifics); blank content falls back to a graceful
+    Hungarian phrase rather than leaking ``{token}`` or the literal ``"None"``.
+    """
+    _require_style(style, entry.entry_type)
+    content = _clean(entry.content)
+
+    if entry.entry_type == "character":
+        appearance = content or "egy ismeretlen megjelenésű alak"
+        personality = content or "kiismerhetetlen"
+        role = _clean(entry.role)
+        role_clause = f", {role}" if role else ""
+        return _assemble(
+            style,
+            name=entry.title,
+            appearance=appearance,
+            personality=personality,
+            role_clause=role_clause,
+            extra="",
+        )
+
+    # location-type entry
+    description = content or "egy meghatározatlan helyszín"
+    geography = content or "ismeretlen környezetben"
+    atmosphere = content or "meghatározhatatlan hangulat"
     return _assemble(
         style,
-        name=character.name,
-        appearance=appearance,
-        personality=personality,
-        role_clause=role_clause,
-        extra="",
-    )
-
-
-def build_location_prompt(location, style: str) -> str:
-    """Build a full image prompt for a Location row in the given style."""
-    _require_style(style, "location")
-
-    description = _clean(location.description) or "egy meghatározatlan helyszín"
-    geography = _clean(location.geography) or "ismeretlen környezetben"
-    atmosphere = _clean(location.atmosphere) or "meghatározhatatlan hangulat"
-
-    return _assemble(
-        style,
-        name=location.name,
+        name=entry.title,
         description=description,
         geography=geography,
         atmosphere=atmosphere,

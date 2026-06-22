@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from alexandria_core.core.config import settings
-from alexandria_core.models.character import Character
+from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.project import Project
 from PIL import Image
@@ -51,19 +51,19 @@ async def _make_project(db) -> uuid.UUID:
     return project.id
 
 
-async def _make_character(db, project_id: uuid.UUID, name: str = "Aragorn") -> Character:
-    char = Character(
+async def _make_character(db, project_id: uuid.UUID, name: str = "Aragorn") -> CodexEntry:
+    entry = CodexEntry(
         project_id=project_id,
-        name=name,
-        appearance="Magas, sötét hajú vándor kopott köpenyben.",
-        personality="Zárkózott de hűséges.",
+        entry_type="character",
+        title=name,
+        content="Magas, sötét hajú vándor kopott köpenyben. Zárkózott de hűséges.",
         role="Hős",
         ai_visible=True,
     )
-    db.add(char)
+    db.add(entry)
     await db.flush()
     await db.commit()
-    return char
+    return entry
 
 
 @pytest.fixture(autouse=True)

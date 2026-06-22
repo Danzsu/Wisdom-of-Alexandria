@@ -1,37 +1,32 @@
-"""Unit tests for image_prompt: style presets + prompt builders (Phase 1, image gen).
+"""Unit tests for image_prompt: style presets + prompt builder (Phase 1, image gen).
 
 Style presets are detailed image-prompt templates with {placeholder} tokens that
-get filled from a Codex Character/Location row. The builders must:
+get filled from a Codex entry (``CodexEntry`` with ``entry_type``, ``title``,
+``content``, ``role``). The builder must:
 - fill every token (never leak a literal `{...}`),
 - never inject the literal string "None",
 - substitute graceful Hungarian fallbacks for missing/blank fields,
-- validate that the style matches the entity type.
+- validate that the style matches the entry's entry_type.
 """
 
 import pytest
-from alexandria_core.models.character import Character
-from alexandria_core.models.location import Location
+from alexandria_core.models.codex_entry import CodexEntry
 
-from app.services.image_prompt import (
-    available_styles,
-    build_character_prompt,
-    build_location_prompt,
-)
+from app.services.image_prompt import available_styles, build_codex_prompt
 
 
 @pytest.mark.unit
-def test_build_character_prompt_full() -> None:
-    c = Character(
-        name="Eszter",
-        appearance="magas, vörös hajú, zöld szemű",
-        personality="határozott és szókimondó",
-        role="nyomozó",
+def test_build_codex_prompt_character_full() -> None:
+    entry = CodexEntry(
+        entry_type="character",
+        title="Szelene",
+        content="magas, vörös hajú, zöld szemű, határozott és szókimondó",
+        role="írnok",
     )
-    prompt = build_character_prompt(c, "realistic_portrait")
-    assert "Eszter" in prompt
-    assert "magas, vörös hajú, zöld szemű" in prompt
-    assert "határozott és szókimondó" in prompt
-    assert "nyomozó" in prompt
+    prompt = build_codex_prompt(entry, "realistic_portrait")
+    assert "Szelene" in prompt
+    assert "magas, vörös hajú, zöld szemű, határozott és szókimondó" in prompt
+    assert "írnok" in prompt
     # style block text is present
     assert "Photorealistic" in prompt
     # no leaked template tokens
@@ -40,22 +35,21 @@ def test_build_character_prompt_full() -> None:
 
 
 @pytest.mark.unit
-def test_build_character_prompt_graceful_empties() -> None:
-    c = Character(name="Névtelen", appearance=None, personality=None, role=None)
-    prompt = build_character_prompt(c, "realistic_portrait")
+def test_build_codex_prompt_character_graceful_empties() -> None:
+    entry = CodexEntry(entry_type="character", title="Névtelen", content=None, role=None)
+    prompt = build_codex_prompt(entry, "realistic_portrait")
     assert "Névtelen" in prompt
     assert "egy ismeretlen megjelenésű alak" in prompt
-    assert "kiismerhetetlen" in prompt
     assert "None" not in prompt
     assert "{" not in prompt
     assert "}" not in prompt
 
 
 @pytest.mark.unit
-def test_build_character_prompt_unknown_style() -> None:
-    c = Character(name="X")
+def test_build_codex_prompt_unknown_style() -> None:
+    entry = CodexEntry(entry_type="character", title="X")
     with pytest.raises(ValueError) as exc:
-        build_character_prompt(c, "does_not_exist")
+        build_codex_prompt(entry, "does_not_exist")
     msg = str(exc.value)
     # the message lists valid character styles
     assert "realistic_portrait" in msg
@@ -63,33 +57,33 @@ def test_build_character_prompt_unknown_style() -> None:
 
 
 @pytest.mark.unit
-def test_build_character_prompt_rejects_location_style() -> None:
-    c = Character(name="X")
+def test_build_codex_prompt_rejects_mismatched_entity_type() -> None:
+    # A character style on a location entry → ValueError (entity_type mismatch).
+    entry = CodexEntry(entry_type="location", title="X")
     with pytest.raises(ValueError):
-        build_character_prompt(c, "epic_landscape")
+        build_codex_prompt(entry, "realistic_portrait")
 
 
 @pytest.mark.unit
-def test_build_location_prompt_full() -> None:
-    loc = Location(
-        name="Alexandriai könyvtár",
-        description="hatalmas márvány csarnok tekercsekkel",
-        geography="a tengerparton, dombokkal körülvéve",
-        atmosphere="poros, ünnepélyes csend",
+def test_build_codex_prompt_location_full() -> None:
+    entry = CodexEntry(
+        entry_type="location",
+        title="Alexandriai könyvtár",
+        content="hatalmas márvány csarnok tekercsekkel, a tengerparton, poros csend",
     )
-    prompt = build_location_prompt(loc, "watercolor_location")
+    prompt = build_codex_prompt(entry, "watercolor_location")
     assert "Alexandriai könyvtár" in prompt
-    assert "hatalmas márvány csarnok tekercsekkel" in prompt
-    assert "a tengerparton, dombokkal körülvéve" in prompt
-    assert "poros, ünnepélyes csend" in prompt
+    assert "hatalmas márvány csarnok tekercsekkel, a tengerparton, poros csend" in prompt
+    # style block text is present
+    assert "watercolour" in prompt
     assert "{" not in prompt
     assert "}" not in prompt
 
 
 @pytest.mark.unit
-def test_build_location_prompt_graceful_empties() -> None:
-    loc = Location(name="Ismeretlen hely", description=None, geography=None, atmosphere=None)
-    prompt = build_location_prompt(loc, "epic_landscape")
+def test_build_codex_prompt_location_graceful_empties() -> None:
+    entry = CodexEntry(entry_type="location", title="Ismeretlen hely", content=None)
+    prompt = build_codex_prompt(entry, "epic_landscape")
     assert "Ismeretlen hely" in prompt
     assert "egy meghatározatlan helyszín" in prompt
     assert "None" not in prompt
@@ -98,10 +92,10 @@ def test_build_location_prompt_graceful_empties() -> None:
 
 
 @pytest.mark.unit
-def test_build_location_prompt_rejects_character_style() -> None:
-    loc = Location(name="X")
+def test_build_codex_prompt_rejects_location_style_on_character() -> None:
+    entry = CodexEntry(entry_type="character", title="X")
     with pytest.raises(ValueError):
-        build_location_prompt(loc, "realistic_portrait")
+        build_codex_prompt(entry, "epic_landscape")
 
 
 @pytest.mark.unit
