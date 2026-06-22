@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +27,55 @@ class ResolvedProvider:
 
     api_key: str | None
     base_url: str | None
+
+
+@dataclass
+class ImageResult:
+    """A single generated image: raw bytes + mime type + the model id used."""
+
+    data: bytes
+    mime: str
+    model: str
+
+
+def _default_genai_client(api_key: str | None):
+    """Build a real google-genai client. Imported lazily so this module imports
+    without the ``google-genai`` package installed (the unit tests inject a fake
+    client and never reach this path)."""
+    from google import genai
+
+    return genai.Client(api_key=api_key)
+
+
+def _first_inline_image(resp: Any) -> dict[str, Any]:
+    """Return the first inline-image part of a google-genai response as
+    ``{"data": bytes, "mime": str | None}``.
+
+    Tolerant of both attribute and mapping shapes (mirroring embed()'s
+    dict/attr handling) so it survives SDK object/dict variation. Raises
+    ``ValueError`` LOUDLY when no inline image is present — a text-only or empty
+    response must never be silently persisted as a broken asset.
+    """
+
+    def _get(obj: Any, key: str) -> Any:
+        if isinstance(obj, dict):
+            return obj.get(key)
+        return getattr(obj, key, None)
+
+    candidates = _get(resp, "candidates") or []
+    for candidate in candidates:
+        content = _get(candidate, "content")
+        parts = _get(content, "parts") or []
+        for part in parts:
+            inline = _get(part, "inline_data")
+            if inline is None:
+                continue
+            data = _get(inline, "data")
+            if data is None:
+                continue
+            mime = _get(inline, "mime_type")
+            return {"data": data, "mime": mime}
+    raise ValueError("image provider returned no image")
 
 
 _OLLAMA_PREFIX = "ollama/"
@@ -202,6 +253,55 @@ class ModelRouter:
                 f"{len(texts)} input(s)"
             )
         return vectors
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        db: AsyncSession,
+        reference_images: list[Any] | None = None,
+        aspect_ratio: str = "2:3",
+        client_factory: Callable[[str | None], Any] = _default_genai_client,
+        **kwargs: Any,
+    ) -> ImageResult:
+        """Generate an image via Google's google-genai SDK (Nano Banana / Gemini
+        image models), reusing the Provider/Fernet-key resolution.
+
+        Mirrors complete()/embed() error discipline: resolves the configured
+        provider (decrypting the stored key) through ``resolve_provider`` — an
+        undecryptable key raises loudly BEFORE the SDK is touched, never sending
+        an unauthenticated request. The SDK is sync, so the call runs off the
+        event loop via ``asyncio.to_thread``. A response carrying no inline image
+        raises ``ValueError`` (loud) rather than yielding an empty payload.
+
+        ``client_factory`` is injectable so tests never import the real package.
+        """
+        # Resolve credentials first; an undecryptable key raises here (loud),
+        # before the SDK client is constructed or called.
+        resolved = await self.resolve_provider(db, model)
+        # Strip the LiteLLM-style provider prefix (e.g. "gemini/x" -> "x"): the
+        # google-genai SDK expects the bare model id.
+        model_id = model.split("/", 1)[-1] if "/" in model else model
+        client = client_factory(resolved.api_key)
+        contents = [prompt, *(reference_images or [])]
+        # google-genai is synchronous; run it in a thread so it cannot block the
+        # event loop / worker. config is a plain dict to avoid importing genai
+        # types (keeps this module importable without the package).
+        resp = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model_id,
+            contents=contents,
+            config={
+                "response_modalities": ["Image"],
+                "image_config": {"aspect_ratio": aspect_ratio},
+            },
+            **kwargs,
+        )
+        img = _first_inline_image(resp)
+        return ImageResult(
+            data=img["data"], mime=img.get("mime") or "image/png", model=model_id
+        )
 
     def build_messages(self, system: str, user: str) -> list[dict[str, str]]:
         return [

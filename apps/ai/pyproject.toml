@@ -17,6 +17,8 @@ dependencies = [
     "redis>=5.0.0",
     "rq>=1.16.0",
     "pgvector>=0.3",
+    "google-genai>=1.0",
+    "pillow>=10",
     "alexandria-db",
 ]
 
