@@ -10,6 +10,7 @@ from alexandria_core.models.codex_relation import CodexRelation  # noqa: F401
 from alexandria_core.models.embedding import Embedding  # noqa: F401
 from alexandria_core.models.generation_job import GenerationJob, JobStatus  # noqa: F401
 from alexandria_core.models.location import Location  # noqa: F401
+from alexandria_core.models.media_asset import MediaAsset  # noqa: F401
 from alexandria_core.models.plotline import Plotline  # noqa: F401
 from alexandria_core.models.plotline_scene import PlotlineScene  # noqa: F401
 from alexandria_core.models.project import Project  # noqa: F401

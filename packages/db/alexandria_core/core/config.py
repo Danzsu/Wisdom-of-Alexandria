@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # ``EMBEDDING_DIM`` below (kept in sync with this default) rather than a
     # runtime-mutable setting.
     embedding_dim: int = 1536
+    # Filesystem dir for generated image binaries; object-store is a V2 path.
+    media_dir: str = "./media"
+    max_image_bytes: int = 15_000_000
 
 
 settings = Settings()
