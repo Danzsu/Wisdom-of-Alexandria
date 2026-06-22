@@ -1,5 +1,6 @@
 import uuid
 
+import pytest
 from httpx import AsyncClient
 
 
@@ -165,6 +166,28 @@ async def test_delete_book_not_found(client: AsyncClient, auth_headers: dict):
     project_id = await _create_project(client, auth_headers)
     resp = await client.delete(f"/api/v1/projects/{project_id}/books/{uuid.uuid4()}", headers=auth_headers)
     assert resp.status_code == 404
+
+
+
+@pytest.mark.integration
+async def test_book_author_round_trips(client: AsyncClient, auth_headers: dict):
+    project_id = await _create_project(client, auth_headers)
+    created = await client.post(
+        f"/api/v1/projects/{project_id}/books",
+        headers=auth_headers,
+        json={"title": "Fárosz", "author": "Rácz Dániel"},
+    )
+    assert created.status_code == 201
+    assert created.json()["author"] == "Rácz Dániel"
+
+    book_id = created.json()["id"]
+    patched = await client.patch(
+        f"/api/v1/projects/{project_id}/books/{book_id}",
+        headers=auth_headers,
+        json={"author": "R. Dániel"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["author"] == "R. Dániel"
 
 
 async def test_book_requires_auth_all_endpoints(client: AsyncClient):

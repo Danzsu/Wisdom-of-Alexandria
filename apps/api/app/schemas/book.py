@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class BookCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
+    author: str | None = Field(default=None, max_length=255)
     description: str | None = None
     synopsis: str | None = None
     genre: str | None = Field(default=None, max_length=100)
@@ -19,6 +20,7 @@ class BookCreate(BaseModel):
 
 class BookUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
+    author: str | None = Field(default=None, max_length=255)
     description: str | None = None
     synopsis: str | None = None
     genre: str | None = Field(default=None, max_length=100)
@@ -37,6 +39,7 @@ class BookRead(BaseModel):
     project_id: uuid.UUID
     series_id: uuid.UUID | None = None
     title: str
+    author: str | None
     description: str | None
     synopsis: str | None
     genre: str | None

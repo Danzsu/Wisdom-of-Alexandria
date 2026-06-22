@@ -21,6 +21,9 @@ class Book(UUIDPrimaryKey, Timestamps, Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Author/byline shown on generated covers (and, later, exports). Optional —
+    # single-user app has no user-profile name to default from.
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     synopsis: Mapped[str | None] = mapped_column(Text, nullable=True)
     genre: Mapped[str | None] = mapped_column(String(100), nullable=True)
