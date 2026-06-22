@@ -50,6 +50,8 @@ _TABLES_ADDED_LATER = {
     # plotlines + plotline_scenes -> d4a1b2c3e5f6 (Plotline domain)
     "plotlines",
     "plotline_scenes",
+    # media_assets -> f6a1b2c3d4e5 (AI image generation, Phase 1)
+    "media_assets",
 }
 
 # Columns added by LATER revisions to base tables — dropped from the in-memory

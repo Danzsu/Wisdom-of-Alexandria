@@ -24,4 +24,8 @@ class Provider(UUIDPrimaryKey, Timestamps, Base):
     # cloud default: OpenAI ``text-embedding-3-small`` (1536-dim). Nullable:
     # providers that do not serve embeddings (or local Ollama) may leave it unset.
     embedding_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Optional image-generation model for this provider (AI image generation,
+    # Phase 1). Cloud example: ``gemini/gemini-3.1-flash-image``. Nullable:
+    # providers that do not serve image generation may leave it unset.
+    image_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

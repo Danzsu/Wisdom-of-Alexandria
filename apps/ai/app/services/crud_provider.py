@@ -17,6 +17,7 @@ async def create_provider(db: AsyncSession, data: ProviderCreate) -> Provider:
         base_url=data.base_url,
         default_model=data.default_model,
         embedding_model=data.embedding_model,
+        image_model=data.image_model,
         enabled=data.enabled,
     )
     db.add(provider)
@@ -99,6 +100,7 @@ def to_read(provider: Provider) -> ProviderRead:
         base_url=provider.base_url,
         default_model=provider.default_model,
         embedding_model=provider.embedding_model,
+        image_model=provider.image_model,
         enabled=provider.enabled,
         created_at=provider.created_at,
         updated_at=provider.updated_at,

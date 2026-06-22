@@ -17,6 +17,8 @@ class ProviderCreate(BaseModel):
     default_model: str | None = Field(default=None, max_length=255)
     # Optional embedding model (RAG). Cloud default: OpenAI text-embedding-3-small.
     embedding_model: str | None = Field(default=None, max_length=255)
+    # Optional image-generation model. Cloud example: gemini/gemini-3.1-flash-image.
+    image_model: str | None = Field(default=None, max_length=255)
     enabled: bool = True
 
 
@@ -28,6 +30,7 @@ class ProviderUpdate(BaseModel):
     base_url: str | None = Field(default=None, max_length=512)
     default_model: str | None = Field(default=None, max_length=255)
     embedding_model: str | None = Field(default=None, max_length=255)
+    image_model: str | None = Field(default=None, max_length=255)
     enabled: bool | None = None
 
 
@@ -46,6 +49,7 @@ class ProviderRead(BaseModel):
     base_url: str | None
     default_model: str | None
     embedding_model: str | None
+    image_model: str | None
     enabled: bool
     created_at: datetime
     updated_at: datetime
