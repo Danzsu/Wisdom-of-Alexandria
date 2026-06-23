@@ -181,3 +181,8 @@ export { ErrorState, type ErrorStateProps } from "./error-state";
  * Milestone 1d — Radix Select primitive.
  * ------------------------------------------------------------------------- */
 export { Select, type SelectProps, type SelectOption } from "./select";
+
+/* ---------------------------------------------------------------------------
+ * Milestone 1e — Button loading state + Accordion + FormInput slots.
+ * ------------------------------------------------------------------------- */
+export { Accordion, type AccordionProps, type AccordionItem } from "./accordion";

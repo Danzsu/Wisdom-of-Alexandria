@@ -59,4 +59,30 @@ describe("Button", () => {
     expect(screen.getByTestId("lead")).toBeInTheDocument();
     expect(screen.getByTestId("trail")).toBeInTheDocument();
   });
+
+  it("loading shows a spinner, disables, and marks busy", () => {
+    render(<Button loading>Mentés</Button>);
+    const btn = screen.getByRole("button", { name: /Mentés/ });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("aria-busy", "true");
+    expect(btn.querySelector('[role="status"]')).toBeInTheDocument();
+  });
+
+  it("loading overrides leadingIcon with spinner", () => {
+    render(
+      <Button loading leadingIcon={<span data-testid="original-icon" />}>
+        Mentés
+      </Button>,
+    );
+    expect(screen.queryByTestId("original-icon")).not.toBeInTheDocument();
+    expect(screen.getByRole("button").querySelector('[role="status"]')).toBeInTheDocument();
+  });
+
+  it("not-loading is unaffected (not disabled, no aria-busy, no spinner)", () => {
+    render(<Button>Mentés</Button>);
+    const btn = screen.getByRole("button", { name: "Mentés" });
+    expect(btn).not.toBeDisabled();
+    expect(btn).not.toHaveAttribute("aria-busy");
+    expect(btn.querySelector('[role="status"]')).not.toBeInTheDocument();
+  });
 });

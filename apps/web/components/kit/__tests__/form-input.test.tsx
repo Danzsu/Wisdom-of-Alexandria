@@ -32,4 +32,45 @@ describe("FormInput", () => {
     expect(screen.getByLabelText("mező")).not.toHaveAttribute("aria-invalid");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("renders prefix and suffix adornments", () => {
+    render(
+      <FormInput
+        aria-label="Ár"
+        prefix={<span>Ft</span>}
+        suffix={<span>/db</span>}
+      />,
+    );
+    expect(screen.getByText("Ft")).toBeInTheDocument();
+    expect(screen.getByText("/db")).toBeInTheDocument();
+    // The actual input is still labelled and accessible
+    expect(screen.getByLabelText("Ár")).toBeInTheDocument();
+  });
+
+  it("error/aria-invalid still wired when prefix+suffix are present", () => {
+    render(
+      <FormInput
+        aria-label="Ár"
+        prefix={<span>Ft</span>}
+        suffix={<span>/db</span>}
+        error="Kötelező"
+      />,
+    );
+    const input = screen.getByLabelText("Ár");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("Kötelező");
+  });
+
+  it("aria-describedby still wired to error message with slots present", () => {
+    render(
+      <FormInput
+        aria-label="Ár"
+        prefix={<span>Ft</span>}
+        error="Kötelező mező"
+      />,
+    );
+    const input = screen.getByLabelText("Ár");
+    const alert = screen.getByRole("alert");
+    expect(input.getAttribute("aria-describedby")).toEqual(alert.id);
+  });
 });

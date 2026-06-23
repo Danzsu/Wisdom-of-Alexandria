@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { Spinner } from "./spinner";
 
 const buttonVariants = cva(
   // Shared: flex row, centred content, inherited font, depress on press.
@@ -55,6 +56,11 @@ export interface ButtonProps
    * `cta` action; the class lives in globals.css.
    */
   sweep?: boolean;
+  /**
+   * Shows a `Spinner` in the leading-icon slot, forces `disabled`, and sets
+   * `aria-busy`. The label stays visible so the button width is stable.
+   */
+  loading?: boolean;
   children?: ReactNode;
 }
 
@@ -64,6 +70,15 @@ export interface ButtonProps
  * `shape` toggles pill vs. block radius, `size` sets the height. Optional
  * leading/trailing icon slots and a `sweep` flag for the CTA gold shimmer.
  */
+/** Map button size to spinner diameter (px). */
+const SPINNER_SIZE: Record<NonNullable<ButtonProps["size"]>, number> = {
+  28: 12,
+  30: 13,
+  32: 13,
+  34: 14,
+  40: 15,
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
     {
@@ -74,17 +89,27 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       leadingIcon,
       trailingIcon,
       sweep,
+      loading,
+      disabled,
       type,
       children,
       ...props
     },
     ref,
   ) {
+    const isDisabled = disabled || loading;
+    const resolvedSize = size ?? 32;
+    const resolvedLeadingIcon = loading ? (
+      <Spinner size={SPINNER_SIZE[resolvedSize]} variant="accent" label="Betöltés" />
+    ) : leadingIcon;
+
     return (
       <button
         ref={ref}
         type={type ?? "button"}
         data-press=""
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
         className={cn(
           buttonVariants({ variant, shape, size }),
           sweep && "woa-cta",
@@ -92,7 +117,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...props}
       >
-        {leadingIcon}
+        {resolvedLeadingIcon}
         {children}
         {trailingIcon}
       </button>
