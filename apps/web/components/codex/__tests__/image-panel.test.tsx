@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
@@ -44,12 +44,14 @@ describe("ImagePanel", () => {
 
   it("shows the style picker (from the styles handler) and the Generate button", async () => {
     renderPanel();
-    const picker = await screen.findByLabelText(hu.images.styleLabel);
-    // Options come from IMAGE_STYLES_FIXTURE for entity_type=character.
+    // Radix Select trigger exposes role="combobox" + aria-label (not a native
+    // control — findByLabelText doesn't apply). Wait for the trigger to appear
+    // (styles load asynchronously) and confirm the default style label is shown.
+    const trigger = await screen.findByRole("combobox", { name: hu.images.styleLabel });
+    // The trigger should display the first option once styles load.
     await waitFor(() =>
-      expect(within(picker).getByText("Realisztikus portré")).toBeInTheDocument(),
+      expect(trigger).toHaveTextContent("Realisztikus portré"),
     );
-    expect(within(picker).getByText("Festői portré")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: hu.images.generate }),
     ).toBeInTheDocument();

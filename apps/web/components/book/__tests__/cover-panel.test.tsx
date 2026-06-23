@@ -29,8 +29,10 @@ describe("CoverPanel", () => {
       }),
     );
     renderWithProviders(<CoverPanel bookId={BOOK.id} bookTitle={BOOK.title} bookAuthor={BOOK.author} />);
-    await screen.findByLabelText(hu.covers.artStyleLabel);
-    await screen.findByLabelText(hu.covers.layoutLabel);
+    // Radix Select triggers expose role="combobox" + aria-label (not a native
+    // control, so findByLabelText doesn't apply — query by combobox role instead).
+    await screen.findByRole("combobox", { name: hu.covers.artStyleLabel });
+    await screen.findByRole("combobox", { name: hu.covers.layoutLabel });
     await user.click(await screen.findByRole("button", { name: hu.covers.generate }));
     await waitFor(() => expect(posted.length).toBe(1));
     expect(posted[0]).toMatchObject({

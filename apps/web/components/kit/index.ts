@@ -176,3 +176,8 @@ export {
   type EmptyStateActionObject,
 } from "./empty-state";
 export { ErrorState, type ErrorStateProps } from "./error-state";
+
+/* ---------------------------------------------------------------------------
+ * Milestone 1d — Radix Select primitive.
+ * ------------------------------------------------------------------------- */
+export { Select, type SelectProps, type SelectOption } from "./select";

@@ -23,6 +23,7 @@ import { Tooltip } from "@/components/kit/tooltip";
 import { ConfirmDialog } from "@/components/kit/alert-dialog";
 import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
+import { Select } from "@/components/kit/select";
 import {
   useDeleteImage,
   useEntityImages,
@@ -143,25 +144,18 @@ export function ImagePanel({ entry }: ImagePanelProps) {
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
           <label
-            htmlFor="codex-image-style"
             className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
           >
             {hu.images.styleLabel}
           </label>
-          <select
-            id="codex-image-style"
+          <Select
             aria-label={hu.images.styleLabel}
             value={style}
-            onChange={(e) => setStyle(e.target.value)}
+            onValueChange={setStyle}
             disabled={(styles.data ?? []).length === 0}
-            className="box-border h-9 w-full min-w-[200px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
-          >
-            {(styles.data ?? []).map((s) => (
-              <option key={s.slug} value={s.slug}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            options={(styles.data ?? []).map((s) => ({ value: s.slug, label: s.label }))}
+            className="min-w-[200px]"
+          />
         </div>
         <Button
           type="button"

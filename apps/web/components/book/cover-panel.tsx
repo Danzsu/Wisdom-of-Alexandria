@@ -30,6 +30,7 @@ import { ConfirmDialog } from "@/components/kit/alert-dialog";
 import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
 import { FormInput, FieldLabel } from "@/components/kit/form-input";
+import { Select } from "@/components/kit/select";
 import {
   useDeleteImage,
   useEntityImages,
@@ -177,9 +178,6 @@ export function CoverPanel({ bookId, bookTitle, bookAuthor }: CoverPanelProps) {
 
   const canonicalAsset = assets.find((a) => a.is_canonical);
 
-  const artStylePickerId = `cover-art-style-${bookId}`;
-  const layoutPickerId = `cover-layout-${bookId}`;
-
   return (
     <section className="flex flex-col gap-4">
       <SectionEyebrow as="h3">{hu.covers.title}</SectionEyebrow>
@@ -206,47 +204,33 @@ export function CoverPanel({ bookId, bookTitle, bookAuthor }: CoverPanelProps) {
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
             <label
-              htmlFor={artStylePickerId}
               className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
             >
               {hu.covers.artStyleLabel}
             </label>
-            <select
-              id={artStylePickerId}
+            <Select
               aria-label={hu.covers.artStyleLabel}
               value={artStyle}
-              onChange={(e) => setArtStyle(e.target.value)}
+              onValueChange={setArtStyle}
               disabled={(styles.data ?? []).length === 0}
-              className="box-border h-9 w-full min-w-[180px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
-            >
-              {(styles.data ?? []).map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              options={(styles.data ?? []).map((s) => ({ value: s.slug, label: s.label }))}
+              className="min-w-[180px]"
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label
-              htmlFor={layoutPickerId}
               className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
             >
               {hu.covers.layoutLabel}
             </label>
-            <select
-              id={layoutPickerId}
+            <Select
               aria-label={hu.covers.layoutLabel}
               value={layout}
-              onChange={(e) => setLayout(e.target.value)}
+              onValueChange={setLayout}
               disabled={(layouts.data ?? []).length === 0}
-              className="box-border h-9 w-full min-w-[180px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
-            >
-              {(layouts.data ?? []).map((l) => (
-                <option key={l.slug} value={l.slug}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
+              options={(layouts.data ?? []).map((l) => ({ value: l.slug, label: l.label }))}
+              className="min-w-[180px]"
+            />
           </div>
         </div>
 
