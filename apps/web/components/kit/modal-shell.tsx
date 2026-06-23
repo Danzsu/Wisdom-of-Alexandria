@@ -199,7 +199,7 @@ export function ModalHeader({
     >
       {leading}
       {leadingIcon}
-      <DialogPrimitive.Title className="flex-1 text-[17px] font-semibold text-text">
+      <DialogPrimitive.Title className="flex-1 text-title font-semibold text-text">
         {title}
       </DialogPrimitive.Title>
       {!hideClose ? <ModalClose label={closeLabel} /> : null}

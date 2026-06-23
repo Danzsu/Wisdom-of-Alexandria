@@ -89,7 +89,7 @@ export function ConfirmDialog({
                 <AlertDialogPrimitive.Title className="mb-1 text-[16px] font-semibold text-text">
                   {title}
                 </AlertDialogPrimitive.Title>
-                <AlertDialogPrimitive.Description className="text-[13px] leading-[1.5] text-text-soft">
+                <AlertDialogPrimitive.Description className="text-body leading-[1.5] text-text-soft">
                   {description}
                 </AlertDialogPrimitive.Description>
               </div>

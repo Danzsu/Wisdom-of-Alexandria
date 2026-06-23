@@ -14,7 +14,7 @@ export const QuoteBlock = forwardRef<HTMLQuoteElement, QuoteBlockProps>(
       <blockquote
         ref={ref}
         className={cn(
-          "border-l-2 border-accent bg-surface-muted px-3 py-2.5 font-serif text-[13px] italic leading-[1.6] text-text-soft",
+          "border-l-2 border-accent bg-surface-muted px-3 py-2.5 font-serif text-body italic leading-[1.6] text-text-soft",
           "rounded-r-[10px] rounded-l-none",
           className,
         )}

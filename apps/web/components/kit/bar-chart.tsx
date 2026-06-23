@@ -72,7 +72,7 @@ export function BarChart({
             key={datum.label}
             // Both real and "planned" labels use text-muted: the prior
             // text-faint failed WCAG AA on these informational axis labels.
-            className="flex-1 text-center text-[11px] text-text-muted"
+            className="flex-1 text-center text-tiny text-text-muted"
           >
             {datum.label}
           </span>

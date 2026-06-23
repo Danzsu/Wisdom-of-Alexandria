@@ -27,7 +27,7 @@ export const TooltipRoot = TooltipPrimitive.Root;
 export const TooltipTrigger = TooltipPrimitive.Trigger;
 
 const tooltipContentVariants = cva(
-  "z-50 max-w-xs rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-popover " +
+  "z-50 max-w-xs rounded-lg border px-2.5 py-1.5 text-tiny leading-snug shadow-popover " +
     "data-[state=delayed-open]:[animation:woaFade_.12s_ease-out]",
   {
     variants: {

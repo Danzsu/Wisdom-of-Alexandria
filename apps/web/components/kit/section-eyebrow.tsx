@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const sectionEyebrowVariants = cva(
-  "text-[11px] font-semibold uppercase tracking-[0.08em]",
+  "text-tiny font-semibold uppercase tracking-[0.08em]",
   {
     variants: {
       tone: {

@@ -41,7 +41,7 @@ export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
           aria-invalid={hasError || undefined}
           aria-describedby={describedBy}
           className={cn(
-            "box-border h-9 w-full rounded-lg border bg-surface px-3 font-sans text-[14px] text-text outline-none",
+            "box-border h-9 w-full rounded-lg border bg-surface px-3 font-sans text-field text-text outline-none",
             "placeholder:text-text-faint",
             "focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]",
             "disabled:cursor-not-allowed disabled:opacity-50",
@@ -51,7 +51,7 @@ export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
           {...props}
         />
         {messageText ? (
-          <span id={messageId} role="alert" className="text-[12px] text-danger-text">
+          <span id={messageId} role="alert" className="text-small text-danger-text">
             {messageText}
           </span>
         ) : null}
@@ -77,7 +77,7 @@ export function FieldLabel({
     <label
       htmlFor={htmlFor}
       className={cn(
-        "mb-1 flex items-center gap-1.5 text-[12px] font-semibold text-text",
+        "mb-1 flex items-center gap-1.5 text-small font-semibold text-text",
         className,
       )}
     >

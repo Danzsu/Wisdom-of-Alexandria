@@ -58,7 +58,7 @@ export const PopoverMenuContent = forwardRef<
 });
 
 const menuRowVariants = cva(
-  "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] outline-none transition-colors " +
+  "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-body outline-none transition-colors " +
     "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
   {
     variants: {
@@ -128,7 +128,7 @@ export function MenuSection({ label, className }: MenuSectionProps) {
     <DropdownMenuPrimitive.Label asChild>
       <SectionEyebrow
         tone="faint"
-        className={cn("px-2.5 pb-1 pt-1.5 text-[10px]", className)}
+        className={cn("px-2.5 pb-1 pt-1.5 text-micro", className)}
       >
         {label}
       </SectionEyebrow>

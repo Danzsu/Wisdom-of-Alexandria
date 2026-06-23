@@ -192,6 +192,23 @@
   --font-sans: var(--font-sans);
   --font-serif: var(--font-literata);
   --font-mono: var(--font-mono);
+
+  /* --------------------------------------------------------------------------
+     Type scale — semantic names that do NOT collide with Tailwind v4 defaults
+     (text-xs/sm/base/lg/xl/2xl/3xl are NOT redefined here; this is purely
+     additive). These names exactly match the hardcoded text-[Xpx] arbitrary
+     values used in kit components, making the migration zero-visual-change.
+     Radius tokens are deferred (radius names collide with Tailwind defaults).
+     ---------------------------------------------------------------------- */
+  --text-micro: 10px;   --text-micro--line-height: 1.4;
+  --text-tiny: 11px;    --text-tiny--line-height: 1.45;
+  --text-small: 12px;   --text-small--line-height: 1.5;
+  --text-body: 13px;    --text-body--line-height: 1.55;
+  --text-field: 14px;   --text-field--line-height: 1.55;
+  --text-lead: 15px;    --text-lead--line-height: 1.5;
+  --text-title: 17px;   --text-title--line-height: 1.45;
+  --text-display: 24px; --text-display--line-height: 1.2;
+  --text-hero: 26px;    --text-hero--line-height: 1.25;
 }
 
 /* ----------------------------------------------------------------------------

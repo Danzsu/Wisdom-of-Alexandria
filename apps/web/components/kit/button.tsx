@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   // Shared: flex row, centred content, inherited font, depress on press.
-  "inline-flex items-center justify-center gap-1.5 font-sans text-[13px] font-medium leading-none cursor-pointer transition-colors active:translate-y-px active:scale-[.985] disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex items-center justify-center gap-1.5 font-sans text-body font-medium leading-none cursor-pointer transition-colors active:translate-y-px active:scale-[.985] disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {

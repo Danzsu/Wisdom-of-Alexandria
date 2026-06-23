@@ -10,11 +10,11 @@ const textareaVariants = cva(
     variants: {
       variant: {
         // UI sans, 13px / 1.5 — the default custom-instruction / note field.
-        default: "font-sans text-[13px] leading-[1.5]",
+        default: "font-sans text-body leading-[1.5]",
         // Literata serif, 14px / 1.6 — manuscript-flavoured description fields.
-        manuscript: "font-serif text-[14px] leading-[1.6]",
+        manuscript: "font-serif text-field leading-[1.6]",
         // ui-monospace, 12px / 1.6 — outline / code paste field.
-        mono: "font-mono text-[12px] leading-[1.6]",
+        mono: "font-mono text-small leading-[1.6]",
       },
     },
     defaultVariants: {
@@ -77,7 +77,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {messageText ? (
-          <span id={messageId} role="alert" className="text-[12px] text-danger-text">
+          <span id={messageId} role="alert" className="text-small text-danger-text">
             {messageText}
           </span>
         ) : null}

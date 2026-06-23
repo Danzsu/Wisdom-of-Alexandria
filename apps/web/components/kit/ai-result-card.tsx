@@ -103,7 +103,7 @@ export function AIResultCard({
             </SectionEyebrow>
             {version ? (
               // Plain version pill (no leading dot) — matches the prototype.
-              <span className="flex h-[18px] items-center rounded-full bg-ai-muted px-[7px] text-[10px] font-semibold text-ai-text">
+              <span className="flex h-[18px] items-center rounded-full bg-ai-muted px-[7px] text-micro font-semibold text-ai-text">
                 {version}
               </span>
             ) : null}
@@ -113,7 +113,7 @@ export function AIResultCard({
             <ContextChips entities={contextEntities} model={model} />
           ) : null}
 
-          <p className="m-0 font-serif text-[14px] leading-[1.65] text-text-soft [text-wrap:pretty]">
+          <p className="m-0 font-serif text-field leading-[1.65] text-text-soft [text-wrap:pretty]">
             {body}
           </p>
 
@@ -151,7 +151,7 @@ export function AIResultCard({
           </div>
         </div>
       </motion.div>
-      <p className="m-0 text-center text-[11px] text-text-muted">{disclaimer}</p>
+      <p className="m-0 text-center text-tiny text-text-muted">{disclaimer}</p>
     </div>
   );
 }

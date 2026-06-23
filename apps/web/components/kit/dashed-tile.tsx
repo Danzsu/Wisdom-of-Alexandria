@@ -12,19 +12,19 @@ const dashedTileVariants = cva(
     variants: {
       size: {
         // Add-a-card tile (project dashboard / board).
-        add: "min-h-[170px] w-full rounded-[14px] bg-transparent text-[13px]",
+        add: "min-h-[170px] w-full rounded-[14px] bg-transparent text-body",
         // Import dropzone.
         import:
-          "min-h-[150px] w-full rounded-[14px] bg-surface-soft text-[12px] text-text-muted",
+          "min-h-[150px] w-full rounded-[14px] bg-surface-soft text-small text-text-muted",
         // Inline image placeholder dropzone.
         image:
-          "min-h-[160px] w-full rounded-xl bg-surface-muted text-[12px] text-text-muted",
+          "min-h-[160px] w-full rounded-xl bg-surface-muted text-small text-text-muted",
         // Square portrait upload.
         portrait:
-          "h-[84px] w-[84px] gap-[3px] rounded-xl bg-surface-muted text-[10px] text-text-muted",
+          "h-[84px] w-[84px] gap-[3px] rounded-xl bg-surface-muted text-micro text-text-muted",
         // Book-cover upload.
         cover:
-          "h-[106px] w-[76px] gap-[5px] rounded-[10px] bg-surface-muted text-[10px] text-text-muted",
+          "h-[106px] w-[76px] gap-[5px] rounded-[10px] bg-surface-muted text-micro text-text-muted",
       },
     },
     defaultVariants: {

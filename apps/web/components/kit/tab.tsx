@@ -14,10 +14,10 @@ const tabVariants = cva(
       orientation: {
         // Horizontal underline tab.
         horizontal:
-          "flex h-9 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-[13px]",
+          "flex h-9 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-body",
         // Vertical icon-over-label inspector tab.
         vertical:
-          "flex h-12 flex-1 flex-col items-center justify-center gap-[3px] border-b-2 border-transparent text-[10px] font-medium",
+          "flex h-12 flex-1 flex-col items-center justify-center gap-[3px] border-b-2 border-transparent text-micro font-medium",
       },
       active: {
         true: "",

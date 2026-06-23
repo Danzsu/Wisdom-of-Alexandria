@@ -96,7 +96,7 @@ export const RangeSlider = forwardRef<
       {showValue ? (
         <span
           className={cn(
-            "text-right text-[13px] tabular-nums text-text-muted",
+            "text-right text-body tabular-nums text-text-muted",
             valueLabelClassName ?? "w-7",
           )}
         >

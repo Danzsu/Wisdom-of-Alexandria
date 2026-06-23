@@ -57,7 +57,7 @@ export const RadioRow = forwardRef<
     <label
       htmlFor={itemId}
       className={cn(
-        "flex cursor-pointer items-start gap-2 text-[13px] text-text-soft",
+        "flex cursor-pointer items-start gap-2 text-body text-text-soft",
         wrapperClassName,
       )}
     >
@@ -77,7 +77,7 @@ export const RadioRow = forwardRef<
       <span className="flex flex-col gap-0.5">
         <span>{label}</span>
         {subText ? (
-          <span className="text-[12px] text-text-muted">{subText}</span>
+          <span className="text-small text-text-muted">{subText}</span>
         ) : null}
       </span>
     </label>

@@ -61,7 +61,7 @@ export const CheckboxRow = forwardRef<
     <label
       htmlFor={boxId}
       className={cn(
-        "flex cursor-pointer items-start gap-2 text-[13px] text-text-soft",
+        "flex cursor-pointer items-start gap-2 text-body text-text-soft",
         wrapperClassName,
       )}
     >
@@ -69,7 +69,7 @@ export const CheckboxRow = forwardRef<
       <span className="flex flex-col gap-0.5">
         <span>{label}</span>
         {subText ? (
-          <span className="text-[12px] text-text-muted">{subText}</span>
+          <span className="text-small text-text-muted">{subText}</span>
         ) : null}
       </span>
     </label>
@@ -139,9 +139,9 @@ export const SelectableCheckboxCard = forwardRef<
         />
         {leading}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[13px] font-semibold text-text">{title}</span>
+          <span className="text-body font-semibold text-text">{title}</span>
           {subTitle ? (
-            <span className="text-[11px] text-text-muted">{subTitle}</span>
+            <span className="text-tiny text-text-muted">{subTitle}</span>
           ) : null}
         </span>
       </Card>

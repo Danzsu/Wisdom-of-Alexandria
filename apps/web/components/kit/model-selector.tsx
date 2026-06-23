@@ -79,7 +79,7 @@ export function ModelSelector({
     <PopoverMenu>
       <PopoverMenuTrigger
         className={cn(
-          "inline-flex h-9 w-full cursor-pointer items-center gap-2 rounded-[10px] border border-border bg-surface px-3 font-sans text-[13px] text-text-soft transition-colors",
+          "inline-flex h-9 w-full cursor-pointer items-center gap-2 rounded-[10px] border border-border bg-surface px-3 font-sans text-body text-text-soft transition-colors",
           "hover:border-border-strong",
           "data-[state=open]:border-accent",
           className,

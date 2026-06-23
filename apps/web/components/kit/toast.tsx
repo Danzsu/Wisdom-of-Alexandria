@@ -31,11 +31,11 @@ export function Toaster() {
         classNames: {
           toast:
             "!flex !items-center !gap-2 !rounded-[10px] !border !border-border " +
-            "!border-l-[3px] !bg-surface !px-3.5 !py-2.5 !text-[13px] !text-text " +
+            "!border-l-[3px] !bg-surface !px-3.5 !py-2.5 !text-body !text-text " +
             "!shadow-popover [animation:woaToastPop_.32s_cubic-bezier(.16,1,.3,1)] " +
             "!font-sans",
-          title: "!text-[13px] !font-medium !text-text",
-          description: "!text-[12px] !text-text-muted",
+          title: "!text-body !font-medium !text-text",
+          description: "!text-small !text-text-muted",
           icon: "!m-0 !flex !items-center",
           success: "!border-l-success",
           info: "!border-l-ai",

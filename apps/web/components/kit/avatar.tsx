@@ -12,11 +12,11 @@ export type AvatarColor = PovSlot | "accent" | "ai";
 
 const SIZE_CLASS: Record<AvatarSize, string> = {
   21: "h-[21px] w-[21px] text-[9px] font-bold",
-  24: "h-6 w-6 text-[10px] font-bold",
-  28: "h-7 w-7 text-[11px] font-bold",
-  30: "h-[30px] w-[30px] text-[11px] font-bold",
-  34: "h-[34px] w-[34px] text-[12px] font-bold",
-  38: "h-[38px] w-[38px] text-[13px] font-bold",
+  24: "h-6 w-6 text-micro font-bold",
+  28: "h-7 w-7 text-tiny font-bold",
+  30: "h-[30px] w-[30px] text-tiny font-bold",
+  34: "h-[34px] w-[34px] text-small font-bold",
+  38: "h-[38px] w-[38px] text-body font-bold",
   56: "h-14 w-14 text-[18px] font-bold",
   60: "h-[60px] w-[60px] text-[20px] font-bold",
 };

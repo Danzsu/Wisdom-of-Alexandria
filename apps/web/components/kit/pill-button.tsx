@@ -7,7 +7,7 @@ import { Icon } from "./icon";
 import { StatusDot, type StatusDotVariant } from "./status-dot";
 
 const pillButtonVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border font-sans text-[13px] cursor-pointer transition-colors active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex items-center gap-1.5 rounded-full border font-sans text-body cursor-pointer transition-colors active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       active: {

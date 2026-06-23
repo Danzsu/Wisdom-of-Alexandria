@@ -67,7 +67,7 @@ export function SplitButtonDropdown({
     <PopoverMenu>
       <PopoverMenuTrigger
         className={cn(
-          "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-transparent px-[14px] font-sans text-[13px] text-text-soft transition-colors",
+          "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-transparent px-[14px] font-sans text-body text-text-soft transition-colors",
           "hover:border-accent hover:bg-accent-muted hover:text-accent-text",
           "data-[state=open]:border-accent data-[state=open]:bg-accent-muted data-[state=open]:text-accent-text",
           className,
@@ -92,8 +92,8 @@ export function SplitButtonDropdown({
               >
                 {item.subtitle ? (
                   <span className="flex flex-col">
-                    <span className="text-[13px]">{item.label}</span>
-                    <span className="text-[11px] text-text-muted">
+                    <span className="text-body">{item.label}</span>
+                    <span className="text-tiny text-text-muted">
                       {item.subtitle}
                     </span>
                   </span>

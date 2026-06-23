@@ -23,10 +23,10 @@ const badgeVariants = cva(
         pov6: "bg-pov6-bg text-pov6-tx",
       },
       size: {
-        16: "h-4 px-1.5 text-[10px]",
-        18: "h-[18px] px-[7px] text-[10px]",
-        20: "h-5 px-2 text-[11px]",
-        24: "h-6 px-[11px] text-[11px]",
+        16: "h-4 px-1.5 text-micro",
+        18: "h-[18px] px-[7px] text-micro",
+        20: "h-5 px-2 text-tiny",
+        24: "h-6 px-[11px] text-tiny",
       },
     },
     defaultVariants: {

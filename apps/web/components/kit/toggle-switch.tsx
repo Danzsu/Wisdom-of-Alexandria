@@ -73,7 +73,7 @@ export const ToggleSwitch = forwardRef<
       {track}
       <label
         htmlFor={switchId}
-        className="cursor-pointer text-[13px] text-text-soft"
+        className="cursor-pointer text-body text-text-soft"
       >
         {label}
       </label>

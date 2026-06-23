@@ -101,7 +101,7 @@ function Pane({
         )}
       >
         <StatusDot variant={dot} size={8} aria-label={dotLabel} />
-        <span className={cn("text-[12px] font-semibold", labelClassName)}>
+        <span className={cn("text-small font-semibold", labelClassName)}>
           {label}
         </span>
       </div>
@@ -111,7 +111,7 @@ function Pane({
           instantly. Each segment is a span-level motion node so inline flow is
           preserved (transform/opacity only — never layout). */}
       <motion.div
-        className="min-h-0 flex-1 overflow-y-auto px-[22px] py-5 font-serif text-[14px] leading-[1.75] text-text"
+        className="min-h-0 flex-1 overflow-y-auto px-[22px] py-5 font-serif text-field leading-[1.75] text-text"
         variants={motionConf.staggerContainer}
         initial="hidden"
         animate="visible"

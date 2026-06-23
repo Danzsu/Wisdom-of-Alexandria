@@ -89,13 +89,13 @@ function DefaultPaneFallback({ onReset }: Readonly<{ onReset: () => void }>) {
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-danger-muted text-danger-text">
         <Icon icon={AlertTriangle} size={16} />
       </span>
-      <p className="m-0 text-[13px] font-semibold text-danger-text">
+      <p className="m-0 text-body font-semibold text-danger-text">
         {hu.errors.paneTitle}
       </p>
       <button
         type="button"
         onClick={onReset}
-        className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-transparent px-3 text-[12px] font-medium text-text-soft hover:bg-surface-muted"
+        className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-transparent px-3 text-small font-medium text-text-soft hover:bg-surface-muted"
       >
         <Icon icon={RotateCcw} size={12} />
         {hu.errors.paneRetry}
