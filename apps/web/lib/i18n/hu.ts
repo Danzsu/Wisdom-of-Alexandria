@@ -1601,6 +1601,39 @@ export const hu = {
     tabBook: "Könyv",
     tabProviders: "AI / Szolgáltatók",
   },
+  /**
+   * Borító — the AI cover generator panel inside the book settings page
+   * (Phase 2). Picks an art style + layout, enters title/author/subtitle, and
+   * generates a 1600×2560 ebook cover. All copy is Hungarian. Gallery behaviour
+   * mirrors the image panel (canonical hero, retry, delete, set-canonical).
+   */
+  covers: {
+    title: "Borító",
+    artStyleLabel: "Stílus",
+    layoutLabel: "Elrendezés",
+    titleLabel: "Cím",
+    authorLabel: "Szerző",
+    subtitleLabel: "Alcím (opcionális)",
+    generate: "Borító generálása",
+    generating: "Generálás…",
+    empty: "Még nincs borító ehhez a könyvhöz.",
+    emptyHint: "Válassz stílust és elrendezést, majd generálj egyet.",
+    generateFirst: "Első borító generálása",
+    loadError: "A borítók betöltése nem sikerült.",
+    loading: "Borítók betöltése",
+    failedChip: "Sikertelen",
+    retry: "Újragenerálás",
+    generatingCaption: "Generálás folyamatban",
+    canonicalBadge: "Kiválasztott",
+    setCanonical: "Beállítás borítóként",
+    delete: "Törlés",
+    deleteTitle: "Borító törlése",
+    deleteDescription: "Biztosan törlöd ezt a borítót? A művelet nem vonható vissza.",
+    deletedToast: "A borító törölve.",
+    canonicalToast: "A borító beállítva.",
+    generateError: "A borító generálása nem sikerült.",
+    heroAlt: (title: string) => `${title} borítója`,
+  },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
     "történelmi fantasy",
