@@ -1,0 +1,197 @@
+<title>Alexandria · UI/UX Design Report Card</title>
+<style>
+  :root{
+    --bg:#1b1712; --bg2:#15120d; --surface:#241e16; --surface2:#2c2418;
+    --line:#3a3024; --line2:#4a3d2b;
+    --text:#f2ead8; --soft:#cfc2a4; --muted:#9c8e6f; --faint:#7d7152;
+    --gold:#d8a43a; --gold-soft:#3a2e15; --gold-line:#6b4a0a;
+    --ai:#5b9bd8; --ai-soft:#15263a;
+    --ok:#5fb083; --ok-soft:#16271d;
+    --warn:#d8a43a;
+    --bad:#e08a5f; --bad-soft:#30201a;
+    --p0:#e0685f; --p1:#e08a5f; --p2:#d8a43a; --p3:#7d9bba;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#2a2114 0%,var(--bg) 55%);
+    color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 24px 96px}
+  header.top{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:0 0 10px}
+  h1{font-family:var(--serif);font-size:38px;line-height:1.1;margin:0;font-weight:600;letter-spacing:-.01em}
+  h1 .dim{color:var(--soft);font-style:italic;font-weight:500}
+  .sub{color:var(--muted);font-size:14px;margin:12px 0 0}
+  .scoreboard{display:flex;gap:14px;flex-wrap:wrap}
+  .scorecard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 20px;min-width:118px;text-align:center}
+  .scorecard .big{font-family:var(--serif);font-size:34px;font-weight:600;line-height:1}
+  .scorecard .lab{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+  .scorecard.good .big{color:var(--gold)} .scorecard.ok .big{color:var(--ok)} .scorecard.bad .big{color:var(--bad)}
+  h2{font-family:var(--serif);font-size:23px;font-weight:600;margin:52px 0 6px;letter-spacing:-.01em}
+  h2 .n{color:var(--gold);font-size:14px;font-family:var(--sans);font-weight:700;vertical-align:middle;margin-right:10px;
+    border:1px solid var(--gold-line);border-radius:8px;padding:2px 8px}
+  .lede{color:var(--soft);font-size:15px;margin:0 0 22px;max-width:70ch}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 4px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  td.s{font-family:var(--serif);font-weight:600;font-size:16px;white-space:nowrap}
+  .s4{color:var(--ok)} .s3{color:var(--gold)} .s2{color:var(--bad)} .s1{color:var(--p0)}
+  tr.total td{border-top:2px solid var(--line2);border-bottom:none;font-weight:700;padding-top:14px}
+  tr.total .band{color:var(--gold);font-family:var(--serif);font-size:16px}
+  .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+  .scroll table{margin:0} .scroll th,.scroll td{padding-left:16px}
+  .grid{display:grid;gap:14px}
+  @media(min-width:680px){.grid.two{grid-template-columns:1fr 1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+  .card h3{margin:0 0 8px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .card p{margin:6px 0 0;font-size:13.5px;color:var(--soft)}
+  .card .fix{margin-top:10px;font-size:13px;color:var(--text);border-top:1px dashed var(--line2);padding-top:10px}
+  .card .fix b{color:var(--gold);font-weight:700}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.05em;padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .t-p0{background:#3a1c19;color:var(--p0);border:1px solid #5e2a23}
+  .t-p1{background:var(--bad-soft);color:var(--p1);border:1px solid #5e3a28}
+  .t-p2{background:var(--gold-soft);color:var(--p2);border:1px solid var(--gold-line)}
+  .t-p3{background:#1c2733;color:var(--p3);border:1px solid #2f4356}
+  .phase{margin-left:auto;font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:2px 9px}
+  .swatch{display:inline-block;width:13px;height:13px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid rgba(255,255,255,.18)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:var(--bg2);
+    border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--soft)}
+  .ratio{font-family:var(--serif);font-weight:600}
+  .ratio.bad{color:var(--bad)} .ratio.warn{color:var(--warn)}
+  ul.clean{margin:8px 0 0;padding:0;list-style:none}
+  ul.clean li{position:relative;padding:7px 0 7px 22px;font-size:14px;color:var(--soft);border-bottom:1px solid var(--line)}
+  ul.clean li:last-child{border-bottom:none}
+  ul.clean li::before{content:"";position:absolute;left:2px;top:14px;width:7px;height:7px;border-radius:2px;background:var(--gold)}
+  ul.clean.good li::before{background:var(--ok)}
+  .rec{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--gold-line);
+    border-radius:18px;padding:24px 24px 20px;margin-top:18px}
+  .rec h3{margin:0 0 6px;font-family:var(--serif);font-size:19px;color:var(--gold);font-weight:600}
+  .verdict{font-size:15px;color:var(--text)}
+  .persona{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+  .persona:last-child{border-bottom:none}
+  .persona .who{font-weight:700;font-size:13.5px;min-width:150px;color:var(--text)}
+  .persona .flags{font-size:13.5px;color:var(--soft)}
+  footer{margin-top:60px;border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:12.5px}
+  .meta-chip{display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:999px;
+    padding:4px 11px;font-size:11.5px;color:var(--soft);margin:4px 6px 0 0}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Design Report Card · 2026.06.23</p>
+      <h1>Alexandria <span class="dim">UI/UX audit</span></h1>
+      <p class="sub">Live (chrome-devtools Lighthouse + real-browser contrast sweep) and code-level review against the impeccable rubric. Register: product (calm, writer-first).</p>
+    </div>
+    <div class="scoreboard">
+      <div class="scorecard good"><div class="big">29<span style="font-size:18px;color:var(--muted)">/40</span></div><div class="lab">Nielsen · Jó</div></div>
+      <div class="scorecard ok"><div class="big">100</div><div class="lab">A11y · dashboard</div></div>
+      <div class="scorecard bad"><div class="big">84</div><div class="lab">A11y · kit</div></div>
+    </div>
+  </header>
+
+  <p class="lede">Alexandria is already a strong, distinctive product UI: a warm gold-on-parchment palette, Literata serif display type, a calm ease-out motion system, a 44-component kit, and a first-class dark theme. It does not read as AI-generated. The distance to award-winning is mostly <b style="color:var(--text)">systemic</b>, not visual: a few real accessibility defects, no shared scale tokens, and thin state-pattern coverage. Close those and this is a genuinely award-grade writing studio.</p>
+
+  <h2><span class="n">A</span>Design health (Nielsen heuristics)</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>#</th><th>Heuristic</th><th>Score</th><th>Key finding</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Visibility of status</td><td class="s s3">3</td><td>Skeletons, autosave, live AI-jobs screen, toasts, active nav. Loading is sometimes ad-hoc.</td></tr>
+      <tr><td>2</td><td>Match real world</td><td class="s s3">3</td><td>Hungarian-first, true domain language (Codex, jelenet, beat). One leak: raw <code>Failed to fetch</code>.</td></tr>
+      <tr><td>3</td><td>User control &amp; freedom</td><td class="s s3">3</td><td>Focus mode, Esc, cancel/confirm dialogs, revision approve/reject (human-in-the-loop).</td></tr>
+      <tr><td>4</td><td>Consistency &amp; standards</td><td class="s s3">3</td><td>Tokens + kit give high consistency; undercut by hardcoded sizes and a native <code>&lt;select&gt;</code>.</td></tr>
+      <tr><td>5</td><td>Error prevention</td><td class="s s3">3</td><td>Confirm-on-destructive, autosave, AI never auto-overwrites. Solid.</td></tr>
+      <tr><td>6</td><td>Recognition over recall</td><td class="s s3">3</td><td>Cmd+K palette, codex search, tooltips. Icon-only rail relies on hover for labels.</td></tr>
+      <tr><td>7</td><td>Flexibility &amp; efficiency</td><td class="s s3">3</td><td>Cmd+K, slash menu, shortcuts overlay, density control, focus mode. No bulk actions.</td></tr>
+      <tr><td>8</td><td>Aesthetic &amp; minimalist</td><td class="s s3">3</td><td>Calm, warm, on-brand. First run stacks a modal over an onboarding banner (double).</td></tr>
+      <tr><td>9</td><td>Error recovery</td><td class="s s2">2</td><td>Global/route boundaries are good, but the inline error shows untranslated <code>Failed to fetch</code> with no guidance; inline errors are inconsistent.</td></tr>
+      <tr><td>10</td><td>Help &amp; documentation</td><td class="s s3">3</td><td>First-run "how it works", shortcuts overlay, daily spark. No searchable docs.</td></tr>
+      <tr class="total"><td></td><td>Total</td><td class="s">29/40</td><td class="band">Good — solid foundation, address the weak areas</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2><span class="n">B</span>Live accessibility evidence</h2>
+  <p class="lede">Run in a real Chromium via chrome-devtools. The dashboard scores a11y 100; the component showcase scores 84, surfacing defects in primitives that ship on real screens.</p>
+
+  <div class="grid two">
+    <div class="card">
+      <h3>🎨 Color contrast (WCAG AA) <span class="tag t-p1">P1</span></h3>
+      <p><span class="swatch" style="background:#a3977c"></span><code>--text-faint</code> on <span class="swatch" style="background:#f6f1e6"></span>bg = <span class="ratio bad">2.56:1</span> (light), <span class="ratio warn">4.21:1</span> (dark). Needs 4.5. <b>86 nodes</b> on one page.</p>
+      <p style="margin-top:8px"><span class="swatch" style="background:#fff"></span>white on <span class="swatch" style="background:#e07a4f"></span>danger fill = <span class="ratio bad">2.97:1</span> (dark, destructive buttons).</p>
+      <p class="fix"><b>Fix:</b> darken <code>--text-faint</code> to ≥4.5:1 on both bg and surface, both themes; use a darker on-danger text (or deepen the danger fill). Add a CI contrast gate.</p>
+    </div>
+    <div class="card">
+      <h3>♿ ARIA defects in kit primitives <span class="tag t-p1">P1</span></h3>
+      <ul class="clean">
+        <li><b>ProgressBar</b> — <code>role="progressbar"</code> with no accessible name (3×). Add <code>aria-label</code>/<code>aria-valuetext</code>.</li>
+        <li><b>Tab</b> — <code>role="tab"</code> buttons not wrapped in a <code>role="tablist"</code> parent (3×).</li>
+        <li><b>DiffPane</b> — <code>aria-label</code> on a role-less <code>&lt;span&gt;</code> dot (prohibited, 2×). Use <code>role="img"</code> or visually-hidden text.</li>
+      </ul>
+      <p class="fix"><b>Why it matters:</b> the axe unit-gate runs under jsdom (no layout), so contrast and required-parent slip through. A real-browser Lighthouse gate catches them.</p>
+    </div>
+  </div>
+
+  <h2><span class="n">C</span>Priority backlog</h2>
+  <p class="lede">Ordered by award-impact. Each maps to a phase of the approved program.</p>
+  <div class="grid">
+    <div class="card"><h3><span class="tag t-p1">P1</span> Accessibility: AA contrast + ARIA fixes <span class="phase">Phase 1/2</span></h3>
+      <p>Darken <code>--text-faint</code> and the on-danger text to pass AA in both themes; fix ProgressBar / Tab / DiffPane ARIA. Award juries treat AA as table stakes.</p></div>
+    <div class="card"><h3><span class="tag t-p1">P1</span> Scale tokens: type · spacing · radius <span class="phase">Phase 1</span></h3>
+      <p>Sizes are hardcoded (<code>text-[13px]</code>, <code>rounded-[10px]</code>) across the kit and screens. Codify a scale into <code>globals.css</code> <code>@theme</code> (behavior-preserving first), then refine rhythm. This is the consistency multiplier for every future screen.</p></div>
+    <div class="card"><h3><span class="tag t-p2">P2</span> State-pattern library + localized errors <span class="phase">Phase 1</span></h3>
+      <p>Add <code>SkeletonCard/List/Table</code>, a richer <code>EmptyState</code> (icon + copy + CTA), and an inline <code>ErrorState</code> (retry). Replace the raw <code>Failed to fetch</code> with friendly Hungarian copy. Adopt across codex/timeline/relations/plotlines/jobs.</p></div>
+    <div class="card"><h3><span class="tag t-p2">P2</span> First-run onboarding: one path, not two <span class="phase">Phase 2</span></h3>
+      <p>The "how it works" modal stacks over the inline three-step banner on first load. Pick one (prefer the calm inline banner; demote the modal to an on-demand "?"), so a first-timer is not double-onboarded.</p></div>
+    <div class="card"><h3><span class="tag t-p2">P2</span> Missing kit primitives <span class="phase">Phase 1</span></h3>
+      <p>A real Radix <code>Select/Combobox</code> (replace native <code>&lt;select&gt;</code> in cover + image panels), a <code>loading</code> button state, an <code>Accordion</code>, and input prefix/suffix slots.</p></div>
+    <div class="card"><h3><span class="tag t-p3">P3</span> Motion, density &amp; detail polish <span class="phase">Phase 2</span></h3>
+      <p>Per-screen micro-interactions, density tiers where useful, avoid nested cards (the first-run modal nests step cards), and a final pass on focus rings verified live.</p></div>
+  </div>
+
+  <h2><span class="n">D</span>Persona red flags</h2>
+  <div class="card">
+    <div class="persona"><div class="who">Solo HU author (primary)</div><div class="flags">The raw English <code>Failed to fetch</code> breaks immersion and offers no recovery path; faint metadata text (2.56:1) is hard to read in daylight or for older eyes.</div></div>
+    <div class="persona"><div class="who">First-timer</div><div class="flags">A modal lands on top of the onboarding banner: two explanations of the same first steps at once. Icon-only left rail needs hover to learn.</div></div>
+    <div class="persona"><div class="who">Power user</div><div class="flags">Well served: Cmd+K, slash menu, shortcuts overlay, focus mode. Missing: bulk actions and a real combobox for fast model/style switching.</div></div>
+  </div>
+
+  <h2><span class="n">E</span>What is already working</h2>
+  <ul class="clean good">
+    <li>Distinctive, on-brand identity (warm parchment + gold + Literata serif). Passes the AI-slop test.</li>
+    <li>Complete light <b>and</b> dark token system with a smooth themed transition.</li>
+    <li>Disciplined motion: ease-out only, 120–260ms, reduced-motion safe by construction.</li>
+    <li>44-component kit with CVA variants and an axe unit-test gate; honest empty/error states on the dashboard.</li>
+    <li>11 genuinely polished screens (Write/Tiptap, Plan board, Codex, Timeline, Relations, Plotlines, Research, Jobs, Projects, Settings, Markdown export).</li>
+  </ul>
+
+  <h2><span class="n">F</span>V1 readiness &amp; recommendation</h2>
+  <p class="lede">MVP is 100% complete; much of V1 too, and cover generation (Phase 2) just landed. The remaining V1 gaps are modest and mostly UI completion.</p>
+  <div class="grid two">
+    <div class="card"><h3>Remaining for V1</h3>
+      <ul class="clean">
+        <li>Fill the placeholder screens: <b>Áttekintés</b> + <b>Prompt Library</b> (<code>hangok</code> stays V2).</li>
+        <li><b>PDF export</b> (Markdown/DOCX/EPUB already work).</li>
+        <li><b>CodexProgression</b> editor + timeline overlay (CRUD exists).</li>
+        <li><b>Plotline lane</b> visualization (CRUD/list exist).</li>
+        <li>Ollama <b>in-app model download</b> in Settings.</li>
+        <li><b>E2E unblock</b>: resolve the <code>app</code> Python package-name collision.</li>
+      </ul></div>
+    <div class="rec">
+      <h3>Recommendation</h3>
+      <p class="verdict">Do not jump to V2. Land the accessibility + design-system foundation (Phase 1), apply the per-screen polish (Phase 2), then close the handful of V1 feature gaps (Phase 3). That ships a coherent, AA-clean, award-grade <b>V1</b>. V2 themes (audio domain, collaboration/Auth.js, marketplace) come after.</p>
+    </div>
+  </div>
+
+  <footer>
+    <div>
+      <span class="meta-chip">Lighthouse: kit a11y 84 · dashboard a11y 100 · best-practices 100 · SEO 100</span>
+      <span class="meta-chip">Real-browser contrast sweep: 272 nodes/page</span>
+      <span class="meta-chip">Rubric: impeccable (critique + audit)</span>
+      <span class="meta-chip">Code review: 3 Explore agents</span>
+    </div>
+    <p style="margin-top:14px">Methodology: live Chromium via chrome-devtools MCP (Lighthouse navigation + snapshot, WCAG contrast computed from rendered styles) on the running dev server, plus static code analysis of <code>apps/web</code>. Deterministic detector unavailable (not bundled); browser evidence used instead. Backend was offline, so data-heavy screens were judged from rendered loading/error/empty states and source.</p>
+  </footer>
+</div>
