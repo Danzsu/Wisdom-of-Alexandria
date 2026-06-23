@@ -2,46 +2,57 @@
 
 /* ============================================================================
    Alexandria (Wisdom of Alexandria) design token layer.
-   Source of truth: wisdom-of-alexandria-ui-ux/project/Alexandria App.dc.html
-   <head> plus the canonical token block in
-   docs/superpowers/plans/2026-06-11-alexandria-ui-implementation.md.
+   Source of truth: Alexandria.dc.html ("Claude Design" purple-accent reskin).
    Light palette on :root, dark palette on [data-woa=dark].
    POV token suffix is -tx (NOT -text).
+   Accent flipped gold → purple (#6d5dfc / #9187ff dark).
+   --text-faint AA-derived: light #766d64 (4.70/5.07), dark #978c78 (5.51/5.06/4.55).
+   Accent button fill: --accent-strong (#5b4de0) with white fg = 5.86:1 AA PASS.
    ========================================================================== */
 
 :root {
-  --bg: #f6f1e6;
-  --bg-subtle: #efe7d6;
-  --surface: #fffdf7;
-  --surface-soft: #fbf6ec;
-  --surface-muted: #f1ead9;
-  --border: #ded2b8;
-  --border-strong: #c6b48d;
-  --text: #2d2618;
-  --text-soft: #4c4332;
-  --text-muted: #6e6450;
-  --text-faint: #786a47;
-  --accent: #b8862b;
-  --accent-strong: #8a5f14;
-  --accent-hover: #76510f;
-  --accent-muted: #f3e7c6;
-  --accent-text: #6b4a0a;
-  --accent-fg: #fffdf7;
-  --ai: #1e5fa8;
-  --ai-muted: #e2ecf7;
-  --ai-text: #1a4c86;
+  --bg: #f8f6f2;
+  --bg-subtle: #f3f0ea;
+  --surface: #ffffff;
+  --surface-soft: #fbfaf7;
+  --surface-muted: #f1eee8;
+  --border: #ded8ce;
+  --border-strong: #c9c0b4;
+  --text: #2f2a24;
+  --text-soft: #4c453d;
+  --text-muted: #6f675f;
+  /* AA-derived: closest warm-grey to design's #9b9187 that clears 4.5:1 on
+     both --bg (#f8f6f2) and --surface (#ffffff). Ratios: 4.70 / 5.07. */
+  --text-faint: #766d64;
+  --text-muted-strong: #635c54;
+  --accent: #6d5dfc;
+  --accent-strong: #5b4de0;
+  --accent-hover: #5b4de0;
+  --accent-muted: #ebe9ff;
+  --accent-text: #342a91;
+  --accent-fg: #ffffff;
+  --ring: #6d5dfc;
+  --ai: #7c3aed;
+  --ai-muted: #f0e9ff;
+  --ai-text: #5b21b6;
+  --ai-fg: #ffffff;
   --success: #2f7d55;
-  --success-muted: #e4f1ea;
+  --success-muted: #e6f3ec;
   --success-text: #256544;
   --success-fg: #ffffff;
   --warning: #b7791f;
-  --warning-muted: #fdf2d8;
+  --warning-muted: #fff4da;
   --warning-text: #8a5a13;
   --danger: #c2410c;
-  --danger-muted: #fcefe6;
+  --danger-muted: #fff0e8;
   --danger-text: #9a3412;
   --danger-solid: #c2410c;
   --danger-solid-fg: #fffdf7;
+  --gold: #b8893f;
+  --gold-deep: #8a6a2e;
+  --gold-soft: #f3e7cf;
+  --gold-text: #7a5a26;
+  --gold-line: #e3cfa3;
   --pov1-bg: #fdf0d5;
   --pov1-tx: #8a5a13;
   --pov2-bg: #fbe4e9;
@@ -54,9 +65,11 @@
   --pov5-tx: #4c4a59;
   --pov6-bg: #fdeadf;
   --pov6-tx: #9a3412;
-  --shadow-card: 0 1px 2px rgba(45, 38, 24, 0.06);
-  --shadow-panel: 0 2px 10px rgba(45, 38, 24, 0.08);
-  --shadow-popover: 0 8px 24px rgba(45, 38, 24, 0.14);
+  --shadow-card: 0 1px 2px rgba(47, 42, 36, 0.06);
+  --shadow-hover: 0 6px 22px rgba(47, 42, 36, 0.12);
+  --shadow-panel: 0 2px 10px rgba(47, 42, 36, 0.08);
+  --shadow-popover: 0 12px 34px rgba(47, 42, 36, 0.14);
+  --shadow-modal: 0 24px 60px rgba(47, 42, 36, 0.20);
   --topbar-h: 52px;
   --statusbar-h: 32px;
   --rail-w: 56px;
@@ -71,28 +84,34 @@
 }
 
 [data-woa="dark"] {
-  --bg: #1b1712;
-  --bg-subtle: #15120d;
-  --surface: #252019;
-  --surface-soft: #211c15;
-  --surface-muted: #2e2820;
-  --border: #43392a;
-  --border-strong: #5b4d36;
-  --text: #f0e8d6;
-  --text-soft: #d8cdb4;
-  --text-muted: #b5a98b;
-  --text-faint: #9b8f6e;
-  --accent: #d9a84e;
-  --accent-strong: #d9a84e;
-  --accent-hover: #e6ba66;
-  --accent-muted: #3a2f17;
-  --accent-text: #e9c87e;
-  --accent-fg: #241a06;
-  --ai: #6ea8e8;
-  --ai-muted: #1c2a3d;
-  --ai-text: #9dc3ef;
+  --bg: #17150f;
+  --bg-subtle: #120f0a;
+  --surface: #211d16;
+  --surface-soft: #1b1812;
+  --surface-muted: #2a261e;
+  --border: #3b342a;
+  --border-strong: #534a3c;
+  --text: #f0e8d8;
+  --text-soft: #d6ccba;
+  --text-muted: #b6aa96;
+  /* AA-derived: closest warm-grey to design's #857a68 that clears 4.5:1 on
+     --bg (#17150f), --surface (#211d16), AND --surface-muted (#2a261e).
+     Ratios: 5.51 / 5.06 / 4.55. */
+  --text-faint: #978c78;
+  --text-muted-strong: #c2b6a1;
+  --accent: #9187ff;
+  --accent-strong: #9187ff;
+  --accent-hover: #a39bff;
+  --accent-muted: #282343;
+  --accent-text: #c4bdff;
+  --accent-fg: #0f0d1a;
+  --ring: #9187ff;
+  --ai: #b79bff;
+  --ai-muted: #2a2140;
+  --ai-text: #d2c4ff;
+  --ai-fg: #0f0d1a;
   --success: #5fb286;
-  --success-muted: #15281e;
+  --success-muted: #16291f;
   --success-text: #7ec79e;
   --success-fg: #0d1f15;
   --warning: #d9a441;
@@ -103,6 +122,11 @@
   --danger-text: #f0a07f;
   --danger-solid: #b5431f;
   --danger-solid-fg: #fff7f3;
+  --gold: #d8b06a;
+  --gold-deep: #b8893f;
+  --gold-soft: #2b2113;
+  --gold-text: #e8cd8e;
+  --gold-line: #4a3c24;
   --pov1-bg: #3a2c10;
   --pov1-tx: #e6b860;
   --pov2-bg: #3a1b24;
@@ -115,9 +139,11 @@
   --pov5-tx: #c5c2cf;
   --pov6-bg: #2e1a10;
   --pov6-tx: #f0a07f;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-panel: 0 2px 10px rgba(0, 0, 0, 0.35);
-  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 8px 26px rgba(0, 0, 0, 0.5);
+  --shadow-panel: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --shadow-popover: 0 14px 40px rgba(0, 0, 0, 0.6);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.7);
 }
 
 /* ----------------------------------------------------------------------------
@@ -142,6 +168,7 @@
   --color-text-soft: var(--text-soft);
   --color-text-muted: var(--text-muted);
   --color-text-faint: var(--text-faint);
+  --color-text-muted-strong: var(--text-muted-strong);
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
   --color-accent-hover: var(--accent-hover);
@@ -151,6 +178,7 @@
   --color-ai: var(--ai);
   --color-ai-muted: var(--ai-muted);
   --color-ai-text: var(--ai-text);
+  --color-ai-fg: var(--ai-fg);
   --color-success: var(--success);
   --color-success-muted: var(--success-muted);
   --color-success-text: var(--success-text);
@@ -163,6 +191,11 @@
   --color-danger-text: var(--danger-text);
   --color-danger-solid: var(--danger-solid);
   --color-danger-solid-fg: var(--danger-solid-fg);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-text: var(--gold-text);
+  --color-gold-line: var(--gold-line);
   --color-pov1-bg: var(--pov1-bg);
   --color-pov1-tx: var(--pov1-tx);
   --color-pov2-bg: var(--pov2-bg);
@@ -177,8 +210,10 @@
   --color-pov6-tx: var(--pov6-tx);
 
   --shadow-card: var(--shadow-card);
+  --shadow-hover: var(--shadow-hover);
   --shadow-panel: var(--shadow-panel);
   --shadow-popover: var(--shadow-popover);
+  --shadow-modal: var(--shadow-modal);
 
   --spacing-topbar: var(--topbar-h);
   --spacing-statusbar: var(--statusbar-h);
@@ -191,6 +226,8 @@
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-literata);
+  --font-display: var(--font-display);
+  --font-hand: var(--font-hand);
   --font-mono: var(--font-mono);
 
   /* --------------------------------------------------------------------------

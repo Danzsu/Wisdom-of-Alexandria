@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { literata, sourceSans3 } from "@/lib/fonts";
+import { literata, inter, cormorantGaramond, caveat } from "@/lib/fonts";
 import { hu } from "@/lib/i18n/hu";
 import "./globals.css";
 
@@ -32,7 +32,7 @@ export default function GlobalError({
     <html
       lang="hu"
       data-woa="light"
-      className={`${sourceSans3.variable} ${literata.variable}`}
+      className={`${inter.variable} ${literata.variable} ${cormorantGaramond.variable} ${caveat.variable}`}
     >
       <body
         style={{

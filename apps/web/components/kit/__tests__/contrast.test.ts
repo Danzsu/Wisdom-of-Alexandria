@@ -1,12 +1,18 @@
 /**
- * WCAG-AA contrast regression guard — Task 1 (Design-System Foundation Phase 1).
+ * WCAG-AA contrast regression guard — Design-A reskin (purple accent).
  *
  * These tests are fully deterministic: they embed the exact hex values that were
  * WCAG-verified before being written into globals.css, and assert 4.5:1 minimum
  * contrast (AA level for normal-weight text).
  *
- * Rationale: freezes the fix against accidental future token edits.  No browser
+ * Rationale: freezes the fix against accidental future token edits. No browser
  * or CSS parsing is involved — the numbers are hardcoded by design.
+ *
+ * AA derivations:
+ *   Light --text-faint: #766d64 → 4.70:1 on #f8f6f2 bg, 5.07:1 on #ffffff surface.
+ *   Dark  --text-faint: #978c78 → 5.51:1 on #17150f bg, 5.06:1 on #211d16 surface,
+ *                                  4.55:1 on #2a261e surface-muted.
+ *   Accent button fill: --accent-strong #5b4de0 with --accent-fg #ffffff → 5.86:1.
  */
 
 import { describe, expect, it } from "vitest";
@@ -44,25 +50,38 @@ export function contrastRatio(hexFg: string, hexBg: string): number {
 
 // ---------------------------------------------------------------------------
 // Token fixture — these MUST match the values written into globals.css.
+// Design-A reskin (2026-06-24): gold → purple accent, warm-neutral backgrounds.
 // ---------------------------------------------------------------------------
 
 const LIGHT = {
-  bg: "#f6f1e6",
-  surface: "#fffdf7",
-  textFaint: "#786a47", // was #a3977c (2.56:1) — FAIL; new value passes AA
-  textMuted: "#6e6450", // regression guard
+  bg: "#f8f6f2",
+  surface: "#ffffff",
+  // AA-derived: closest warm-grey to design's #9b9187 (which fails at 2.86:1).
+  // #766d64 → 4.70:1 on bg, 5.07:1 on surface. PASS.
+  textFaint: "#766d64",
+  textMuted: "#6f675f", // regression guard — 5.15:1 on bg
   dangerSolid: "#c2410c",
   dangerSolidFg: "#fffdf7",
+  // Accent button: CTA variant uses bg-accent-strong (#5b4de0) with text-accent-fg (#ffffff).
+  // 5.86:1 — PASS. accent itself (#6d5dfc) is 3.93:1 — would fail; button uses accent-strong.
+  accentButtonFill: "#5b4de0",
+  accentButtonFg: "#ffffff",
 };
 
 const DARK = {
-  bg: "#1b1712",
-  surface: "#252019",
-  surfaceMuted: "#2e2820",
-  textFaint: "#9b8f6e", // was #857a61 (4.21:1) — FAIL; nudged one step from #9a8e6d to clear surface-muted
-  textMuted: "#b5a98b", // regression guard
+  bg: "#17150f",
+  surface: "#211d16",
+  surfaceMuted: "#2a261e",
+  // AA-derived: closest warm-grey to design's #857a68 (which fails at 4.33/3.98/3.57).
+  // #978c78 → 5.51:1 on bg, 5.06:1 on surface, 4.55:1 on surface-muted. PASS.
+  textFaint: "#978c78",
+  textMuted: "#b6aa96", // regression guard — 7.98:1 on bg
   dangerSolid: "#b5431f",
   dangerSolidFg: "#fff7f3",
+  // Dark accent button: bg-accent-strong (#9187ff) with accent-fg (#0f0d1a).
+  // 6.51:1 — PASS.
+  accentButtonFill: "#9187ff",
+  accentButtonFg: "#0f0d1a",
 };
 
 const AA_NORMAL = 4.5;
@@ -91,6 +110,13 @@ describe("WCAG-AA contrast — light theme", () => {
     const ratio = contrastRatio(LIGHT.dangerSolidFg, LIGHT.dangerSolid);
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
   });
+
+  it("accent button: --accent-fg on --accent-strong >= 4.5:1", () => {
+    // CTA button variant uses bg-accent-strong as fill and text-accent-fg as label.
+    // See apps/web/components/kit/button.tsx — cta variant.
+    const ratio = contrastRatio(LIGHT.accentButtonFg, LIGHT.accentButtonFill);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
 });
 
 describe("WCAG-AA contrast — dark theme", () => {
@@ -116,6 +142,12 @@ describe("WCAG-AA contrast — dark theme", () => {
 
   it("--danger-solid-fg on --danger-solid >= 4.5:1", () => {
     const ratio = contrastRatio(DARK.dangerSolidFg, DARK.dangerSolid);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("accent button: --accent-fg on --accent-strong >= 4.5:1", () => {
+    // Dark CTA button: accent-strong=#9187ff fills the button, accent-fg=#0f0d1a is the label.
+    const ratio = contrastRatio(DARK.accentButtonFg, DARK.accentButtonFill);
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 });

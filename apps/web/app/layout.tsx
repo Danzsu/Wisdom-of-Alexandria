@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
-import { literata, sourceSans3 } from "@/lib/fonts";
+import { literata, inter, cormorantGaramond, caveat } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +17,7 @@ export default function RootLayout({
       lang="hu"
       data-woa="light"
       suppressHydrationWarning
-      className={`${sourceSans3.variable} ${literata.variable}`}
+      className={`${inter.variable} ${literata.variable} ${cormorantGaramond.variable} ${caveat.variable}`}
     >
       <body
         style={{

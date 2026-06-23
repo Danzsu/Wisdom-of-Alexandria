@@ -7,7 +7,9 @@ import userEvent from "@testing-library/user-event";
 // renders its CSS-variable-backed inline styles; the CSS import is a no-op here.
 vi.mock("@/lib/fonts", () => ({
   literata: { variable: "--font-literata" },
-  sourceSans3: { variable: "--font-sans" },
+  inter: { variable: "--font-sans" },
+  cormorantGaramond: { variable: "--font-display" },
+  caveat: { variable: "--font-hand" },
 }));
 
 import AppError from "../(app)/error";
