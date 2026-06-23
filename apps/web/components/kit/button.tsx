@@ -17,7 +17,7 @@ const buttonVariants = cva(
         success:
           "border-none bg-success text-success-fg font-semibold hover:brightness-95",
         destructive:
-          "border-none bg-danger text-white font-semibold hover:brightness-95",
+          "border-none bg-danger-solid text-danger-solid-fg font-semibold hover:brightness-95",
         "accent-outline":
           "border border-accent bg-accent-muted text-accent-text font-semibold hover:bg-accent-strong hover:text-accent-fg",
         dashed:
