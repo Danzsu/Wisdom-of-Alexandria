@@ -9,9 +9,12 @@ get filled from a Codex entry (``CodexEntry`` with ``entry_type``, ``title``,
 - validate that the style matches the entry's entry_type.
 """
 
+from types import SimpleNamespace
+
 import pytest
 from alexandria_core.models.codex_entry import CodexEntry
 
+from app.services import image_prompt
 from app.services.image_prompt import available_styles, build_codex_prompt
 
 
@@ -127,10 +130,6 @@ def test_available_styles_location() -> None:
 # ---------------------------------------------------------------------------
 # Task 3: Cover art-style presets + build_cover_prompt
 # ---------------------------------------------------------------------------
-
-from types import SimpleNamespace
-
-from app.services import image_prompt
 
 
 def _book(**kw):

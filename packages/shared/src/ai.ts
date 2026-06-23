@@ -52,6 +52,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/covers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Cover
+         * @description Enqueue a cover-generation job for a Book.
+         *
+         *     Creates a ``generating`` MediaAsset + an IMAGE GenerationJob, hands the job
+         *     id to the worker queue, and returns the asset (202). All validation (art_style,
+         *     layout, book existence, model availability) happens BEFORE anything is created
+         *     and OUTSIDE the try, so a 422 is never re-wrapped into a 502.
+         */
+        post: operations["generate_cover_api_v1_ai_covers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/covers/layouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cover Layouts
+         * @description List the available cover typography layouts.
+         */
+        get: operations["list_cover_layouts_api_v1_ai_covers_layouts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/covers/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cover Styles
+         * @description List the available cover art-style presets.
+         */
+        get: operations["list_cover_styles_api_v1_ai_covers_styles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/describe": {
         parameters: {
             query?: never;
@@ -569,6 +634,33 @@ export interface components {
             message: string;
             /** Severity */
             severity: string;
+        };
+        /** CoverGenerateRequest */
+        CoverGenerateRequest: {
+            /** Art Style */
+            art_style: string;
+            /** Author */
+            author?: string | null;
+            /**
+             * Book Id
+             * Format: uuid
+             */
+            book_id: string;
+            /** Layout */
+            layout: string;
+            /** Model */
+            model?: string | null;
+            /** Subtitle */
+            subtitle?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /** CoverLayoutInfo */
+        CoverLayoutInfo: {
+            /** Label */
+            label: string;
+            /** Slug */
+            slug: string;
         };
         /** DescribeRequest */
         DescribeRequest: {
@@ -1109,6 +1201,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_cover_api_v1_ai_covers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cover_layouts_api_v1_ai_covers_layouts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverLayoutInfo"][];
+                };
+            };
+        };
+    };
+    list_cover_styles_api_v1_ai_covers_styles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStyleInfo"][];
                 };
             };
         };
