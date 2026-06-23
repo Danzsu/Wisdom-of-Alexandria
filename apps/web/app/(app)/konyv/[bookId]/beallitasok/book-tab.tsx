@@ -14,6 +14,7 @@ import { useParams } from "next/navigation";
 import { useResolvedBook } from "@/lib/api/export-hooks";
 import { useUpdateBook } from "@/lib/api/hooks";
 import { Button, FieldLabel, FormInput, toast } from "@/components/kit";
+import { CoverPanel } from "@/components/book/cover-panel";
 import { hu } from "@/lib/i18n/hu";
 
 export function BookTab() {
@@ -122,6 +123,16 @@ export function BookTab() {
           </Button>
         </div>
       </form>
+
+      <hr className="my-8 border-border" />
+
+      {bookQuery.data ? (
+        <CoverPanel
+          bookId={bookQuery.data.id}
+          bookTitle={bookQuery.data.title}
+          bookAuthor={bookQuery.data.author ?? null}
+        />
+      ) : null}
     </>
   );
 }

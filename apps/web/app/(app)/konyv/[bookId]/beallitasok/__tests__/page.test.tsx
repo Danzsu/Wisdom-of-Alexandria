@@ -36,6 +36,8 @@ describe("Book settings page", () => {
 
   it("renders the author field on the Könyv tab (default)", async () => {
     renderSettings();
+    // The metadata "Szerző" is distinct from the cover panel's "Szerző a
+    // borítón", so the label is unambiguous.
     expect(
       await screen.findByLabelText(hu.books.authorLabel),
     ).toBeInTheDocument();
@@ -55,13 +57,21 @@ describe("Book settings page", () => {
       ),
     );
     renderSettings();
-    const author = await screen.findByLabelText(hu.books.authorLabel);
-    await user.clear(author);
-    await user.type(author, "Rácz Dániel");
+    const metadataAuthorField = await screen.findByLabelText(
+      hu.books.authorLabel,
+    );
+    await user.clear(metadataAuthorField);
+    await user.type(metadataAuthorField, "Rácz Dániel");
     await user.click(screen.getByRole("button", { name: hu.books.save }));
     await waitFor(() =>
       expect(patched.at(-1)).toMatchObject({ author: "Rácz Dániel" }),
     );
+  });
+
+  it("shows the cover generator section on the Könyv tab (default)", async () => {
+    renderSettings();
+    expect(await screen.findByText(hu.covers.title)).toBeInTheDocument();
+    expect(await screen.findByLabelText(hu.covers.artStyleLabel)).toBeInTheDocument();
   });
 
   it("switching to AI / Szolgáltatók tab renders the provider hub", async () => {

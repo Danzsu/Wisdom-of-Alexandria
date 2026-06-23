@@ -1611,8 +1611,10 @@ export const hu = {
     title: "Borító",
     artStyleLabel: "Stílus",
     layoutLabel: "Elrendezés",
-    titleLabel: "Cím",
-    authorLabel: "Szerző",
+    // Cover-specific labels (distinct from the book metadata "Cím"/"Szerző" on
+    // the same tab) — these are the text rendered ONTO the cover image.
+    titleLabel: "Cím a borítón",
+    authorLabel: "Szerző a borítón",
     subtitleLabel: "Alcím (opcionális)",
     generate: "Borító generálása",
     generating: "Generálás…",
