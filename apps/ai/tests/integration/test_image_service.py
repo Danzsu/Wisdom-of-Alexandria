@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from alexandria_core.core.config import settings
+from alexandria_core.models.book import Book
 from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.project import Project
@@ -64,6 +65,19 @@ async def _make_character(db, project_id: uuid.UUID, name: str = "Aragorn") -> C
     await db.flush()
     await db.commit()
     return entry
+
+
+async def _make_book(
+    db,
+    project_id: uuid.UUID,
+    title: str = "A Fárosz árnyéka",
+    author: str = "Rácz Dániel",
+) -> uuid.UUID:
+    book = Book(project_id=project_id, title=title, author=author)
+    db.add(book)
+    await db.flush()
+    await db.commit()
+    return book.id
 
 
 @pytest.fixture(autouse=True)
@@ -353,3 +367,60 @@ async def test_generation_failure_raises_and_leaves_no_partial(
     for root, _dirs, files in os.walk(str(_tmp_media_dir)):
         leftover.extend(files)
     assert leftover == []
+
+
+# ── generate_cover_for_book ───────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+async def test_generate_cover_for_book_persists_cover_asset(
+    db_session, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
+
+    project_id = await _make_project(db_session)
+    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
+
+    async def fake_generate_image(
+        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
+    ):
+        buf = io.BytesIO()
+        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
+        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
+
+    svc = ImageService()
+    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
+
+    asset = await svc.generate_cover_for_book(
+        db_session,
+        project_id=project_id,
+        book_id=book_id,
+        art_style="cover_fantasy",
+        layout="classic_centered",
+        title="Fárosz",
+        author="Rácz D.",
+        subtitle=None,
+        model="gemini/x",
+    )
+    assert asset.entity_type == "cover"
+    assert asset.entity_id == book_id
+    assert asset.status == "ready"
+    assert asset.style == "cover_fantasy"
+    assert asset.width == 1600 and asset.height == 2560
+
+
+@pytest.mark.integration
+async def test_generate_cover_for_book_missing_book_raises(db_session):
+    svc = ImageService()
+    with pytest.raises(ValueError):
+        await svc.generate_cover_for_book(
+            db_session,
+            project_id=uuid.uuid4(),
+            book_id=uuid.uuid4(),
+            art_style="cover_fantasy",
+            layout="classic_centered",
+            title="t",
+            author="a",
+            subtitle=None,
+            model="m",
+        )

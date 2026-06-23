@@ -27,7 +27,10 @@ from app.services.image_service import ImageService, image_service
 logger = logging.getLogger(__name__)
 
 # Required keys in ``GenerationJob.input_data`` for an image job.
-_REQUIRED_INPUT = ("entity_type", "entity_id", "style", "model")
+# Covers need art_style + layout instead of style.
+_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model")
+_REQUIRED_COVER: tuple[str, ...] = ("art_style", "layout")
+_REQUIRED_CODEX: tuple[str, ...] = ("style",)
 
 
 def run_image_job(job_id: str) -> None:
@@ -61,7 +64,9 @@ async def _run_image_job(
             return
 
         params = job.input_data or {}
-        missing = [k for k in _REQUIRED_INPUT if not params.get(k)]
+        is_cover = params.get("entity_type") == "cover"
+        required = _REQUIRED_COMMON + (_REQUIRED_COVER if is_cover else _REQUIRED_CODEX)
+        missing = [k for k in required if not params.get(k)]
         if missing:
             # Defensive: the producer is expected to populate input_data; record
             # the contract violation as a clean failure instead of crashing.
@@ -77,15 +82,29 @@ async def _run_image_job(
         await db.commit()
 
         try:
-            asset = await images.generate_for_entity(
-                db,
-                project_id=job.project_id,
-                entity_type=params["entity_type"],
-                entity_id=uuid.UUID(str(params["entity_id"])),
-                style=params["style"],
-                model=params["model"],
-                job_id=job.id,
-            )
+            if is_cover:
+                asset = await images.generate_cover_for_book(
+                    db,
+                    project_id=job.project_id,
+                    book_id=uuid.UUID(str(params["entity_id"])),
+                    art_style=params["art_style"],
+                    layout=params["layout"],
+                    title=params.get("title") or "",
+                    author=params.get("author") or "",
+                    subtitle=params.get("subtitle"),
+                    model=params["model"],
+                    job_id=job.id,
+                )
+            else:
+                asset = await images.generate_for_entity(
+                    db,
+                    project_id=job.project_id,
+                    entity_type=params["entity_type"],
+                    entity_id=uuid.UUID(str(params["entity_id"])),
+                    style=params["style"],
+                    model=params["model"],
+                    job_id=job.id,
+                )
             job.output_data = {"media_asset_id": str(asset.id)}
             job.status = JobStatus.DONE
             await db.commit()

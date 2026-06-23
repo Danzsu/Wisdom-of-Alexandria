@@ -19,12 +19,13 @@ from __future__ import annotations
 import logging
 import uuid
 
+from alexandria_core.models.book import Book
 from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.media_asset import MediaAsset
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services import image_prompt
+from app.services import cover_compositor, image_prompt
 from app.services.image_storage import (
     SavedImage,
     delete_image_files,
@@ -109,6 +110,70 @@ class ImageService:
             height=saved.height,
             model_name=result.model,
             style=style,
+            prompt=prompt,
+            job_id=job_id,
+            is_canonical=False,
+        )
+        db.add(asset)
+        await db.commit()
+        await db.refresh(asset)
+        return asset
+
+    async def generate_cover_for_book(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: uuid.UUID,
+        book_id: uuid.UUID,
+        art_style: str,
+        layout: str,
+        title: str,
+        author: str,
+        subtitle: str | None,
+        model: str,
+        job_id: uuid.UUID | None = None,
+    ) -> MediaAsset:
+        """Generate a book cover: art (text-free) → composite typography → READY
+        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Loud on failure
+        (cleans up a partial file, re-raises). Raises ``ValueError`` if the book
+        is missing."""
+        book = await db.get(Book, book_id)
+        if book is None or book.project_id != project_id:
+            raise ValueError(f"book {book_id} not found for cover generation")
+
+        prompt = image_prompt.build_cover_prompt(book, art_style)
+        asset_id = uuid.uuid4()
+        saved: SavedImage | None = None
+        try:
+            result = await self.router.generate_image(
+                prompt, model=model, db=db, aspect_ratio="2:3"
+            )
+            composed = cover_compositor.compose_cover(
+                result.data, layout=layout, title=title, author=author, subtitle=subtitle
+            )
+            from alexandria_core.core.config import settings
+
+            saved = save_image(
+                settings.media_dir, project_id, asset_id, composed, "image/png"
+            )
+        except Exception:
+            if saved is not None:
+                delete_image_files(saved.file_path, saved.thumb_path)
+            raise
+
+        asset = MediaAsset(
+            id=asset_id,
+            project_id=project_id,
+            entity_type="cover",
+            entity_id=book_id,
+            status="ready",
+            file_path=saved.file_path,
+            thumb_path=saved.thumb_path,
+            mime="image/png",
+            width=saved.width,
+            height=saved.height,
+            model_name=result.model,
+            style=art_style,
             prompt=prompt,
             job_id=job_id,
             is_canonical=False,

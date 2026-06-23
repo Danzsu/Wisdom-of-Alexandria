@@ -10,9 +10,11 @@ plus the dotted-path producer/consumer contract.
 import importlib
 import uuid
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from alexandria_core.models.book import Book
 from alexandria_core.models.character import Character
 from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
 from alexandria_core.models.media_asset import MediaAsset
@@ -57,6 +59,23 @@ async def _make_character(db: AsyncSession, project_id: uuid.UUID) -> Character:
     await db.commit()
     await db.refresh(c)
     return c
+
+
+async def _make_book(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    title: str = "A Fárosz árnyéka",
+    author: str = "Rácz Dániel",
+) -> uuid.UUID:
+    b = Book(project_id=project_id, title=title, author=author)
+    db.add(b)
+    await db.commit()
+    await db.refresh(b)
+    return b.id
+
+
+# Alias for clarity in cover-branch tests (same shim as _session_factory).
+_single_session_factory = _session_factory
 
 
 async def _make_image_job(
@@ -216,3 +235,50 @@ def test_image_job_dotted_path_resolves():
     module_path, _, attr = IMAGE_JOB_PATH.rpartition(".")
     mod = importlib.import_module(module_path)
     assert getattr(mod, attr) is run_image_job
+
+
+# ── cover branch ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+async def test_image_job_cover_branch(db_session, monkeypatch):
+    project_id = await _make_project(db_session)
+    book_id = await _make_book(db_session, project_id)
+
+    job = GenerationJob(
+        job_type=JobType.IMAGE,
+        project_id=project_id,
+        status=JobStatus.PENDING,
+        model_name="gemini/x",
+        input_data={
+            "entity_type": "cover",
+            "entity_id": str(book_id),
+            "art_style": "cover_fantasy",
+            "layout": "classic_centered",
+            "title": "Fárosz",
+            "author": "Rácz D.",
+            "subtitle": None,
+            "model": "gemini/x",
+        },
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    calls = {}
+
+    async def fake_cover(db, **kw):
+        calls.update(kw)
+        return SimpleNamespace(id=uuid.uuid4())
+
+    images = ImageService()
+    monkeypatch.setattr(images, "generate_cover_for_book", fake_cover)
+
+    await _run_image_job(
+        job.id,
+        session_factory=_single_session_factory(db_session),
+        images=images,
+    )
+    refreshed = await db_session.get(GenerationJob, job.id)
+    assert refreshed.status == JobStatus.DONE
+    assert calls["art_style"] == "cover_fantasy" and calls["layout"] == "classic_centered"
