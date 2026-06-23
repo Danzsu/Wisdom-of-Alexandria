@@ -158,3 +158,21 @@ export {
   type DiffDeletionSegment,
   type DiffAdditionSegment,
 } from "./diff-pane";
+
+/* ---------------------------------------------------------------------------
+ * Milestone 1c — State-pattern library (skeleton patterns, empty, error).
+ * ------------------------------------------------------------------------- */
+export {
+  SkeletonCard,
+  SkeletonList,
+  SkeletonTable,
+  type SkeletonCardProps,
+  type SkeletonListProps,
+  type SkeletonTableProps,
+} from "./skeleton-patterns";
+export {
+  EmptyState,
+  type EmptyStateProps,
+  type EmptyStateActionObject,
+} from "./empty-state";
+export { ErrorState, type ErrorStateProps } from "./error-state";

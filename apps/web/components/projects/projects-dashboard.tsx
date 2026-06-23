@@ -33,6 +33,7 @@ import {
   Skeleton,
   toast,
 } from "@/components/kit";
+import { ErrorState } from "@/components/kit/error-state";
 import { BrandStar } from "@/components/kit/brand-star";
 import {
   useExportBackup,
@@ -558,8 +559,9 @@ function AllProjectsSection({
       </div>
 
       {query.isError ? (
-        <ErrorCard
-          message={query.error.message}
+        <ErrorState
+          message={hu.projects.loadError}
+          detail={query.error.message}
           onRetry={() => void query.refetch()}
         />
       ) : query.isLoading ? (
@@ -824,25 +826,3 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-function ErrorCard({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div
-      role="alert"
-      className="flex flex-col items-start gap-3 rounded-[14px] border border-danger border-l-[3px] bg-surface px-5 py-4"
-    >
-      <p className="m-0 text-[14px] font-semibold text-danger-text">
-        {hu.projects.errorTitle}
-      </p>
-      <p className="m-0 text-[13px] text-text-muted">{message}</p>
-      <Button variant="secondary" size={32} onClick={onRetry}>
-        {hu.projects.errorRetry}
-      </Button>
-    </div>
-  );
-}

@@ -1469,6 +1469,8 @@ export const hu = {
     emptyHint: "Hozd létre az első könyvedet, és kezdődhet az írás.",
     emptyCta: "Új könyv",
     errorTitle: "Nem sikerült betölteni a projekteket",
+    /** Alias used by the ErrorState adoption on the dashboard. */
+    loadError: "Nem sikerült betölteni a projekteket",
     errorRetry: "Újrapróbálkozás",
     importToast: "A kézirat importálása hamarosan érkezik",
     cleanWriteToast: "A tiszta írás mód hamarosan érkezik",
@@ -1635,6 +1637,15 @@ export const hu = {
     canonicalToast: "A borító beállítva.",
     generateError: "A borító generálása nem sikerült.",
     heroAlt: (title: string) => `${title} borítója`,
+  },
+  /**
+   * Cross-cutting microcopy shared by multiple components and screens.
+   * Keep entries minimal — prefer domain-specific sections when a string
+   * belongs exclusively to one feature.
+   */
+  common: {
+    /** Retry button label used by ErrorState and other inline error panels. */
+    retry: "Újrapróbálkozás",
   },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
