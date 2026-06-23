@@ -8,6 +8,8 @@ import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
 import {
   AI_GENERATED_TEXT,
   CHAPTERS_FIXTURE,
+  COVER_LAYOUTS_FIXTURE,
+  COVER_STYLES_FIXTURE,
   FAROSZ_BOOK,
   FAROSZ_CODEX,
   FAROSZ_PROJECT,
@@ -1790,6 +1792,22 @@ export const handlers = [
       status: 200,
       headers: { "Content-Type": "image/png" },
     });
+  }),
+
+  /* ---- Cover generation (Phase 2 — styles / layouts / POST). On the AI service
+   * base (`aiBase`). Stateful via the shared `imageStore` (entity_type="cover").
+   * ---- */
+  http.get(`${aiBase}/ai/covers/styles`, () => HttpResponse.json(COVER_STYLES_FIXTURE)),
+
+  http.get(`${aiBase}/ai/covers/layouts`, () => HttpResponse.json(COVER_LAYOUTS_FIXTURE)),
+
+  http.post(`${aiBase}/ai/covers`, async ({ request }) => {
+    const b = (await request.json()) as { art_style: string };
+    const asset = makeMediaAsset("generating", {
+      entity_type: "cover", entity_id: "book-1", style: b.art_style,
+    });
+    imageStore.add(asset);
+    return HttpResponse.json(asset, { status: 202 });
   }),
 
   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the

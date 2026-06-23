@@ -31,6 +31,7 @@ import type {
   SnippetRead,
 } from "@/lib/api/ai-types";
 import type {
+  CoverLayoutInfo,
   ImageStyleInfo,
   MediaAssetRead,
 } from "@/lib/api/image-types";
@@ -845,6 +846,20 @@ export const IMAGE_STYLES_FIXTURE: ImageStyleInfo[] = [
     label: "Festői portré",
     entity_type: "character",
   },
+];
+
+/** Cover art-style presets (mirrors GET /ai/covers/styles). */
+export const COVER_STYLES_FIXTURE: ImageStyleInfo[] = [
+  { slug: "cover_literary", label: "Irodalmi", entity_type: "cover" },
+  { slug: "cover_fantasy", label: "Fantasy", entity_type: "cover" },
+  { slug: "cover_minimal", label: "Minimalista", entity_type: "cover" },
+];
+
+/** Cover typography layouts (mirrors GET /ai/covers/layouts). */
+export const COVER_LAYOUTS_FIXTURE: CoverLayoutInfo[] = [
+  { slug: "classic_centered", label: "Klasszikus" },
+  { slug: "bottom_scrim", label: "Alsó sáv" },
+  { slug: "top_minimal", label: "Felül" },
 ];
 
 /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */

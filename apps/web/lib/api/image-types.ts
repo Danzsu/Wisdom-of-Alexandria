@@ -53,6 +53,15 @@ export const imageStyleInfoSchema = z.object({
 export type ImageStyleInfo = z.infer<typeof imageStyleInfoSchema>;
 
 /* ---------------------------------------------------------------------------
+ * CoverLayoutInfo — mirrors cover.py (CoverLayoutInfo). A selectable typography
+ * layout for cover generation. No backend OpenAPI contract tie yet (Phase 2 AI
+ * OpenAPI is regenerated in Task 6/T10); the shape is pinned here and mirrored
+ * to the MSW fixtures.
+ * ------------------------------------------------------------------------- */
+export const coverLayoutInfoSchema = z.object({ slug: z.string(), label: z.string() });
+export type CoverLayoutInfo = z.infer<typeof coverLayoutInfoSchema>;
+
+/* ---------------------------------------------------------------------------
  * FE↔BE contract ties. Each schema's inferred shape is bound to the
  * OpenAPI-generated backend type from `@alexandria/shared` (these come from the
  * `apps/ai` OpenAPI). A field add/remove/rename — or an incompatible type drift
