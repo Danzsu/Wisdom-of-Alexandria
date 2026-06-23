@@ -53,12 +53,18 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
     { className, variant, size, treatment, "aria-label": ariaLabel, ...props },
     ref,
   ) {
+    // When a label is provided the span must have role="img" so the aria-label
+    // is valid (aria-label on a role-less span is a prohibited attribute).
+    // When no label is given the dot is purely decorative and is hidden from AT.
+    const a11y = ariaLabel
+      ? ({ role: "img" as const, "aria-label": ariaLabel })
+      : ({ "aria-hidden": true });
+
     if (treatment === "timeline") {
       return (
         <span
           ref={ref}
-          aria-label={ariaLabel}
-          aria-hidden={ariaLabel ? undefined : true}
+          {...a11y}
           className={cn(
             "inline-block h-4 w-4 flex-none rounded-full border-[3px] border-bg bg-accent shadow-[0_0_0_1px_var(--border)]",
             className,
@@ -71,8 +77,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
       return (
         <span
           ref={ref}
-          aria-label={ariaLabel}
-          aria-hidden={ariaLabel ? undefined : true}
+          {...a11y}
           className={cn(
             "inline-block h-4 w-4 flex-none rounded-full border-2 border-dashed border-border-strong bg-surface",
             className,
@@ -85,8 +90,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
       return (
         <span
           ref={ref}
-          aria-label={ariaLabel}
-          aria-hidden={ariaLabel ? undefined : true}
+          {...a11y}
           className={cn(
             statusDotVariants({ variant }),
             "h-[9px] w-[9px] border-[1.5px] border-surface",
@@ -99,8 +103,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
     return (
       <span
         ref={ref}
-        aria-label={ariaLabel}
-        aria-hidden={ariaLabel ? undefined : true}
+        {...a11y}
         className={cn(statusDotVariants({ variant, size }), className)}
         {...props}
       />

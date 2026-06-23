@@ -108,6 +108,31 @@ describe("apiFetch", () => {
   });
 });
 
+describe("apiFetch — transport errors (T5)", () => {
+  it("surfaces a localized message (not the raw browser string) on fetch failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
+      new TypeError("Failed to fetch"),
+    );
+    await expect(apiFetch("/projects")).rejects.toMatchObject({
+      status: 0,
+      message: "Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot.",
+    });
+  });
+
+  it("re-throws an AbortError without converting it to an ApiError", async () => {
+    const abortError = new DOMException("The user aborted a request.", "AbortError");
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(abortError);
+    let thrown: unknown;
+    try {
+      await apiFetch("/projects");
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DOMException);
+    expect(thrown).not.toBeInstanceOf(ApiError);
+  });
+});
+
 describe("getAuthToken — localStorage fallback (A10.2)", () => {
   it("warns (without logging the token) and falls back when localStorage throws", () => {
     // Force a localStorage failure (private mode / disabled storage). Spying on

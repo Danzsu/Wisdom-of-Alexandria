@@ -365,7 +365,7 @@ export default function KitchenSinkPage() {
           </TabBar>
         </div>
         <Specimen label="vertical (inspector)">
-          <div className="flex w-48 gap-2 rounded-lg border border-border p-1">
+          <TabBar aria-label="Inspektor panel" className="w-48 gap-2 rounded-lg border border-border p-1">
             <Tab orientation="vertical" active icon={<Icon icon={Wand2} />}>
               AI
             </Tab>
@@ -375,7 +375,7 @@ export default function KitchenSinkPage() {
             <Tab orientation="vertical" icon={<Icon icon={User} />}>
               Jegyzet
             </Tab>
-          </div>
+          </TabBar>
         </Specimen>
       </Section>
 

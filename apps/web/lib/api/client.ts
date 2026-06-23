@@ -170,13 +170,19 @@ export async function apiFetch<T>(
       signal,
     });
   } catch (cause) {
-    // Network / transport failure (CORS, server down, aborted). Surface it as a
-    // typed error rather than letting an opaque TypeError bubble up.
-    const message =
-      cause instanceof Error
-        ? cause.message
-        : "Nem sikerült elérni a szervert.";
-    throw new ApiError(0, message, cause);
+    // An intentional abort (e.g. React Query cancellation) must propagate as-is —
+    // do NOT convert it to an ApiError; callers check for AbortError explicitly.
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    // Network / transport failure (CORS, server down, DNS failure). The browser's
+    // raw "Failed to fetch" is dev jargon — never show it to the user. Surface a
+    // fixed localized message; keep the original cause as the body for debugging.
+    throw new ApiError(
+      0,
+      "Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot.",
+      cause,
+    );
   }
 
   const parsed = await parseJson(res);

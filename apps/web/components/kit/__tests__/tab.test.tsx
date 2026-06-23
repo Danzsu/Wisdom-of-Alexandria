@@ -97,3 +97,57 @@ describe("Tab", () => {
     );
   });
 });
+
+/** Walk the DOM and assert every role="tab" element has a role="tablist" ancestor. */
+function assertTabsHaveTablistAncestor(container: HTMLElement): void {
+    const tabs = container.querySelectorAll('[role="tab"]');
+    for (const tab of tabs) {
+      let ancestor: Element | null = tab.parentElement;
+      let found = false;
+      while (ancestor) {
+        if (ancestor.getAttribute("role") === "tablist") {
+          found = true;
+          break;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      expect(
+        found,
+        `role="tab" element ("${tab.textContent?.trim()}") has no role="tablist" ancestor`,
+      ).toBe(true);
+    }
+}
+
+describe("Tab — tablist parent requirement (T4)", () => {
+  it("bare Tab elements outside a TabBar violate the tablist requirement", () => {
+    // Confirm the structural rule: a role="tab" MUST have a role="tablist" ancestor.
+    // This test documents the broken pattern — the fix is to wrap in a TabBar.
+    const { container } = render(
+      <div>
+        <Tab active>AI</Tab>
+        <Tab>Codex</Tab>
+      </div>,
+    );
+    const tabs = container.querySelectorAll('[role="tab"]');
+    const hasMissingParent = Array.from(tabs).some((tab) => {
+      let ancestor: Element | null = tab.parentElement;
+      while (ancestor) {
+        if (ancestor.getAttribute("role") === "tablist") return false;
+        ancestor = ancestor.parentElement;
+      }
+      return true;
+    });
+    expect(hasMissingParent).toBe(true);
+  });
+
+  it("all role=tab elements have a role=tablist ancestor when wrapped in TabBar", () => {
+    const { container } = render(
+      <TabBar aria-label="Inspektor">
+        <Tab active>AI</Tab>
+        <Tab>Codex</Tab>
+        <Tab>Jegyzet</Tab>
+      </TabBar>,
+    );
+    assertTabsHaveTablistAncestor(container);
+  });
+});

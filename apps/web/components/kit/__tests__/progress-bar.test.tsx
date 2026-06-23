@@ -1,6 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { axe } from "vitest-axe";
 import { ProgressBar } from "@/components/kit/progress-bar";
+
+describe("ProgressBar — accessibility (T2)", () => {
+  it("exposes an accessible name from aria-label and sets valuetext", () => {
+    render(<ProgressBar value={30} aria-label="Feltöltés" />);
+    const bar = screen.getByRole("progressbar", { name: "Feltöltés" });
+    expect(bar).toHaveAttribute("aria-valuetext", "30%");
+  });
+
+  it("has a default accessible name when none is given", () => {
+    render(<ProgressBar value={10} />);
+    expect(screen.getByRole("progressbar")).toHaveAccessibleName();
+  });
+
+  it("does not set valuetext when indeterminate", () => {
+    render(<ProgressBar indeterminate aria-label="Betöltés" />);
+    const bar = screen.getByRole("progressbar", { name: "Betöltés" });
+    expect(bar).not.toHaveAttribute("aria-valuetext");
+  });
+
+  it("is axe-clean with an explicit aria-label", async () => {
+    const { container } = render(<ProgressBar value={50} aria-label="X" />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
 
 describe("ProgressBar", () => {
   it("renders a determinate fill at the given width and exposes aria values", () => {

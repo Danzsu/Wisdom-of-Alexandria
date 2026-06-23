@@ -1,6 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { StatusDot } from "@/components/kit/status-dot";
+
+describe("StatusDot — accessibility (T3)", () => {
+  it("a labelled dot has role=img so the label is valid", () => {
+    render(<StatusDot variant="danger" aria-label="Eredeti" />);
+    expect(screen.getByRole("img", { name: "Eredeti" })).toBeInTheDocument();
+  });
+
+  it("an unlabelled dot is hidden from AT via aria-hidden", () => {
+    const { container } = render(<StatusDot variant="success" />);
+    expect(container.querySelector("span")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("a labelled timeline treatment has role=img", () => {
+    render(<StatusDot treatment="timeline" aria-label="Idővonal csomópont" />);
+    expect(screen.getByRole("img", { name: "Idővonal csomópont" })).toBeInTheDocument();
+  });
+
+  it("an unlabelled timeline treatment is aria-hidden", () => {
+    const { container } = render(<StatusDot treatment="timeline" />);
+    expect(container.querySelector("span")).toHaveAttribute("aria-hidden", "true");
+  });
+});
 
 describe("StatusDot", () => {
   it("applies the colour variant class", () => {

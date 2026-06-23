@@ -42,6 +42,7 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
       indeterminate = false,
       value = 0,
       showLabel = false,
+      "aria-label": ariaLabel,
       ...domProps
     },
     ref,
@@ -52,9 +53,11 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
         <div
           ref={ref}
           role="progressbar"
+          aria-label={ariaLabel ?? "Folyamatjelző"}
           aria-valuemin={indeterminate ? undefined : 0}
           aria-valuemax={indeterminate ? undefined : 100}
           aria-valuenow={indeterminate ? undefined : Math.round(pct)}
+          aria-valuetext={indeterminate ? undefined : `${Math.round(pct)}%`}
           className={cn(
             "h-[5px] flex-1 overflow-hidden rounded-full bg-accent-muted",
             className,
