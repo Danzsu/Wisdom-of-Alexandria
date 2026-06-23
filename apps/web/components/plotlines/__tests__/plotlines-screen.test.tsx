@@ -70,15 +70,20 @@ describe("PlotlinesScreen", () => {
         <PlotlinesScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
+    // EmptyState renders title as an h2.
     await waitFor(() =>
-      expect(screen.getByText(hu.plotlines.emptyTitle)).toBeInTheDocument(),
+      expect(
+        screen.getByRole("heading", { name: hu.plotlines.emptyTitle }),
+      ).toBeInTheDocument(),
     );
+    // CTA wired via EmptyState action → opens PlotlineModal.
     expect(
       screen.getByRole("button", { name: hu.plotlines.emptyCta }),
     ).toBeInTheDocument();
   });
 
-  it("surfaces an error state with retry when the plotlines query fails", async () => {
+  it("surfaces an error state with retry when the plotlines query fails and clicking retry refetches and recovers", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${base}/projects/:projectId/plotlines`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
@@ -89,12 +94,26 @@ describe("PlotlinesScreen", () => {
         <PlotlinesScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
+    // ErrorState uses role="alert".
     await waitFor(() =>
-      expect(screen.getByText(hu.plotlines.error)).toBeInTheDocument(),
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
     );
-    expect(
-      screen.getByRole("button", { name: hu.plotlines.retry }),
-    ).toBeInTheDocument();
+    expect(screen.getByText(hu.plotlines.error)).toBeInTheDocument();
+    // Retry button comes from ErrorState (uses hu.common.retry).
+    const retryButton = screen.getByRole("button", { name: hu.common.retry });
+    expect(retryButton).toBeInTheDocument();
+
+    // Mutation-proof: restore the default handler so the refetch succeeds.
+    // If onRetry is a no-op the refetch never fires, the alert persists and
+    // the plotline cards never appear — failing the assertions below.
+    server.resetHandlers();
+    await user.click(retryButton);
+
+    // After retry the screen recovers: alert disappears and plotline data loads.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("A Fárosz fénye")).toBeInTheDocument();
   });
 
   it("renders an attached scene chip that deep-links to the scene's Write view", async () => {

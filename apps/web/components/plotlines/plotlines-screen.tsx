@@ -18,8 +18,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
-import { Spinner } from "@/components/kit/spinner";
-import { Button } from "@/components/kit";
+import { Button, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
 import { usePlotlines, useBookTree } from "@/lib/api/hooks";
 import { PLOTLINE_TYPES, type PlotlineRead } from "@/lib/api/types";
@@ -112,34 +111,26 @@ export function PlotlinesScreen({ bookId }: Readonly<PlotlinesScreenProps>) {
   const isError = projectIdQuery.isError || plotlinesQuery.isError;
 
   if (isError) {
-    const message = (projectIdQuery.error ?? plotlinesQuery.error)?.message;
+    const detail = (projectIdQuery.error ?? plotlinesQuery.error)?.message;
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="m-0 text-[14px] font-semibold text-danger-text">
-          {hu.plotlines.error}
-        </p>
-        {message ? (
-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
-        ) : null}
-        <Button
-          variant="secondary"
-          size={32}
-          onClick={() => {
+      <div className="flex flex-1 items-center justify-center px-6">
+        <ErrorState
+          message={hu.plotlines.error}
+          detail={detail}
+          onRetry={() => {
             void plotlinesQuery.refetch();
             if (projectIdQuery.isError) void projectIdQuery.refetch();
           }}
-        >
-          {hu.plotlines.retry}
-        </Button>
+          className="w-full max-w-md"
+        />
       </div>
     );
   }
 
   if (isLoading || !projectId) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
-        <Spinner size={14} />
-        {hu.plotlines.loading}
+      <div className="flex flex-1 flex-col px-6 py-8">
+        <SkeletonList rows={4} className="mx-auto w-full max-w-3xl" />
       </div>
     );
   }
@@ -148,20 +139,16 @@ export function PlotlinesScreen({ bookId }: Readonly<PlotlinesScreenProps>) {
   if (plotlines.length === 0) {
     return (
       <>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-            <BrandStar size={26} />
-          </span>
-          <p className="m-0 text-[15px] font-semibold text-text">
-            {hu.plotlines.emptyTitle}
-          </p>
-          <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
-            {hu.plotlines.emptyHint}
-          </p>
-          <Button variant="cta" onClick={openCreate}>
-            <Plus size={15} aria-hidden />
-            {hu.plotlines.emptyCta}
-          </Button>
+        <div className="flex flex-1 items-center justify-center px-6">
+          <EmptyState
+            icon={<BrandStar size={26} />}
+            title={hu.plotlines.emptyTitle}
+            description={hu.plotlines.emptyHint}
+            action={{
+              label: hu.plotlines.emptyCta,
+              onClick: openCreate,
+            }}
+          />
         </div>
         <PlotlineModal
           open={modalOpen}

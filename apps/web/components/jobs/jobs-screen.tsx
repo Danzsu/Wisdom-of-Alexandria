@@ -15,11 +15,11 @@
  * raw string — neither crashes the list.
  */
 import { useState } from "react";
-import { ListChecks, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { Card } from "@/components/kit/card";
 import { Badge, type BadgeProps } from "@/components/kit/badge";
-import { Skeleton } from "@/components/kit/skeleton";
 import { Icon } from "@/components/kit/icon";
+import { EmptyState, ErrorState, SkeletonCard } from "@/components/kit";
 import { useJobs } from "@/lib/api/ai-hooks";
 import { asJobStatus, type GenerationJobRead } from "@/lib/api/ai-types";
 import { hu } from "@/lib/i18n/hu";
@@ -132,45 +132,6 @@ function JobRow({ job }: { job: GenerationJobRead }) {
   );
 }
 
-/** Skeleton shown while the first jobs fetch is in flight. */
-function JobsLoading() {
-  return (
-    <div
-      className="flex flex-col gap-3"
-      role="status"
-      aria-label={hu.jobs.loadingAria}
-    >
-      {[0, 1, 2].map((i) => (
-        <Card key={i}>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <Skeleton width={120} height={14} />
-              <Skeleton width={64} height={20} />
-            </div>
-            <Skeleton width={220} height={11} />
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-/** Empty state — the book has no AI jobs yet. */
-function JobsEmpty() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-        <Icon icon={ListChecks} size={26} />
-      </span>
-      <p className="m-0 text-[15px] font-semibold text-text">
-        {hu.jobs.emptyTitle}
-      </p>
-      <p className="m-0 max-w-[340px] text-[13px] leading-[1.5] text-text-muted">
-        {hu.jobs.emptyHint}
-      </p>
-    </div>
-  );
-}
 
 export interface JobsScreenProps {
   /** Active book id (from the route). The list is scoped to it server-side. */
@@ -191,18 +152,23 @@ export function JobsScreen({ bookId }: JobsScreenProps) {
       </header>
 
       {jobs.isError ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-          <p className="m-0 text-[14px] font-semibold text-danger-text">
-            {hu.jobs.errorTitle}
-          </p>
-          <p className="m-0 max-w-md text-[13px] text-text-muted">
-            {jobs.error?.message}
-          </p>
-        </div>
+        <ErrorState
+          message={hu.jobs.errorTitle}
+          detail={jobs.error?.message}
+          onRetry={() => void jobs.refetch()}
+        />
       ) : jobs.isLoading ? (
-        <JobsLoading />
+        <div className="flex flex-col gap-3" role="status" aria-label={hu.jobs.loadingAria}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       ) : (jobs.data ?? []).length === 0 ? (
-        <JobsEmpty />
+        <EmptyState
+          icon={<Icon icon={ListChecks} size={26} />}
+          title={hu.jobs.emptyTitle}
+          description={hu.jobs.emptyHint}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {(jobs.data ?? []).map((job) => (

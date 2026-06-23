@@ -86,11 +86,15 @@ describe("RelationsScreen", () => {
         <RelationsScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
+    // EmptyState renders title as an h2.
     await waitFor(() =>
-      expect(screen.getByText("Még nincs kapcsolat")).toBeInTheDocument(),
+      expect(
+        screen.getByRole("heading", { name: hu.relations.emptyTitle }),
+      ).toBeInTheDocument(),
     );
+    // CTA wired via EmptyState action.
     expect(
-      screen.getByRole("button", { name: "Első kapcsolat" }),
+      screen.getByRole("button", { name: hu.relations.emptyCta }),
     ).toBeInTheDocument();
   });
 
@@ -249,7 +253,8 @@ describe("RelationsScreen", () => {
     expect(gsapContextMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces an error state when the relations query fails", async () => {
+  it("surfaces an error state when the relations query fails and clicking retry refetches and recovers", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${base}/projects/:projectId/codex-relations`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
@@ -260,9 +265,24 @@ describe("RelationsScreen", () => {
         <RelationsScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
-    // The screen shows its error copy rather than crashing / rendering blank.
+    // ErrorState uses role="alert" and includes a retry button.
     await waitFor(() =>
-      expect(screen.getByText(hu.relations.error)).toBeInTheDocument(),
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
     );
+    expect(screen.getByText(hu.relations.error)).toBeInTheDocument();
+    const retryButton = screen.getByRole("button", { name: hu.common.retry });
+    expect(retryButton).toBeInTheDocument();
+
+    // Mutation-proof: restore the default handler so the refetch succeeds.
+    // If onRetry is a no-op the refetch never fires, the alert persists and
+    // the graph nodes never appear — failing the assertions below.
+    server.resetHandlers();
+    await user.click(retryButton);
+
+    // After retry the screen recovers: alert disappears and graph data loads.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("Szelene")).toBeInTheDocument();
   });
 });

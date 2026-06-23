@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Providers } from "@/test/test-utils";
 import { server } from "@/test/msw/server";
 import { AI_BASE_URL } from "@/lib/api/client";
 import { FAROSZ_BOOK, JOB_FAILED } from "@/test/msw/fixtures";
+import { hu } from "@/lib/i18n/hu";
 import { JobsScreen } from "../jobs-screen";
 
 const aiBase = `${AI_BASE_URL}/api/v1`;
@@ -54,19 +55,39 @@ describe("JobsScreen (AI feladatok)", () => {
   it("shows the empty state when the book has no jobs", async () => {
     // A book id with no seeded jobs returns an empty list.
     renderScreen("00000000-0000-0000-0000-000000000000");
-    expect(await screen.findByText("Nincs még AI feladat")).toBeInTheDocument();
+    // EmptyState renders title as an h2.
+    expect(
+      await screen.findByRole("heading", { name: hu.jobs.emptyTitle }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(hu.jobs.emptyHint)).toBeInTheDocument();
   });
 
-  it("shows an error state when the jobs fetch fails", async () => {
+  it("shows an error state when the jobs fetch fails and clicking retry refetches and recovers", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${aiBase}/jobs`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
       ),
     );
     renderScreen();
-    expect(
-      await screen.findByText("Nem sikerült betölteni az AI feladatokat"),
-    ).toBeInTheDocument();
+    // ErrorState uses role="alert".
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(hu.jobs.errorTitle)).toBeInTheDocument();
+    // Retry button comes from ErrorState (uses hu.common.retry).
+    const retryButton = screen.getByRole("button", { name: hu.common.retry });
+    expect(retryButton).toBeInTheDocument();
+
+    // Mutation-proof: restore the default handler so the refetch succeeds.
+    // If onRetry is a no-op the refetch never fires, the alert persists and
+    // the job rows never appear — failing the assertions below.
+    server.resetHandlers();
+    await user.click(retryButton);
+
+    // After retry the screen recovers: alert disappears and job rows load.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("Átírás")).toBeInTheDocument();
   });
 
   it("renders an unknown status/type gracefully (raw fallback, no crash)", async () => {

@@ -288,15 +288,20 @@ describe("TimelineScreen", () => {
         <TimelineScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
+    // EmptyState renders title as an h2.
     await waitFor(() =>
-      expect(screen.getByText(hu.timeline.emptyTitle)).toBeInTheDocument(),
+      expect(
+        screen.getByRole("heading", { name: hu.timeline.emptyTitle }),
+      ).toBeInTheDocument(),
     );
-    // The CTA routes to the Plan Board.
-    const cta = screen.getByRole("button", { name: hu.timeline.emptyCta });
-    expect(cta).toBeInTheDocument();
+    // The CTA is wired to the Plan Board via EmptyState action.
+    expect(
+      screen.getByRole("button", { name: hu.timeline.emptyCta }),
+    ).toBeInTheDocument();
   });
 
-  it("surfaces an error with a retry button", async () => {
+  it("surfaces an error with a retry button and clicking retry refetches and recovers", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${base}/books/:bookId/chapters`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
@@ -307,12 +312,28 @@ describe("TimelineScreen", () => {
         <TimelineScreen bookId={FAROSZ_BOOK.id} />
       </Providers>,
     );
+    // ErrorState uses role="alert".
     await waitFor(() =>
-      expect(screen.getByText(hu.timeline.error)).toBeInTheDocument(),
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole("button", { name: hu.timeline.retry }),
+      screen.getByText(hu.timeline.error),
     ).toBeInTheDocument();
+    // Retry button comes from ErrorState (uses hu.common.retry).
+    const retryButton = screen.getByRole("button", { name: hu.common.retry });
+    expect(retryButton).toBeInTheDocument();
+
+    // Mutation-proof: restore the default successful handler so the refetch succeeds.
+    // If onRetry is a no-op, the refetch never fires, the alert persists and
+    // the chapter heading never appears — failing the assertions below.
+    server.resetHandlers();
+    await user.click(retryButton);
+
+    // After retry the screen recovers: the alert disappears and chapter data loads.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText(CHAPTER_ONE.title)).toBeInTheDocument();
   });
 
   it("does NOT enter GSAP when animation is gated off (static baseline)", async () => {

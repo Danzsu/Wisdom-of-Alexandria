@@ -12,8 +12,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
-import { Spinner } from "@/components/kit/spinner";
-import { Button } from "@/components/kit";
+import { Button, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
 import { useCodexEntries, useCodexRelations } from "@/lib/api/hooks";
 import { buildGraphData } from "./graph-data";
@@ -54,28 +53,31 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
     projectIdQuery.isError || relationsQuery.isError || entriesQuery.isError;
 
   if (isError) {
-    const message = (
+    const detail = (
       projectIdQuery.error ??
       relationsQuery.error ??
       entriesQuery.error
     )?.message;
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <p className="m-0 text-[14px] font-semibold text-danger-text">
-          {hu.relations.error}
-        </p>
-        {message ? (
-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
-        ) : null}
+      <div className="flex flex-1 items-center justify-center px-6">
+        <ErrorState
+          message={hu.relations.error}
+          detail={detail}
+          onRetry={() => {
+            void relationsQuery.refetch();
+            void entriesQuery.refetch();
+            if (projectIdQuery.isError) void projectIdQuery.refetch();
+          }}
+          className="w-full max-w-md"
+        />
       </div>
     );
   }
 
   if (isLoading || !projectId) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
-        <Spinner size={14} />
-        {hu.relations.loading}
+      <div className="flex flex-1 flex-col px-6 py-8">
+        <SkeletonList rows={4} className="mx-auto w-full max-w-2xl" />
       </div>
     );
   }
@@ -84,20 +86,16 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
   if (graph.edges.length === 0) {
     return (
       <>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-            <BrandStar size={26} />
-          </span>
-          <p className="m-0 text-[15px] font-semibold text-text">
-            {hu.relations.emptyTitle}
-          </p>
-          <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
-            {hu.relations.emptyHint}
-          </p>
-          <Button variant="cta" onClick={() => setModalOpen(true)}>
-            <Plus size={15} aria-hidden />
-            {hu.relations.emptyCta}
-          </Button>
+        <div className="flex flex-1 items-center justify-center px-6">
+          <EmptyState
+            icon={<BrandStar size={26} />}
+            title={hu.relations.emptyTitle}
+            description={hu.relations.emptyHint}
+            action={{
+              label: hu.relations.emptyCta,
+              onClick: () => setModalOpen(true),
+            }}
+          />
         </div>
         <NewRelationModal
           open={modalOpen}

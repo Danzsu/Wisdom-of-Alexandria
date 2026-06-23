@@ -26,10 +26,8 @@
  * draft / archived / anything else → "planned".
  */
 import { useEffect, useMemo, useRef } from "react";
-import { ArrowRight } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
-import { Spinner } from "@/components/kit/spinner";
-import { Button, StatusPill } from "@/components/kit";
+import { StatusPill, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
 import { Card } from "@/components/kit/card";
 import { TimelineNode, TimelineSpine } from "@/components/kit/timeline";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
@@ -183,34 +181,26 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
 
   // Error — the book tree is the load-bearing source; surface its message + retry.
   if (tree.isError || projectIdQuery.isError) {
-    const message = (tree.error ?? projectIdQuery.error)?.message;
+    const detail = (tree.error ?? projectIdQuery.error)?.message;
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="m-0 text-[14px] font-semibold text-danger-text">
-          {hu.timeline.error}
-        </p>
-        {message ? (
-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
-        ) : null}
-        <Button
-          variant="secondary"
-          size={32}
-          onClick={() => {
+      <div className="flex flex-1 items-center justify-center px-6">
+        <ErrorState
+          message={hu.timeline.error}
+          detail={detail}
+          onRetry={() => {
             void tree.refetch();
             if (projectIdQuery.isError) void projectIdQuery.refetch();
           }}
-        >
-          {hu.timeline.retry}
-        </Button>
+          className="w-full max-w-md"
+        />
       </div>
     );
   }
 
   if (tree.isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
-        <Spinner size={14} />
-        {hu.timeline.loading}
+      <div className="flex flex-1 flex-col px-6 py-8">
+        <SkeletonList rows={5} className="mx-auto w-full max-w-2xl" />
       </div>
     );
   }
@@ -218,25 +208,16 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
   // Empty — a calm prompt + a CTA to the Plan Board, never a blank canvas.
   if (totalScenes === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-          <BrandStar size={26} />
-        </span>
-        <p className="m-0 text-[15px] font-semibold text-text">
-          {hu.timeline.emptyTitle}
-        </p>
-        <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
-          {hu.timeline.emptyHint}
-        </p>
-        <Button
-          variant="cta"
-          onClick={() =>
-            bookId && navTo(routes.book(bookId, "terv"))
-          }
-        >
-          {hu.timeline.emptyCta}
-          <ArrowRight size={15} aria-hidden />
-        </Button>
+      <div className="flex flex-1 items-center justify-center px-6">
+        <EmptyState
+          icon={<BrandStar size={26} />}
+          title={hu.timeline.emptyTitle}
+          description={hu.timeline.emptyHint}
+          action={{
+            label: hu.timeline.emptyCta,
+            onClick: () => bookId && navTo(routes.book(bookId, "terv")),
+          }}
+        />
       </div>
     );
   }
