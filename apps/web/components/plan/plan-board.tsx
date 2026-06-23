@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { Plus } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
-import { Spinner } from "@/components/kit/spinner";
-import { Icon } from "@/components/kit/icon";
 import { ErrorBoundary } from "@/components/kit/error-boundary";
+import {
+  EmptyState,
+  ErrorState,
+  SkeletonCard,
+} from "@/components/kit";
 import { hu } from "@/lib/i18n/hu";
 import { usePlanBoard } from "./use-plan-board";
 import { PlanHeader } from "./plan-header";
@@ -84,23 +86,24 @@ function PlanBody({
 
   if (controller.isLoading) {
     return (
-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
-        <Spinner size={14} />
-        {hu.plan.loading}
+      <div
+        aria-label={hu.plan.loading}
+        className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3"
+      >
+        {Array.from({ length: 6 }, (_, i) => (
+          <SkeletonCard key={i} />
+        ))}
       </div>
     );
   }
 
   if (controller.isError) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-        <p className="m-0 text-[14px] font-semibold text-danger-text">
-          {hu.plan.error}
-        </p>
-        <p className="m-0 max-w-md text-[13px] text-text-muted">
-          {controller.error?.message}
-        </p>
-      </div>
+      <ErrorState
+        message={hu.plan.error}
+        detail={controller.error?.message}
+        onRetry={controller.refetch}
+      />
     );
   }
 
@@ -135,25 +138,14 @@ function EmptyBook({
   controller: ReturnType<typeof usePlanBoard>;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-        <BrandStar size={26} />
-      </span>
-      <p className="m-0 text-[15px] font-semibold text-text">
-        {hu.plan.emptyTitle}
-      </p>
-      <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
-        {hu.plan.emptyHint}
-      </p>
-      <button
-        type="button"
-        onClick={controller.createFirstChapter}
-        disabled={controller.isCreating}
-        className="mt-1 flex h-9 items-center gap-1.5 rounded-lg bg-accent-strong px-3.5 text-[13px] font-semibold text-accent-fg hover:opacity-90 disabled:opacity-50"
-      >
-        <Icon icon={Plus} size={14} />
-        {hu.plan.emptyCta}
-      </button>
-    </div>
+    <EmptyState
+      icon={<BrandStar size={26} />}
+      title={hu.plan.emptyTitle}
+      description={hu.plan.emptyHint}
+      action={{
+        label: hu.plan.emptyCta,
+        onClick: controller.createFirstChapter,
+      }}
+    />
   );
 }

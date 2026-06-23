@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
-import { Button } from "@/components/kit";
+import { Button, EmptyState, ErrorState } from "@/components/kit";
 import { Spinner } from "@/components/kit/spinner";
 import { ContextChips } from "@/components/kit/context-chips";
 import { useBookProjectId, useResearch } from "@/lib/api/ai-hooks";
@@ -85,9 +85,10 @@ export function ResearchScreen({ bookId }: ResearchScreenProps) {
 
         <div className="mt-6">
           {researchMutation.isError ? (
-            <p className="text-[13px] text-danger" role="status">
-              {hu.research.errorRetry}
-            </p>
+            <ErrorState
+              message={hu.research.errorRetry}
+              onRetry={() => researchMutation.reset()}
+            />
           ) : result !== undefined ? (
             <article className="rounded-[14px] border border-border bg-surface p-5 shadow-card">
               <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
@@ -111,14 +112,11 @@ export function ResearchScreen({ bookId }: ResearchScreenProps) {
               )}
             </article>
           ) : (
-            <div className="rounded-[14px] border border-dashed border-border-strong bg-surface-muted/40 p-8 text-center">
-              <p className="text-[15px] font-semibold text-text">
-                {hu.research.emptyTitle}
-              </p>
-              <p className="mx-auto mt-1 max-w-[460px] text-[13px] text-text-muted">
-                {hu.research.emptyHint}
-              </p>
-            </div>
+            <EmptyState
+              icon={<BrandStar size={22} />}
+              title={hu.research.emptyTitle}
+              description={hu.research.emptyHint}
+            />
           )}
         </div>
       </div>

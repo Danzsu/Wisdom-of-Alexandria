@@ -93,6 +93,8 @@ export interface PlanBoardController {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
+  /** Refetch the full book tree (chapters + all per-chapter scene queries). */
+  refetch: () => void;
   /** True while a create mutation is in flight (disables the relevant CTA). */
   isCreating: boolean;
   /** Open a scene in the editor — the create→write loop's exit. */
@@ -436,6 +438,7 @@ export function usePlanBoard({
     isLoading: tree.isLoading,
     isError: tree.isError,
     error: tree.error,
+    refetch: tree.refetch,
     isCreating,
     openScene,
     createChapter,

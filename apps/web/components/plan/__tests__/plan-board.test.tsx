@@ -54,7 +54,7 @@ describe("PlanBoard", () => {
     expect(await screen.findByText(SCENE_FIRST.title)).toBeInTheDocument();
   });
 
-  it("surfaces a load error (not swallowed)", async () => {
+  it("surfaces a load error via ErrorState (not swallowed)", async () => {
     server.use(
       http.get(`${base}/books/:bookId/chapters`, () =>
         HttpResponse.json({ detail: "kaboom" }, { status: 500 }),
@@ -65,6 +65,52 @@ describe("PlanBoard", () => {
       await screen.findByText("Nem sikerült betölteni a tervet"),
     ).toBeInTheDocument();
     expect(await screen.findByText("kaboom")).toBeInTheDocument();
+    // ErrorState renders role="alert"
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("retry button on ErrorState refetches and clears the error", async () => {
+    // Start with a failing endpoint.
+    server.use(
+      http.get(`${base}/books/:bookId/chapters`, () =>
+        HttpResponse.json({ detail: "kaboom" }, { status: 500 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderBoard();
+
+    // Wait for the error state to appear.
+    await screen.findByRole("alert");
+    expect(
+      screen.getByText("Nem sikerült betölteni a tervet"),
+    ).toBeInTheDocument();
+
+    // Restore the successful handler before clicking retry.
+    server.resetHandlers();
+
+    // Click the retry button.
+    await user.click(screen.getByRole("button", { name: "Újrapróbálkozás" }));
+
+    // The board should now render the chapter list (error gone).
+    expect(
+      await screen.findByText(CHAPTER_ONE.title),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("loading state renders SkeletonCard placeholders", async () => {
+    // Delay the response so we can observe the loading state.
+    server.use(
+      http.get(`${base}/books/:bookId/chapters`, async () => {
+        await new Promise((r) => setTimeout(r, 200));
+        return HttpResponse.json([]);
+      }),
+    );
+    renderBoard();
+    // SkeletonCard uses data-testid="skeleton-card"
+    expect(
+      (await screen.findAllByTestId("skeleton-card")).length,
+    ).toBeGreaterThan(0);
   });
 
   it("switches to the Matrix view", async () => {

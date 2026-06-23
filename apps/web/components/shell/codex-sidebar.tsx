@@ -28,7 +28,7 @@ import { Filter, Plus, Search } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { BookSpineCard } from "@/components/kit/book-spine-card";
 import { Icon } from "@/components/kit/icon";
-import { Spinner } from "@/components/kit/spinner";
+import { EmptyState, ErrorState, SkeletonList } from "@/components/kit";
 import { bookIdFromPathname } from "@/lib/use-shell-chrome";
 import { usePathname } from "next/navigation";
 import { useBookProjectId } from "@/lib/api/ai-hooks";
@@ -268,38 +268,27 @@ export function CodexSidebar() {
               : hu.codex.chatsEmpty}
           </p>
         ) : isError ? (
-          <p
-            role="alert"
-            className="m-auto px-4 py-8 text-center text-[12px] text-danger-text"
-          >
-            {(codex.error ?? projectIdQuery.error)?.message ??
-              hu.codex.listError}
-          </p>
+          <ErrorState
+            message={hu.codex.listError}
+            detail={
+              (codex.error ?? projectIdQuery.error)?.message ?? undefined
+            }
+            onRetry={() => { codex.refetch(); }}
+            className="m-2"
+          />
         ) : isLoading ? (
-          <div className="m-auto flex items-center gap-2 py-8 text-[12px] text-text-muted">
-            <Spinner size={14} />
-            {hu.codex.listLoading}
-          </div>
+          <SkeletonList rows={5} className="p-2" />
         ) : entries.length === 0 ? (
-          <div className="m-auto flex max-w-[220px] flex-col items-center gap-2.5 px-4 py-8 text-center">
-            <span className="flex h-[54px] w-[54px] items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
-              <BrandStar size={24} />
-            </span>
-            <p className="m-0 text-[14px] font-semibold text-text">
-              {hu.codex.listEmptyTitle}
-            </p>
-            <p className="m-0 text-[12px] leading-[1.5] text-text-muted">
-              {hu.codex.listEmptyHint}
-            </p>
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="mt-0.5 flex h-8 items-center gap-1.5 rounded-lg bg-accent-strong px-3 text-[13px] font-semibold text-accent-fg hover:bg-accent-hover"
-            >
-              <Icon icon={Plus} size={13} />
-              {hu.codex.listEmptyCta}
-            </button>
-          </div>
+          <EmptyState
+            icon={<BrandStar size={22} />}
+            title={hu.codex.listEmptyTitle}
+            description={hu.codex.listEmptyHint}
+            action={{
+              label: hu.codex.listEmptyCta,
+              onClick: () => setModalOpen(true),
+            }}
+            className="px-2 py-8"
+          />
         ) : groups.length === 0 ? (
           <p className="m-auto px-4 py-8 text-center text-[12px] text-text-muted">
             {hu.codex.listEmptyHint}

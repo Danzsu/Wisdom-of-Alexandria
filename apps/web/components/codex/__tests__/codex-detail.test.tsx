@@ -9,6 +9,7 @@ import { resetCodexStore } from "@/test/msw/handlers";
 import { FAROSZ_BOOK, FAROSZ_PROJECT } from "@/test/msw/fixtures";
 import { CodexDetail } from "@/components/codex/codex-detail";
 import type { CodexEntryRead } from "@/lib/api/types";
+import { hu } from "@/lib/i18n/hu";
 
 const base = `${API_BASE_URL}/api/v1`;
 
@@ -131,6 +132,51 @@ describe("CodexDetail", () => {
 
     await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
     expect(bodies.at(-1)).toMatchObject({ ai_visible: false });
+  });
+
+  it("MentionsTab resolves SkeletonList and shows matched mention entries", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await user.click(screen.getByRole("tab", { name: hu.codex.tabMentions }));
+
+    // SkeletonList renders while the book tree loads; wait for it to settle.
+    await waitFor(() =>
+      expect(screen.queryByTestId("skeleton-list")).not.toBeInTheDocument(),
+    );
+    // SCENE_ACTIVE content contains "Szelene" — one mention row expected.
+    expect(
+      await screen.findByText(/Szelene a tekercsek közé hajolt/),
+    ).toBeInTheDocument();
+  });
+
+  it("MentionsTab ErrorState retry refetches chapters and clears the error", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/api/v1/books/:bookId/chapters`, () =>
+        HttpResponse.json({ detail: "tree-boom" }, { status: 500 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderDetail();
+
+    // Switch to the Megemlítések tab.
+    await user.click(screen.getByRole("tab", { name: hu.codex.tabMentions }));
+
+    // ErrorState appears (role="alert").
+    await screen.findByRole("alert");
+
+    // Restore the success handler before clicking retry.
+    server.resetHandlers();
+
+    await user.click(screen.getByRole("button", { name: hu.common.retry }));
+
+    // Error disappears; the mention row from SCENE_ACTIVE appears.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText(/Szelene a tekercsek közé hajolt/),
+    ).toBeInTheDocument();
   });
 
   it("delete asks for confirmation then DELETEs", async () => {

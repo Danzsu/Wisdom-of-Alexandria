@@ -48,7 +48,7 @@ describe("ResearchScreen", () => {
     );
   });
 
-  it("surfaces an error without crashing", async () => {
+  it("surfaces an error via ErrorState (role=alert, not swallowed)", async () => {
     server.use(
       http.post(`${aiBase}/ai/research`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 502 }),
@@ -58,7 +58,36 @@ describe("ResearchScreen", () => {
     await ask("Kérdés");
 
     await waitFor(() =>
-      expect(screen.getByText(hu.research.errorRetry)).toBeInTheDocument(),
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
     );
+    expect(screen.getByText(hu.research.errorRetry)).toBeInTheDocument();
+  });
+
+  it("retry button on ErrorState resets the error so a new question can be asked", async () => {
+    server.use(
+      http.post(`${aiBase}/ai/research`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 502 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ResearchScreen bookId={FAROSZ_BOOK.id} />);
+    await ask("Kérdés");
+
+    // Error state must appear.
+    await screen.findByRole("alert");
+
+    // Restore success handler before retry.
+    server.resetHandlers();
+
+    // Click retry — the mutation resets, error disappears, form is usable again.
+    await user.click(screen.getByRole("button", { name: hu.common.retry }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    // The input is still accessible so the user can re-ask.
+    expect(
+      screen.getByRole("textbox", { name: hu.research.questionAria }),
+    ).toBeInTheDocument();
   });
 });

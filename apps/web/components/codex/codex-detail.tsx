@@ -34,6 +34,7 @@ import { RadioGroup, RadioRow } from "@/components/kit/radio-group";
 import { Icon } from "@/components/kit/icon";
 import { BrandStar } from "@/components/kit/brand-star";
 import { Spinner } from "@/components/kit/spinner";
+import { EmptyState, ErrorState, SkeletonList } from "@/components/kit";
 import { toast } from "@/components/kit/toast";
 import {
   contentMentions,
@@ -621,22 +622,19 @@ function MentionsTab({
 
   if (tree.isError) {
     return (
-      <p role="alert" className="m-0 text-[13px] text-danger-text">
-        {tree.error?.message ?? hu.codex.listError}
-      </p>
+      <ErrorState
+        message={hu.codex.listError}
+        detail={tree.error?.message ?? undefined}
+        onRetry={tree.refetch}
+      />
     );
   }
   if (tree.isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
-        <Spinner size={14} />
-        {hu.codex.mentionsLoading}
-      </div>
-    );
+    return <SkeletonList rows={4} />;
   }
   if (matches.length === 0) {
     return (
-      <p className="m-0 text-[13px] text-text-muted">{hu.codex.mentionsEmpty}</p>
+      <EmptyState title={hu.codex.mentionsEmpty} />
     );
   }
 

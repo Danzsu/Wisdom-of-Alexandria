@@ -111,6 +111,7 @@ function makeController(): PlanBoardController {
     isLoading: false,
     isError: false,
     error: null,
+    refetch: vi.fn(),
     isCreating: false,
     openScene: vi.fn(),
     createChapter: vi.fn(),

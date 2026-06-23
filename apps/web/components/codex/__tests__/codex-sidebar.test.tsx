@@ -47,7 +47,7 @@ describe("CodexSidebar", () => {
     expect(screen.getByText("Nagykönyvtár")).toBeInTheDocument();
   });
 
-  it("shows the empty state when the project has no codex entries", async () => {
+  it("shows the empty state (EmptyState kit) when the project has no codex entries", async () => {
     server.use(
       http.get(`${base}/projects/:projectId/codex`, () =>
         HttpResponse.json([]),
@@ -55,16 +55,43 @@ describe("CodexSidebar", () => {
     );
     renderSidebar();
     expect(await screen.findByText("Még üres a Codex")).toBeInTheDocument();
+    // EmptyState renders title as an h2
+    expect(screen.getByRole("heading", { name: "Még üres a Codex" })).toBeInTheDocument();
   });
 
-  it("surfaces a list error (never swallowed)", async () => {
+  it("surfaces a list error via ErrorState (never swallowed)", async () => {
     server.use(
       http.get(`${base}/projects/:projectId/codex`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
       ),
     );
     renderSidebar();
-    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    const alert = await screen.findByRole("alert");
+    // ErrorState renders the message prominently; detail rendered as muted text
+    expect(alert).toBeInTheDocument();
+  });
+
+  it("retry button on codex list ErrorState refetches and shows entries", async () => {
+    server.use(
+      http.get(`${base}/projects/:projectId/codex`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderSidebar();
+
+    // Wait for error state.
+    await screen.findByRole("alert");
+
+    // Restore success handler before retry.
+    server.resetHandlers();
+
+    // Click the retry button rendered by ErrorState.
+    await user.click(screen.getByRole("button", { name: "Újrapróbálkozás" }));
+
+    // Entries should now appear.
+    expect(await screen.findByText("Szelene")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("selecting an entry writes the ?entry param", async () => {
