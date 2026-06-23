@@ -132,9 +132,11 @@ describe("HowItWorksFirstRun", () => {
     mockReducedMotion(false);
   });
 
-  it("opens the narrative on first run (flag unset)", () => {
+  it("does NOT auto-open the modal on first run (flag unset) — banner is the sole first-run guide", () => {
     render(<HowItWorksFirstRun />);
-    expect(useUIStore.getState().howItWorksOpen).toBe(true);
+    // The store must remain closed: the inline dashboard banner is now the
+    // primary first-run affordance; the modal is on-demand only.
+    expect(useUIStore.getState().howItWorksOpen).toBe(false);
   });
 
   it("does NOT auto-open when the dismissal flag is set", () => {
@@ -143,20 +145,47 @@ describe("HowItWorksFirstRun", () => {
     expect(useUIStore.getState().howItWorksOpen).toBe(false);
   });
 
-  it("a dismissal persists across a remount (no re-trigger)", async () => {
-    const user = userEvent.setup();
-    // First run: trigger opens it, then the user skips.
+  it("the modal title is NOT in the document on first-run mount (no stacking)", () => {
     render(
       <>
         <HowItWorksFirstRun />
         <HowItWorks />
       </>,
     );
+    // Before any user interaction, the dialog heading must be absent —
+    // no modal-on-banner stacking on `/projekt` first load.
+    expect(screen.queryByText(hu.howItWorks.title)).not.toBeInTheDocument();
+  });
+
+  it("the modal opens when triggered manually via the store (on-demand path)", async () => {
+    render(
+      <>
+        <HowItWorksFirstRun />
+        <HowItWorks />
+      </>,
+    );
+    expect(screen.queryByText(hu.howItWorks.title)).not.toBeInTheDocument();
+
+    // Simulate the help button click (which calls openHowItWorks on the store).
+    useUIStore.getState().openHowItWorks();
+    expect(await screen.findByText(hu.howItWorks.title)).toBeInTheDocument();
+  });
+
+  it("a dismissal persists across a remount (no re-trigger)", async () => {
+    const user = userEvent.setup();
+    // Open the modal manually (the on-demand path), then dismiss it.
+    render(
+      <>
+        <HowItWorksFirstRun />
+        <HowItWorks />
+      </>,
+    );
+    useUIStore.getState().openHowItWorks();
     await screen.findByRole("dialog");
     await user.click(screen.getByRole("button", { name: hu.howItWorks.skipAria }));
     expect(window.localStorage.getItem(HOW_IT_WORKS_KEY)).toBe("1");
 
-    // Simulate a fresh mount (next app load): must NOT auto-open.
+    // Simulate a fresh mount: must still NOT auto-open.
     useUIStore.setState({ howItWorksOpen: false });
     render(<HowItWorksFirstRun />);
     expect(useUIStore.getState().howItWorksOpen).toBe(false);

@@ -32,6 +32,8 @@ export const hu = {
     /** Centered scene breadcrumb on the Write route. */
     breadcrumbChapter: "II. fejezet",
     breadcrumbScene: "3. jelenet — Rejtett jelek",
+    /** On-demand help button that opens the "Hogyan működik" narrative. */
+    helpAria: "Hogyan működik?",
   },
   /** Modal/dialog shared microcopy. */
   modal: {

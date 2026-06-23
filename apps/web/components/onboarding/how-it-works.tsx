@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Library, LayoutList, Sparkles, CheckCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -257,27 +257,14 @@ export function HowItWorks() {
 }
 
 /**
- * Mount-once first-run trigger. On the client, if the dismissal flag is unset,
- * it opens the narrative exactly once. Renders nothing. Kept separate from
- * {@link HowItWorks} so the open decision (localStorage read) runs once on mount
- * and the overlay itself stays a pure, store-driven view — and so it never
- * flashes on every load (a set flag is read before any open).
+ * Retained for backwards compatibility — previously auto-opened the "Hogyan
+ * működik" narrative on first run, which caused two onboarding patterns to stack
+ * on the dashboard (modal on top of the inline "Három lépés" banner). The
+ * auto-open has been removed: the narrative is now an on-demand affordance only
+ * (the "Hogyan működik?" button in the TopBar). This component renders nothing
+ * and can be safely removed in a future cleanup pass once all call-sites are
+ * updated.
  */
 export function HowItWorksFirstRun() {
-  const open = useUIStore((s) => s.openHowItWorks);
-
-  useEffect(() => {
-    let dismissed = false;
-    try {
-      dismissed = window.localStorage.getItem(HOW_IT_WORKS_KEY) === "1";
-    } catch {
-      // Storage unavailable: treat as first run so the narrative still shows.
-      dismissed = false;
-    }
-    if (!dismissed) open();
-    // Open exactly once on mount; the store + flag own re-entry from here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return null;
 }

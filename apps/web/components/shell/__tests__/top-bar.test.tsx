@@ -119,6 +119,22 @@ describe("TopBar", () => {
     expect(push).toHaveBeenCalledWith("/projekt");
   });
 
+  it("the help button is always visible and opens the howItWorks modal", async () => {
+    useUIStore.setState({ howItWorksOpen: false });
+    renderTopBar({ inBook: false });
+    const helpBtn = screen.getByRole("button", { name: "Hogyan működik?" });
+    expect(helpBtn).toBeInTheDocument();
+    await userEvent.click(helpBtn);
+    expect(useUIStore.getState().howItWorksOpen).toBe(true);
+  });
+
+  it("the help button is present even inside a book", () => {
+    renderTopBar({ inBook: true });
+    expect(
+      screen.getByRole("button", { name: "Hogyan működik?" }),
+    ).toBeInTheDocument();
+  });
+
   it("opens the user menu and fires its item actions", async () => {
     renderTopBar();
     await userEvent.click(

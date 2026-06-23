@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Users, SlidersHorizontal, PanelLeft, PanelRight } from "lucide-react";
+import { CircleHelp, Search, Users, SlidersHorizontal, PanelLeft, PanelRight } from "lucide-react";
 import { BrandStar } from "@/components/kit/brand-star";
 import { Icon } from "@/components/kit/icon";
 import { ThemeToggle } from "@/components/kit/theme-toggle";
@@ -48,6 +48,7 @@ export function TopBar({
 }: Readonly<TopBarProps>) {
   const navTo = useNavTo();
   const openCommand = useUIStore((s) => s.openCommand);
+  const openHowItWorks = useUIStore((s) => s.openHowItWorks);
   const shellDrawer = useUIStore((s) => s.shellDrawer);
   const toggleShellDrawer = useUIStore((s) => s.toggleShellDrawer);
   // The active model is config-driven (same /ai/models source the StatusBar +
@@ -154,6 +155,20 @@ export function TopBar({
         >
           <Icon icon={Search} size={16} />
         </button>
+
+        {/* On-demand "Hogyan működik?" help — opens the scroll-narrative modal.
+            Always visible; demotes the old first-run auto-open to a pull trigger
+            so the inline onboarding banner is the sole first-run affordance. */}
+        <Tooltip content={hu.topbar.helpAria}>
+          <button
+            type="button"
+            aria-label={hu.topbar.helpAria}
+            onClick={openHowItWorks}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          >
+            <Icon icon={CircleHelp} size={16} />
+          </button>
+        </Tooltip>
 
         <ThemeToggle />
 
