@@ -111,7 +111,7 @@ export function ProjectsDashboard() {
       className="min-h-0 flex-1 overflow-y-auto px-8 py-12"
       style={{
         background:
-          "radial-gradient(120% 60% at 50% -8%, var(--accent-muted) 0%, transparent 46%)",
+          "radial-gradient(120% 55% at 50% -10%, var(--accent-muted) 0%, transparent 46%)",
       }}
     >
       <div className="mx-auto max-w-[880px]">
@@ -238,19 +238,55 @@ function OnboardingBanner({ onCreate }: { onCreate: () => void }) {
 /* Welcome hero                                                               */
 /* -------------------------------------------------------------------------- */
 
+/** Book-spine SVG — the design's custom 50px icon (stroke, not filled). */
+function BookSpineIcon({ size = 50 }: Readonly<{ size?: number }>) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      aria-hidden="true"
+    >
+      <path d="M3 7v13M21 7v13M3 7l4.5-3 4.5 3 4.5-3L21 7M3 11h18M3 15h18" />
+    </svg>
+  );
+}
+
 function WelcomeHero() {
   return (
     <div className="mb-1.5 flex flex-col items-center">
+      {/* Floating gold book-spine icon */}
       <span
         aria-hidden="true"
-        className="mb-2.5 block text-accent [animation:woaFloat_4.5s_ease-in-out_infinite]"
+        className="mb-4 block text-gold [animation:woaFloat_5s_ease-in-out_infinite]"
       >
-        <Icon icon={Library} size={62} />
+        <BookSpineIcon size={50} />
       </span>
-      <h1 className="mb-1 text-center font-serif text-[26px] font-semibold text-text">
+
+      {/* Eyebrow with flanking gold gradient lines */}
+      <span className="mb-[14px] flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="h-px w-[34px]"
+          style={{ background: "linear-gradient(90deg,transparent,var(--gold-line))" }}
+        />
+        <span className="text-[11px] font-semibold uppercase tracking-[.18em] text-gold-text">
+          {hu.projects.heroEyebrow}
+        </span>
+        <span
+          aria-hidden="true"
+          className="h-px w-[34px]"
+          style={{ background: "linear-gradient(90deg,var(--gold-line),transparent)" }}
+        />
+      </span>
+
+      <h1 className="mb-0 text-center font-display text-[46px] font-semibold leading-[1.04] text-text">
         {hu.projects.heroTitle}
       </h1>
-      <p className="mb-[26px] text-center text-[14px] text-text-muted">
+      <p className="mb-[26px] mt-2.5 text-center font-serif text-[16px] italic text-text-muted">
         {hu.projects.heroSubtitle}
       </p>
     </div>
@@ -370,20 +406,20 @@ function DailySpark() {
     <button
       type="button"
       onClick={() => toast.info(hu.projects.sparkToast)}
-      className="mb-8 flex w-full items-center gap-3 rounded-xl border border-border border-l-[3px] border-l-accent bg-surface-soft p-[13px_16px] text-left transition-shadow hover:shadow-card"
+      className="mb-8 flex w-full items-center gap-[13px] rounded-[14px] border border-border border-l-[3px] border-l-gold bg-surface-soft p-[15px_18px] text-left transition-shadow hover:shadow-card"
     >
-      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-accent-muted text-accent-text">
+      <span className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-gold-soft text-gold-text">
         <BrandStar size={18} className="fill-current" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-text">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-gold-text">
           {hu.projects.sparkEyebrow}
         </span>
-        <span className="mt-0.5 block font-serif text-[15px] italic text-text">
+        <span className="mt-0.5 block font-serif text-[15.5px] italic text-text">
           {hu.projects.sparkPrompt}
         </span>
       </span>
-      <span className="whitespace-nowrap text-[12px] font-semibold text-accent-text">
+      <span className="whitespace-nowrap text-[13px] font-semibold text-gold-text">
         {hu.projects.sparkCta}
       </span>
     </button>

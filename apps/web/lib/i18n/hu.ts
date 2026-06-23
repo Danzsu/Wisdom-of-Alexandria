@@ -1409,6 +1409,7 @@ export const hu = {
     onboardStep2Hint: "Szereplők, helyszínek — az AI ebből merít.",
     onboardStep3Title: "Írd meg az első jelenetet",
     onboardStep3Hint: "Te írod — az AI csak ha kéred, és sosem magától.",
+    heroEyebrow: "A könyvespolcod",
     heroTitle: "Üdvözöl az Alexandria.",
     heroSubtitle: "Melyik történeteden dolgozol ma?",
     quickNewBook: "Új könyv",
