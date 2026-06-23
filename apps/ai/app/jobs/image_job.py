@@ -20,6 +20,7 @@ import uuid
 from alexandria_core.core.errors import safe_error
 from alexandria_core.db.session import AsyncSessionLocal
 from alexandria_core.models.generation_job import JobStatus
+from alexandria_core.models.media_asset import MediaAsset
 
 from app.services.crud_generation_job import get_job
 from app.services.image_service import ImageService, image_service
@@ -28,7 +29,9 @@ logger = logging.getLogger(__name__)
 
 # Required keys in ``GenerationJob.input_data`` for an image job.
 # Covers need art_style + layout instead of style.
-_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model")
+# ``asset_id`` is the placeholder MediaAsset the endpoint created; the service
+# UPDATES that row rather than creating a new one (single-asset lifecycle).
+_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model", "asset_id")
 _REQUIRED_COVER: tuple[str, ...] = ("art_style", "layout")
 _REQUIRED_CODEX: tuple[str, ...] = ("style",)
 
@@ -81,6 +84,7 @@ async def _run_image_job(
         job.status = JobStatus.RUNNING
         await db.commit()
 
+        asset_id = uuid.UUID(str(params["asset_id"]))
         try:
             if is_cover:
                 asset = await images.generate_cover_for_book(
@@ -93,6 +97,7 @@ async def _run_image_job(
                     author=params.get("author") or "",
                     subtitle=params.get("subtitle"),
                     model=params["model"],
+                    asset_id=asset_id,
                     job_id=job.id,
                 )
             else:
@@ -103,6 +108,7 @@ async def _run_image_job(
                     entity_id=uuid.UUID(str(params["entity_id"])),
                     style=params["style"],
                     model=params["model"],
+                    asset_id=asset_id,
                     job_id=job.id,
                 )
             job.output_data = {"media_asset_id": str(asset.id)}
@@ -117,7 +123,12 @@ async def _run_image_job(
             if failed is not None:
                 failed.status = JobStatus.FAILED
                 failed.error_message = safe_error(exc)
-                await db.commit()
+            # Flip the placeholder to 'failed' so the FE spinner stops; guard
+            # against a missing asset (deleted between enqueue and execution).
+            placeholder = await db.get(MediaAsset, asset_id)
+            if placeholder is not None:
+                placeholder.status = "failed"
+            await db.commit()
             # Log a SANITIZED message only — never logger.exception(), whose raw
             # traceback could embed a provider secret.
             logger.error("Image job %s failed: %s", job_id, safe_error(exc))

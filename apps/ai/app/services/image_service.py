@@ -53,18 +53,25 @@ class ImageService:
         entity_id: uuid.UUID,
         style: str,
         model: str,
+        asset_id: uuid.UUID,
         job_id: uuid.UUID | None = None,
     ) -> MediaAsset:
-        """Generate an image for a Codex entry and persist a READY asset.
+        """Generate an image for a Codex entry and update the EXISTING placeholder.
 
         ``entity_id`` is a ``CodexEntry`` id; ``entity_type`` is its expected
         ``entry_type`` ("character" | "location"). Reuses the entity's current
         canonical image (if any, and readable) as a reference image so successive
         generations stay visually consistent. Raises ``ValueError`` if the entry
-        is missing OR its ``entry_type`` does not match ``entity_type``. On ANY
-        failure during the provider call or save step, removes any partial file
-        and re-raises (loud).
+        is missing OR its ``entry_type`` does not match ``entity_type``, or if the
+        placeholder asset ``asset_id`` does not exist. On ANY failure during the
+        provider call or save step, removes any partial file and re-raises (loud).
         """
+        asset = await db.get(MediaAsset, asset_id)
+        if asset is None:
+            raise ValueError(
+                f"placeholder asset {asset_id} not found for image generation"
+            )
+
         entry = await db.get(CodexEntry, entity_id)
         if entry is None or entry.entry_type != entity_type:
             raise ValueError(
@@ -75,7 +82,6 @@ class ImageService:
         prompt = image_prompt.build_codex_prompt(entry, style)
         reference = await self._canonical_reference_bytes(db, entity_type, entity_id)
 
-        asset_id = uuid.uuid4()
         saved: SavedImage | None = None
         try:
             result = await self.router.generate_image(
@@ -97,24 +103,17 @@ class ImageService:
                 delete_image_files(saved.file_path, saved.thumb_path)
             raise
 
-        asset = MediaAsset(
-            id=asset_id,
-            project_id=project_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            status="ready",
-            file_path=saved.file_path,
-            thumb_path=saved.thumb_path,
-            mime=result.mime,
-            width=saved.width,
-            height=saved.height,
-            model_name=result.model,
-            style=style,
-            prompt=prompt,
-            job_id=job_id,
-            is_canonical=False,
-        )
-        db.add(asset)
+        # Update the existing placeholder in-place — never create a second row.
+        asset.file_path = saved.file_path
+        asset.thumb_path = saved.thumb_path
+        asset.mime = result.mime
+        asset.width = saved.width
+        asset.height = saved.height
+        asset.model_name = result.model
+        asset.prompt = prompt
+        asset.status = "ready"
+        if job_id is not None:
+            asset.job_id = job_id
         await db.commit()
         await db.refresh(asset)
         return asset
@@ -131,18 +130,25 @@ class ImageService:
         author: str,
         subtitle: str | None,
         model: str,
+        asset_id: uuid.UUID,
         job_id: uuid.UUID | None = None,
     ) -> MediaAsset:
         """Generate a book cover: art (text-free) → composite typography → READY
-        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Loud on failure
-        (cleans up a partial file, re-raises). Raises ``ValueError`` if the book
-        is missing."""
+        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Updates the
+        EXISTING placeholder identified by ``asset_id`` in-place rather than
+        creating a new row. Loud on failure (cleans up a partial file, re-raises).
+        Raises ``ValueError`` if the book or the placeholder asset is missing."""
+        asset = await db.get(MediaAsset, asset_id)
+        if asset is None:
+            raise ValueError(
+                f"placeholder asset {asset_id} not found for cover generation"
+            )
+
         book = await db.get(Book, book_id)
         if book is None or book.project_id != project_id:
             raise ValueError(f"book {book_id} not found for cover generation")
 
         prompt = image_prompt.build_cover_prompt(book, art_style)
-        asset_id = uuid.uuid4()
         saved: SavedImage | None = None
         try:
             result = await self.router.generate_image(
@@ -161,24 +167,17 @@ class ImageService:
                 delete_image_files(saved.file_path, saved.thumb_path)
             raise
 
-        asset = MediaAsset(
-            id=asset_id,
-            project_id=project_id,
-            entity_type="cover",
-            entity_id=book_id,
-            status="ready",
-            file_path=saved.file_path,
-            thumb_path=saved.thumb_path,
-            mime="image/png",
-            width=saved.width,
-            height=saved.height,
-            model_name=result.model,
-            style=art_style,
-            prompt=prompt,
-            job_id=job_id,
-            is_canonical=False,
-        )
-        db.add(asset)
+        # Update the existing placeholder in-place — never create a second row.
+        asset.file_path = saved.file_path
+        asset.thumb_path = saved.thumb_path
+        asset.mime = "image/png"
+        asset.width = saved.width
+        asset.height = saved.height
+        asset.model_name = result.model
+        asset.prompt = prompt
+        asset.status = "ready"
+        if job_id is not None:
+            asset.job_id = job_id
         await db.commit()
         await db.refresh(asset)
         return asset

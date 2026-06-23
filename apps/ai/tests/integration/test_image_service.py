@@ -93,6 +93,28 @@ async def _count_assets(db) -> int:
     ).scalar_one()
 
 
+async def _make_placeholder(
+    db,
+    project_id: uuid.UUID,
+    entity_type: str,
+    entity_id: uuid.UUID,
+    style: str = "realistic_portrait",
+) -> MediaAsset:
+    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        style=style,
+        model_name="gemini/x",
+    )
+    db.add(placeholder)
+    await db.commit()
+    await db.refresh(placeholder)
+    return placeholder
+
+
 # ── generate_for_entity happy path ──────────────────────────────────────────
 
 
@@ -102,6 +124,7 @@ async def test_generate_for_character_writes_file_and_ready_asset(
 ):
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
 
     router = _stub_router()
     svc = ImageService(router=router)
@@ -112,6 +135,7 @@ async def test_generate_for_character_writes_file_and_ready_asset(
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/gemini-3.1-flash-image",
+        asset_id=placeholder.id,
     )
 
     assert asset.status == "ready"
@@ -140,15 +164,21 @@ async def test_generate_for_character_writes_file_and_ready_asset(
 @pytest.mark.integration
 async def test_generate_for_missing_entity_raises(db_session, _tmp_media_dir):
     project_id = await _make_project(db_session)
+    # Use a random entity_id so the CodexEntry lookup fails (entity doesn't exist).
+    missing_entity_id = uuid.uuid4()
+    placeholder = await _make_placeholder(
+        db_session, project_id, "character", missing_entity_id
+    )
     svc = ImageService(router=_stub_router())
     with pytest.raises(ValueError):
         await svc.generate_for_entity(
             db_session,
             project_id=project_id,
             entity_type="character",
-            entity_id=uuid.uuid4(),
+            entity_id=missing_entity_id,
             style="realistic_portrait",
             model="gemini/x",
+            asset_id=placeholder.id,
         )
 
 
@@ -163,6 +193,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
     router = _stub_router()
     svc = ImageService(router=router)
 
+    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
     first = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -170,6 +201,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph1.id,
     )
     # No reference on the first call (no canonical yet).
     first_kwargs = router.generate_image.await_args.kwargs
@@ -177,6 +209,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
 
     await svc.set_canonical(db_session, first.id)
 
+    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
     await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -184,6 +217,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph2.id,
     )
     # Second call now passes the canonical image bytes as a reference.
     second_kwargs = router.generate_image.await_args.kwargs
@@ -203,6 +237,7 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
     char = await _make_character(db_session, project_id)
     svc = ImageService(router=_stub_router())
 
+    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
     a1 = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -210,7 +245,9 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph1.id,
     )
+    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
     a2 = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -218,6 +255,7 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph2.id,
     )
 
     await svc.set_canonical(db_session, a1.id)
@@ -262,6 +300,7 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
     other = await _make_character(db_session, project_id, name="Hős B")
     svc = ImageService(router=_stub_router())
 
+    ph_older = await _make_placeholder(db_session, project_id, "character", char.id)
     older = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -269,7 +308,9 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph_older.id,
     )
+    ph_newer = await _make_placeholder(db_session, project_id, "character", char.id)
     newer = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -277,8 +318,10 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph_newer.id,
     )
     # A 2nd entity's asset must not leak in.
+    ph_other = await _make_placeholder(db_session, project_id, "character", other.id)
     await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -286,6 +329,7 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
         entity_id=other.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=ph_other.id,
     )
 
     # Make created_at unambiguous on coarse-resolution SQLite clocks.
@@ -310,6 +354,7 @@ async def test_delete_removes_row_and_files(db_session, _tmp_media_dir):
     char = await _make_character(db_session, project_id)
     svc = ImageService(router=_stub_router())
 
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
     asset = await svc.generate_for_entity(
         db_session,
         project_id=project_id,
@@ -317,6 +362,7 @@ async def test_delete_removes_row_and_files(db_session, _tmp_media_dir):
         entity_id=char.id,
         style="realistic_portrait",
         model="gemini/x",
+        asset_id=placeholder.id,
     )
     file_path = asset.file_path
     thumb_path = asset.thumb_path
@@ -347,6 +393,7 @@ async def test_generation_failure_raises_and_leaves_no_partial(
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
 
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
     router = AsyncMock()
     router.generate_image = AsyncMock(side_effect=RuntimeError("provider boom"))
     svc = ImageService(router=router)
@@ -359,10 +406,15 @@ async def test_generation_failure_raises_and_leaves_no_partial(
             entity_id=char.id,
             style="realistic_portrait",
             model="gemini/x",
+            asset_id=placeholder.id,
         )
 
-    # No READY asset persisted, and no orphaned files left under the media dir.
-    assert await _count_assets(db_session) == 0
+    # The placeholder row still exists (service is LOUD — re-raises, never flips
+    # status itself; the job layer owns the 'failed' flip).  No NEW rows created.
+    assert await _count_assets(db_session) == 1
+    await db_session.refresh(placeholder)
+    assert placeholder.status == "generating"  # service never mutates on failure
+    # No partial files written to disk.
     leftover = []
     for root, _dirs, files in os.walk(str(_tmp_media_dir)):
         leftover.extend(files)
@@ -380,6 +432,9 @@ async def test_generate_cover_for_book_persists_cover_asset(
 
     project_id = await _make_project(db_session)
     book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
+    placeholder = await _make_placeholder(
+        db_session, project_id, "cover", book_id, style="cover_fantasy"
+    )
 
     async def fake_generate_image(
         prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
@@ -401,6 +456,7 @@ async def test_generate_cover_for_book_persists_cover_asset(
         author="Rácz D.",
         subtitle=None,
         model="gemini/x",
+        asset_id=placeholder.id,
     )
     assert asset.entity_type == "cover"
     assert asset.entity_id == book_id
@@ -411,16 +467,170 @@ async def test_generate_cover_for_book_persists_cover_asset(
 
 @pytest.mark.integration
 async def test_generate_cover_for_book_missing_book_raises(db_session):
+    project_id = await _make_project(db_session)
+    missing_book_id = uuid.uuid4()
+    placeholder = await _make_placeholder(
+        db_session, project_id, "cover", missing_book_id, style="cover_fantasy"
+    )
     svc = ImageService()
     with pytest.raises(ValueError):
         await svc.generate_cover_for_book(
             db_session,
-            project_id=uuid.uuid4(),
-            book_id=uuid.uuid4(),
+            project_id=project_id,
+            book_id=missing_book_id,
             art_style="cover_fantasy",
             layout="classic_centered",
             title="t",
             author="a",
             subtitle=None,
             model="m",
+            asset_id=placeholder.id,
+        )
+
+
+# ── ADVERSARIAL: single-asset lifecycle (placeholder reuse) ──────────────────
+
+
+@pytest.mark.integration
+async def test_generate_for_entity_updates_placeholder_not_creates_new(
+    db_session, _tmp_media_dir
+):
+    """After a successful codex-image generation the DB must contain EXACTLY
+    ONE MediaAsset for the entity — the same row the endpoint created as the
+    'generating' placeholder — and its status must be 'ready'.
+
+    Before the fix: the service minted a brand-new uuid4 asset on success,
+    leaving two rows (placeholder stuck 'generating' + a new 'ready' one).
+    """
+    project_id = await _make_project(db_session)
+    char = await _make_character(db_session, project_id)
+
+    # Pre-create the placeholder exactly as the endpoint does.
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="character",
+        entity_id=char.id,
+        style="realistic_portrait",
+        model_name="gemini/x",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+    placeholder_id = placeholder.id
+
+    svc = ImageService(router=_stub_router())
+    asset = await svc.generate_for_entity(
+        db_session,
+        project_id=project_id,
+        entity_type="character",
+        entity_id=char.id,
+        style="realistic_portrait",
+        model="gemini/x",
+        asset_id=placeholder_id,
+    )
+
+    # Returned asset is the SAME row.
+    assert asset.id == placeholder_id
+    assert asset.status == "ready"
+
+    # Exactly ONE row in the DB for this entity.
+    total = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(MediaAsset)
+            .where(
+                MediaAsset.entity_type == "character",
+                MediaAsset.entity_id == char.id,
+            )
+        )
+    ).scalar_one()
+    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
+
+
+@pytest.mark.integration
+async def test_generate_cover_for_book_updates_placeholder_not_creates_new(
+    db_session, monkeypatch, tmp_path
+):
+    """Same single-asset lifecycle invariant for the cover branch.
+
+    Before the fix: service created a second row; placeholder stayed 'generating'.
+    """
+    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
+
+    project_id = await _make_project(db_session)
+    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
+
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="cover",
+        entity_id=book_id,
+        style="cover_fantasy",
+        model_name="gemini/x",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+    placeholder_id = placeholder.id
+
+    async def fake_generate_image(
+        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
+    ):
+        buf = io.BytesIO()
+        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
+        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
+
+    svc = ImageService()
+    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
+
+    asset = await svc.generate_cover_for_book(
+        db_session,
+        project_id=project_id,
+        book_id=book_id,
+        art_style="cover_fantasy",
+        layout="classic_centered",
+        title="Fárosz",
+        author="Rácz D.",
+        subtitle=None,
+        model="gemini/x",
+        asset_id=placeholder_id,
+    )
+
+    # Returned asset is the SAME row.
+    assert asset.id == placeholder_id
+    assert asset.status == "ready"
+
+    # Exactly ONE row.
+    total = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(MediaAsset)
+            .where(
+                MediaAsset.entity_type == "cover",
+                MediaAsset.entity_id == book_id,
+            )
+        )
+    ).scalar_one()
+    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
+
+
+@pytest.mark.integration
+async def test_generate_for_entity_missing_placeholder_raises(
+    db_session, _tmp_media_dir
+):
+    """Passing a non-existent asset_id raises ValueError (guard against lost jobs)."""
+    project_id = await _make_project(db_session)
+    char = await _make_character(db_session, project_id)
+    svc = ImageService(router=_stub_router())
+
+    with pytest.raises(ValueError, match="asset"):
+        await svc.generate_for_entity(
+            db_session,
+            project_id=project_id,
+            entity_type="character",
+            entity_id=char.id,
+            style="realistic_portrait",
+            model="gemini/x",
+            asset_id=uuid.uuid4(),
         )

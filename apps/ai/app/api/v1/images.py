@@ -128,6 +128,7 @@ async def create_image(
             "entity_id": str(data.entity_id),
             "style": data.style,
             "model": model,
+            "asset_id": str(asset.id),
         },
     )
     db.add(job)

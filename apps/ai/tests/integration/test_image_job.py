@@ -93,27 +93,50 @@ async def _make_image_job(
     return job
 
 
-def _input(char_id: uuid.UUID, **overrides) -> dict:
+def _input(char_id: uuid.UUID, asset_id: uuid.UUID | None = None, **overrides) -> dict:
     data = {
         "entity_type": "character",
         "entity_id": str(char_id),
         "style": "realistic_portrait",
         "model": "gemini/gemini-3.1-flash-image",
+        "asset_id": str(asset_id) if asset_id is not None else str(uuid.uuid4()),
     }
     data.update(overrides)
     return data
+
+
+async def _make_placeholder(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    entity_type: str,
+    entity_id: uuid.UUID,
+    style: str = "realistic_portrait",
+) -> MediaAsset:
+    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
+    ph = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        style=style,
+        model_name="gemini/x",
+    )
+    db.add(ph)
+    await db.commit()
+    await db.refresh(ph)
+    return ph
 
 
 @pytest.mark.integration
 async def test_image_job_runs_and_records_media_asset(db_session):
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
-    job = await _make_image_job(db_session, project_id, _input(char.id))
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
 
-    asset_id = uuid.uuid4()
     images = AsyncMock(spec=ImageService)
     images.generate_for_entity.return_value = MediaAsset(
-        id=asset_id,
+        id=placeholder.id,
         project_id=project_id,
         entity_type="character",
         entity_id=char.id,
@@ -126,7 +149,7 @@ async def test_image_job_runs_and_records_media_asset(db_session):
 
     await db_session.refresh(job)
     assert job.status == JobStatus.DONE
-    assert job.output_data["media_asset_id"] == str(asset_id)
+    assert job.output_data["media_asset_id"] == str(placeholder.id)
 
     images.generate_for_entity.assert_awaited_once()
     kwargs = images.generate_for_entity.await_args.kwargs
@@ -136,6 +159,7 @@ async def test_image_job_runs_and_records_media_asset(db_session):
     assert kwargs["style"] == "realistic_portrait"
     assert kwargs["model"] == "gemini/gemini-3.1-flash-image"
     assert kwargs["job_id"] == job.id
+    assert kwargs["asset_id"] == placeholder.id
 
 
 @pytest.mark.integration
@@ -145,14 +169,15 @@ async def test_image_job_is_running_when_generate_executes(db_session):
     before the heavy work)."""
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
-    job = await _make_image_job(db_session, project_id, _input(char.id))
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
     captured = {}
 
     async def _capturing_generate(db, **kwargs):
         current = await db.get(GenerationJob, job.id)
         captured["status_at_generate"] = current.status
         return MediaAsset(
-            id=uuid.uuid4(),
+            id=placeholder.id,
             project_id=project_id,
             entity_type="character",
             entity_id=char.id,
@@ -174,7 +199,8 @@ async def test_image_job_failure_is_persisted_and_sanitized(db_session):
     and the exception is NOT re-raised (the call returns normally)."""
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
-    job = await _make_image_job(db_session, project_id, _input(char.id))
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
 
     images = AsyncMock(spec=ImageService)
     raw = "boom\nSECRET\n" + ("x" * 5000)
@@ -199,7 +225,8 @@ async def test_image_job_missing_required_input_fails(db_session):
     a clear message, and generate_for_entity is never attempted."""
     project_id = await _make_project(db_session)
     char = await _make_character(db_session, project_id)
-    bad = _input(char.id)
+    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+    bad = _input(char.id, placeholder.id)
     del bad["style"]
     job = await _make_image_job(db_session, project_id, bad)
 
@@ -245,6 +272,19 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
     project_id = await _make_project(db_session)
     book_id = await _make_book(db_session, project_id)
 
+    # Create placeholder asset (as the endpoint does).
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="cover",
+        entity_id=book_id,
+        style="cover_fantasy",
+        model_name="gemini/x",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+
     job = GenerationJob(
         job_type=JobType.IMAGE,
         project_id=project_id,
@@ -259,6 +299,7 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
             "author": "Rácz D.",
             "subtitle": None,
             "model": "gemini/x",
+            "asset_id": str(placeholder.id),
         },
     )
     db_session.add(job)
@@ -269,7 +310,7 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
 
     async def fake_cover(db, **kw):
         calls.update(kw)
-        return SimpleNamespace(id=uuid.uuid4())
+        return SimpleNamespace(id=placeholder.id)
 
     images = ImageService()
     monkeypatch.setattr(images, "generate_cover_for_book", fake_cover)
@@ -282,3 +323,180 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
     refreshed = await db_session.get(GenerationJob, job.id)
     assert refreshed.status == JobStatus.DONE
     assert calls["art_style"] == "cover_fantasy" and calls["layout"] == "classic_centered"
+    # asset_id is now forwarded to the service call.
+    assert calls["asset_id"] == placeholder.id
+
+
+# ── ADVERSARIAL: placeholder is updated on success (no second row) ───────────
+
+
+@pytest.mark.integration
+async def test_image_job_codex_passes_asset_id_to_service(db_session):
+    """The job must pass the placeholder's asset_id to the service so it can
+    UPDATE that row rather than creating a new one.
+
+    Before the fix: asset_id was absent from input_data and not forwarded,
+    so the service created a second row.
+    """
+    project_id = await _make_project(db_session)
+    char = await _make_character(db_session, project_id)
+
+    # Pre-create the placeholder as the endpoint does.
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="character",
+        entity_id=char.id,
+        style="realistic_portrait",
+        model_name="gemini/gemini-3.1-flash-image",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+
+    job = await _make_image_job(
+        db_session,
+        project_id,
+        {
+            **_input(char.id),
+            "asset_id": str(placeholder.id),
+        },
+    )
+
+    captured: dict = {}
+    ready_asset = MediaAsset(
+        id=placeholder.id,
+        project_id=project_id,
+        entity_type="character",
+        entity_id=char.id,
+        status="ready",
+    )
+
+    async def _capturing_generate(db, **kwargs):
+        captured.update(kwargs)
+        # Confirm the job is RUNNING at the moment the service is called.
+        current_job = await db.get(GenerationJob, job.id)
+        assert current_job.status == JobStatus.RUNNING
+        return ready_asset
+
+    images = AsyncMock(spec=ImageService)
+    images.generate_for_entity.side_effect = _capturing_generate
+
+    await _run_image_job(
+        job.id, session_factory=_session_factory(db_session), images=images
+    )
+
+    # The job must forward the placeholder id to the service.
+    assert "asset_id" in captured, "asset_id was not forwarded to generate_for_entity"
+    assert captured["asset_id"] == placeholder.id
+
+    await db_session.refresh(job)
+    assert job.status == JobStatus.DONE
+    assert job.output_data["media_asset_id"] == str(placeholder.id)
+
+
+@pytest.mark.integration
+async def test_image_job_failure_flips_placeholder_to_failed(db_session):
+    """When the service raises, the job handler must flip the PLACEHOLDER's
+    status to 'failed' so the FE spinner stops.
+
+    Before the fix: the placeholder stayed 'generating' forever on failure.
+    """
+    project_id = await _make_project(db_session)
+    char = await _make_character(db_session, project_id)
+
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="character",
+        entity_id=char.id,
+        style="realistic_portrait",
+        model_name="gemini/x",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+    placeholder_id = placeholder.id
+
+    job = await _make_image_job(
+        db_session,
+        project_id,
+        {
+            **_input(char.id),
+            "asset_id": str(placeholder_id),
+        },
+    )
+
+    images = AsyncMock(spec=ImageService)
+    images.generate_for_entity.side_effect = RuntimeError("provider boom")
+
+    await _run_image_job(
+        job.id, session_factory=_session_factory(db_session), images=images
+    )
+
+    await db_session.refresh(job)
+    assert job.status == JobStatus.FAILED
+
+    # The PLACEHOLDER must now be 'failed', not stuck 'generating'.
+    reloaded = await db_session.get(MediaAsset, placeholder_id)
+    assert reloaded is not None
+    assert reloaded.status == "failed", (
+        f"Placeholder must be 'failed' after job failure, got '{reloaded.status}'"
+    )
+
+
+@pytest.mark.integration
+async def test_image_job_cover_failure_flips_placeholder_to_failed(db_session):
+    """Same placeholder-flip guarantee for the cover branch on failure."""
+    project_id = await _make_project(db_session)
+    book_id = await _make_book(db_session, project_id)
+
+    placeholder = MediaAsset(
+        status="generating",
+        project_id=project_id,
+        entity_type="cover",
+        entity_id=book_id,
+        style="cover_fantasy",
+        model_name="gemini/x",
+    )
+    db_session.add(placeholder)
+    await db_session.commit()
+    await db_session.refresh(placeholder)
+    placeholder_id = placeholder.id
+
+    job = GenerationJob(
+        job_type=JobType.IMAGE,
+        project_id=project_id,
+        status=JobStatus.PENDING,
+        model_name="gemini/x",
+        input_data={
+            "entity_type": "cover",
+            "entity_id": str(book_id),
+            "art_style": "cover_fantasy",
+            "layout": "classic_centered",
+            "title": "Fárosz",
+            "author": "Rácz D.",
+            "subtitle": None,
+            "model": "gemini/x",
+            "asset_id": str(placeholder_id),
+        },
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    images = AsyncMock(spec=ImageService)
+    images.generate_cover_for_book.side_effect = RuntimeError("compositor boom")
+
+    await _run_image_job(
+        job.id, session_factory=_session_factory(db_session), images=images
+    )
+
+    await db_session.refresh(job)
+    assert job.status == JobStatus.FAILED
+
+    reloaded = await db_session.get(MediaAsset, placeholder_id)
+    assert reloaded is not None
+    assert reloaded.status == "failed", (
+        f"Cover placeholder must be 'failed' after job failure, got '{reloaded.status}'"
+    )

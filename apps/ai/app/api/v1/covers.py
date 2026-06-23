@@ -85,6 +85,7 @@ async def generate_cover(
             "author": author,
             "subtitle": data.subtitle,
             "model": model,
+            "asset_id": str(asset.id),
         },
     )
     db.add(job)
