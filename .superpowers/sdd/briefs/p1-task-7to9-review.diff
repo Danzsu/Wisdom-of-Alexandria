@@ -1,0 +1,620 @@
+### git status
+ M apps/web/components/kit/index.ts
+ M apps/web/components/projects/projects-dashboard.tsx
+ M apps/web/components/shell/screen-placeholder.tsx
+ M apps/web/lib/i18n/hu.ts
+?? .superpowers/sdd/
+?? apps/web/components/kit/__tests__/empty-state.test.tsx
+?? apps/web/components/kit/__tests__/error-state.test.tsx
+?? apps/web/components/kit/__tests__/skeleton-patterns.test.tsx
+?? apps/web/components/kit/empty-state.tsx
+?? apps/web/components/kit/error-state.tsx
+?? apps/web/components/kit/skeleton-patterns.tsx
+
+### tracked diff (vs e488177 = T6)
+diff --git a/apps/web/components/kit/index.ts b/apps/web/components/kit/index.ts
+index a868ac0..79683f6 100644
+--- a/apps/web/components/kit/index.ts
++++ b/apps/web/components/kit/index.ts
+@@ -158,3 +158,21 @@ export {
+   type DiffDeletionSegment,
+   type DiffAdditionSegment,
+ } from "./diff-pane";
++
++/* ---------------------------------------------------------------------------
++ * Milestone 1c — State-pattern library (skeleton patterns, empty, error).
++ * ------------------------------------------------------------------------- */
++export {
++  SkeletonCard,
++  SkeletonList,
++  SkeletonTable,
++  type SkeletonCardProps,
++  type SkeletonListProps,
++  type SkeletonTableProps,
++} from "./skeleton-patterns";
++export {
++  EmptyState,
++  type EmptyStateProps,
++  type EmptyStateActionObject,
++} from "./empty-state";
++export { ErrorState, type ErrorStateProps } from "./error-state";
+diff --git a/apps/web/components/projects/projects-dashboard.tsx b/apps/web/components/projects/projects-dashboard.tsx
+index 27d3eab..854503c 100644
+--- a/apps/web/components/projects/projects-dashboard.tsx
++++ b/apps/web/components/projects/projects-dashboard.tsx
+@@ -33,6 +33,7 @@ import {
+   Skeleton,
+   toast,
+ } from "@/components/kit";
++import { ErrorState } from "@/components/kit/error-state";
+ import { BrandStar } from "@/components/kit/brand-star";
+ import {
+   useExportBackup,
+@@ -558,8 +559,9 @@ function AllProjectsSection({
+       </div>
+ 
+       {query.isError ? (
+-        <ErrorCard
+-          message={query.error.message}
++        <ErrorState
++          message={hu.projects.loadError}
++          detail={query.error.message}
+           onRetry={() => void query.refetch()}
+         />
+       ) : query.isLoading ? (
+@@ -824,25 +826,3 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
+   );
+ }
+ 
+-function ErrorCard({
+-  message,
+-  onRetry,
+-}: {
+-  message: string;
+-  onRetry: () => void;
+-}) {
+-  return (
+-    <div
+-      role="alert"
+-      className="flex flex-col items-start gap-3 rounded-[14px] border border-danger border-l-[3px] bg-surface px-5 py-4"
+-    >
+-      <p className="m-0 text-[14px] font-semibold text-danger-text">
+-        {hu.projects.errorTitle}
+-      </p>
+-      <p className="m-0 text-[13px] text-text-muted">{message}</p>
+-      <Button variant="secondary" size={32} onClick={onRetry}>
+-        {hu.projects.errorRetry}
+-      </Button>
+-    </div>
+-  );
+-}
+diff --git a/apps/web/components/shell/screen-placeholder.tsx b/apps/web/components/shell/screen-placeholder.tsx
+index b735c14..794d7de 100644
+--- a/apps/web/components/shell/screen-placeholder.tsx
++++ b/apps/web/components/shell/screen-placeholder.tsx
+@@ -1,9 +1,12 @@
+ import { BrandStar } from "@/components/kit/brand-star";
++import { EmptyState } from "@/components/kit/empty-state";
+ 
+ /**
+  * Minimal centred screen placeholder used by M2 route segments so navigation
+  * is verifiable before the real screens are built. Shows the screen's Hungarian
+  * label and an optional milestone hint. Server-renderable (no client hooks).
++ *
++ * Public API: `{ label, hint? }` — unchanged; three route segments rely on it.
+  */
+ export function ScreenPlaceholder({
+   label,
+@@ -13,14 +16,12 @@ export function ScreenPlaceholder({
+   hint?: string;
+ }) {
+   return (
+-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+-      <BrandStar size={28} />
+-      <h1 className="m-0 font-serif text-[24px] font-semibold text-text">
+-        {label}
+-      </h1>
+-      {hint ? (
+-        <p className="m-0 max-w-prose text-[13px] text-text-muted">{hint}</p>
+-      ) : null}
++    <div className="flex flex-1 flex-col items-center justify-center p-8">
++      <EmptyState
++        icon={<BrandStar size={28} />}
++        title={label}
++        description={hint}
++      />
+     </div>
+   );
+ }
+diff --git a/apps/web/lib/i18n/hu.ts b/apps/web/lib/i18n/hu.ts
+index a1ac09a..4d1d74b 100644
+--- a/apps/web/lib/i18n/hu.ts
++++ b/apps/web/lib/i18n/hu.ts
+@@ -1469,6 +1469,8 @@ export const hu = {
+     emptyHint: "Hozd létre az első könyvedet, és kezdődhet az írás.",
+     emptyCta: "Új könyv",
+     errorTitle: "Nem sikerült betölteni a projekteket",
++    /** Alias used by the ErrorState adoption on the dashboard. */
++    loadError: "Nem sikerült betölteni a projekteket",
+     errorRetry: "Újrapróbálkozás",
+     importToast: "A kézirat importálása hamarosan érkezik",
+     cleanWriteToast: "A tiszta írás mód hamarosan érkezik",
+@@ -1636,6 +1638,15 @@ export const hu = {
+     generateError: "A borító generálása nem sikerült.",
+     heroAlt: (title: string) => `${title} borítója`,
+   },
++  /**
++   * Cross-cutting microcopy shared by multiple components and screens.
++   * Keep entries minimal — prefer domain-specific sections when a string
++   * belongs exclusively to one feature.
++   */
++  common: {
++    /** Retry button label used by ErrorState and other inline error panels. */
++    retry: "Újrapróbálkozás",
++  },
+   /** Genre options for the wizard Select (sourced from the prototype default). */
+   genres: [
+     "történelmi fantasy",
+
+### untracked (excl scratch)
+===== apps/web/components/kit/__tests__/empty-state.test.tsx =====
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { axe } from "vitest-axe";
+import { ImageIcon } from "lucide-react";
+import { EmptyState } from "@/components/kit/empty-state";
+
+describe("EmptyState", () => {
+  it("renders the title as a heading", () => {
+    render(<EmptyState title="Nincs még borító" />);
+    expect(
+      screen.getByRole("heading", { name: "Nincs még borító" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders description when provided", () => {
+    render(<EmptyState title="Üres" description="Generálj egyet." />);
+    expect(screen.getByText("Generálj egyet.")).toBeInTheDocument();
+  });
+
+  it("renders title, description, and a working CTA action object", async () => {
+    const onAct = vi.fn();
+    render(
+      <EmptyState
+        icon={<ImageIcon />}
+        title="Nincs még borító"
+        description="Generálj egyet."
+        action={{ label: "Borító generálása", onClick: onAct }}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Nincs még borító" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Generálj egyet.")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Borító generálása" }),
+    );
+    expect(onAct).toHaveBeenCalledOnce();
+  });
+
+  it("renders a custom ReactNode action", () => {
+    render(
+      <EmptyState
+        title="Üres"
+        action={<button type="button">Egyedi gomb</button>}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Egyedi gomb" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render description or action when not provided", () => {
+    render(<EmptyState title="Üres" />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("decorative icon is aria-hidden", () => {
+    const { container } = render(
+      <EmptyState icon={<ImageIcon />} title="Üres" />,
+    );
+    const badge = container.querySelector("[aria-hidden=true]");
+    expect(badge).toBeInTheDocument();
+  });
+});
+
+describe("EmptyState accessibility", () => {
+  it("is axe-clean with title only", async () => {
+    const { container } = render(<EmptyState title="Üres" />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("is axe-clean with all props", async () => {
+    const { container } = render(
+      <EmptyState
+        icon={<ImageIcon />}
+        title="Nincs borító"
+        description="Generálj egyet."
+        action={{ label: "Generálás", onClick: () => undefined }}
+      />,
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+===== apps/web/components/kit/__tests__/error-state.test.tsx =====
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { axe } from "vitest-axe";
+import { ErrorState } from "@/components/kit/error-state";
+import { hu } from "@/lib/i18n/hu";
+
+describe("ErrorState", () => {
+  it("has role=alert and contains the message", () => {
+    render(
+      <ErrorState message="Nem sikerült betölteni a projekteket." />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Nem sikerült betölteni",
+    );
+  });
+
+  it("renders the retry button that calls onRetry", async () => {
+    const onRetry = vi.fn();
+    render(
+      <ErrorState
+        message="Nem sikerült betölteni a projekteket."
+        onRetry={onRetry}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /Újrapróbálkozás/ }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("retry button label is hu.common.retry", () => {
+    render(
+      <ErrorState message="Hiba" onRetry={() => undefined} />,
+    );
+    expect(
+      screen.getByRole("button", { name: hu.common.retry }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders optional detail in muted text", () => {
+    render(
+      <ErrorState
+        message="Szerverhiba"
+        detail="Internal Server Error"
+      />,
+    );
+    expect(screen.getByText("Internal Server Error")).toBeInTheDocument();
+  });
+
+  it("does not render a retry button when onRetry is not provided", () => {
+    render(<ErrorState message="Hiba" />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("ErrorState accessibility", () => {
+  it("is axe-clean with message only", async () => {
+    const { container } = render(<ErrorState message="Hiba" />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("is axe-clean with all props", async () => {
+    const { container } = render(
+      <ErrorState
+        message="Nem sikerült betölteni a projekteket."
+        detail="Internal Server Error"
+        onRetry={() => undefined}
+      />,
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+===== apps/web/components/kit/__tests__/skeleton-patterns.test.tsx =====
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { axe } from "vitest-axe";
+import {
+  SkeletonCard,
+  SkeletonList,
+  SkeletonTable,
+} from "@/components/kit/skeleton-patterns";
+
+describe("SkeletonList", () => {
+  it("renders N rows, all aria-hidden at root", () => {
+    render(<SkeletonList rows={4} />);
+    const root = screen.getByTestId("skeleton-list");
+    expect(root.querySelectorAll(".woa-skel").length).toBeGreaterThanOrEqual(4);
+    expect(root).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("renders exactly the requested number of rows", () => {
+    render(<SkeletonList rows={2} />);
+    const root = screen.getByTestId("skeleton-list");
+    expect(root.querySelectorAll(".woa-skel").length).toBe(2);
+  });
+});
+
+describe("SkeletonTable", () => {
+  it("renders rows × cols cells", () => {
+    render(<SkeletonTable rows={3} cols={4} />);
+    expect(
+      screen.getByTestId("skeleton-table").querySelectorAll(".woa-skel").length,
+    ).toBe(12);
+  });
+
+  it("root is aria-hidden", () => {
+    render(<SkeletonTable rows={2} cols={2} />);
+    expect(screen.getByTestId("skeleton-table")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+});
+
+describe("SkeletonCard", () => {
+  it("renders with data-testid and is aria-hidden", () => {
+    render(<SkeletonCard />);
+    const root = screen.getByTestId("skeleton-card");
+    expect(root).toHaveAttribute("aria-hidden", "true");
+    expect(root.querySelectorAll(".woa-skel").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("accessibility", () => {
+  it("SkeletonList is axe-clean", async () => {
+    const { container } = render(<SkeletonList rows={3} />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("SkeletonTable is axe-clean", async () => {
+    const { container } = render(<SkeletonTable rows={2} cols={3} />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("SkeletonCard is axe-clean", async () => {
+    const { container } = render(<SkeletonCard />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+===== apps/web/components/kit/empty-state.tsx =====
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { Button } from "./button";
+
+export interface EmptyStateActionObject {
+  label: string;
+  onClick: () => void;
+}
+
+export interface EmptyStateProps {
+  /** Optional decorative icon rendered in a soft rounded badge. */
+  icon?: ReactNode;
+  /** Main heading (rendered as h2). */
+  title: string;
+  /** Optional muted description paragraph. */
+  description?: string;
+  /**
+   * Optional CTA: either a `{ label, onClick }` shorthand (renders an
+   * accent-outline Button) or a custom ReactNode for full control.
+   */
+  action?: EmptyStateActionObject | ReactNode;
+  className?: string;
+}
+
+/**
+ * Centered column empty-state pattern. Icon in a soft accent badge, serif
+ * title, muted description, optional CTA button.
+ *
+ * No hardcoded strings — all copy comes from the caller.
+ */
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  className,
+}: EmptyStateProps) {
+  const actionNode =
+    action && isActionObject(action) ? (
+      <Button variant="accent-outline" size={34} onClick={action.onClick}>
+        {action.label}
+      </Button>
+    ) : (
+      action
+    );
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center gap-3 rounded-lg px-6 py-14 text-center",
+        className,
+      )}
+    >
+      {icon ? (
+        <span
+          aria-hidden="true"
+          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-muted text-accent-text"
+        >
+          {icon}
+        </span>
+      ) : null}
+      <h2 className="m-0 font-serif text-title font-semibold text-text">
+        {title}
+      </h2>
+      {description ? (
+        <p className="m-0 max-w-prose text-body text-text-muted">{description}</p>
+      ) : null}
+      {actionNode ? <div className="mt-1">{actionNode}</div> : null}
+    </div>
+  );
+}
+
+function isActionObject(
+  action: EmptyStateActionObject | ReactNode,
+): action is EmptyStateActionObject {
+  return (
+    typeof action === "object" &&
+    action !== null &&
+    !Array.isArray(action) &&
+    "label" in (action as object) &&
+    "onClick" in (action as object)
+  );
+}
+===== apps/web/components/kit/error-state.tsx =====
+import { AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "./button";
+import { hu } from "@/lib/i18n/hu";
+
+export interface ErrorStateProps {
+  /** Short human-readable error message shown prominently. */
+  message: string;
+  /** Optional additional context rendered as muted secondary text. */
+  detail?: string;
+  /** If provided, a retry button is rendered. */
+  onRetry?: () => void;
+  className?: string;
+}
+
+/**
+ * Compact inline error panel with `role="alert"` so assistive tech announces
+ * it immediately. Danger icon (decorative), message, optional muted detail,
+ * optional retry button.
+ *
+ * Visual treatment: full border (no side-stripe), `rounded-lg`.
+ * No hardcoded strings — retry label comes from `hu.common.retry`.
+ */
+export function ErrorState({
+  message,
+  detail,
+  onRetry,
+  className,
+}: ErrorStateProps) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex flex-col gap-2.5 rounded-lg border border-danger bg-surface px-5 py-4",
+        className,
+      )}
+    >
+      <span className="flex items-center gap-2">
+        <AlertTriangle
+          aria-hidden="true"
+          size={16}
+          className="flex-none text-danger-text"
+        />
+        <p className="m-0 text-field font-semibold text-text">{message}</p>
+      </span>
+      {detail ? (
+        <p className="m-0 text-body text-text-muted">{detail}</p>
+      ) : null}
+      {onRetry ? (
+        <Button variant="secondary" size={32} onClick={onRetry}>
+          {hu.common.retry}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+===== apps/web/components/kit/skeleton-patterns.tsx =====
+import { Skeleton } from "./skeleton";
+import { cn } from "@/lib/utils";
+
+/* -------------------------------------------------------------------------- */
+/* SkeletonCard                                                                */
+/* -------------------------------------------------------------------------- */
+
+export interface SkeletonCardProps {
+  className?: string;
+}
+
+/**
+ * A card-shaped loading placeholder: title line + 2 body lines.
+ * Purely decorative — aria-hidden.
+ */
+export function SkeletonCard({ className }: SkeletonCardProps) {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="skeleton-card"
+      className={cn(
+        "flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-card",
+        className,
+      )}
+    >
+      <Skeleton width="55%" height={14} />
+      <Skeleton width="80%" height={9} />
+      <Skeleton width="65%" height={9} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* SkeletonList                                                                */
+/* -------------------------------------------------------------------------- */
+
+export interface SkeletonListProps {
+  rows: number;
+  className?: string;
+}
+
+/**
+ * Stacked row placeholders. `rows` controls how many shimmer lines are shown.
+ * Purely decorative — aria-hidden.
+ */
+export function SkeletonList({ rows, className }: SkeletonListProps) {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="skeleton-list"
+      className={cn("flex flex-col gap-2", className)}
+    >
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} height={32} className="woa-skel rounded-md" />
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* SkeletonTable                                                               */
+/* -------------------------------------------------------------------------- */
+
+export interface SkeletonTableProps {
+  rows: number;
+  cols: number;
+  className?: string;
+}
+
+/**
+ * A grid of shimmer cells (`rows × cols`). Purely decorative — aria-hidden.
+ */
+export function SkeletonTable({ rows, cols, className }: SkeletonTableProps) {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="skeleton-table"
+      className={cn("flex flex-col gap-1", className)}
+    >
+      {Array.from({ length: rows }, (_, ri) => (
+        <div key={ri} className="flex gap-1">
+          {Array.from({ length: cols }, (_, ci) => (
+            <Skeleton
+              key={ci}
+              height={28}
+              className="woa-skel flex-1 rounded-sm"
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

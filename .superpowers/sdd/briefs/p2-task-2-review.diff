@@ -1,0 +1,542 @@
+### git status
+ M apps/web/components/jobs/__tests__/jobs-screen.test.tsx
+ M apps/web/components/jobs/jobs-screen.tsx
+ M apps/web/components/plotlines/__tests__/plotlines-screen.test.tsx
+ M apps/web/components/plotlines/plotlines-screen.tsx
+ M apps/web/components/relations/__tests__/relations-screen.test.tsx
+ M apps/web/components/relations/relations-screen.tsx
+ M apps/web/components/timeline/__tests__/timeline-screen.test.tsx
+ M apps/web/components/timeline/timeline-screen.tsx
+?? .superpowers/sdd/
+
+### diff (vs b0ae975 = P2-T1)
+diff --git a/apps/web/components/jobs/__tests__/jobs-screen.test.tsx b/apps/web/components/jobs/__tests__/jobs-screen.test.tsx
+index dfd79aa..01c19e8 100644
+--- a/apps/web/components/jobs/__tests__/jobs-screen.test.tsx
++++ b/apps/web/components/jobs/__tests__/jobs-screen.test.tsx
+@@ -6,6 +6,7 @@ import { Providers } from "@/test/test-utils";
+ import { server } from "@/test/msw/server";
+ import { AI_BASE_URL } from "@/lib/api/client";
+ import { FAROSZ_BOOK, JOB_FAILED } from "@/test/msw/fixtures";
++import { hu } from "@/lib/i18n/hu";
+ import { JobsScreen } from "../jobs-screen";
+ 
+ const aiBase = `${AI_BASE_URL}/api/v1`;
+@@ -54,7 +55,11 @@ describe("JobsScreen (AI feladatok)", () => {
+   it("shows the empty state when the book has no jobs", async () => {
+     // A book id with no seeded jobs returns an empty list.
+     renderScreen("00000000-0000-0000-0000-000000000000");
+-    expect(await screen.findByText("Nincs még AI feladat")).toBeInTheDocument();
++    // EmptyState renders title as an h2.
++    expect(
++      await screen.findByRole("heading", { name: hu.jobs.emptyTitle }),
++    ).toBeInTheDocument();
++    expect(screen.getByText(hu.jobs.emptyHint)).toBeInTheDocument();
+   });
+ 
+   it("shows an error state when the jobs fetch fails", async () => {
+@@ -64,8 +69,12 @@ describe("JobsScreen (AI feladatok)", () => {
+       ),
+     );
+     renderScreen();
++    // ErrorState uses role="alert".
++    expect(await screen.findByRole("alert")).toBeInTheDocument();
++    expect(screen.getByText(hu.jobs.errorTitle)).toBeInTheDocument();
++    // Retry button comes from ErrorState (uses hu.common.retry).
+     expect(
+-      await screen.findByText("Nem sikerült betölteni az AI feladatokat"),
++      screen.getByRole("button", { name: hu.common.retry }),
+     ).toBeInTheDocument();
+   });
+ 
+diff --git a/apps/web/components/jobs/jobs-screen.tsx b/apps/web/components/jobs/jobs-screen.tsx
+index 0e5748b..b67be78 100644
+--- a/apps/web/components/jobs/jobs-screen.tsx
++++ b/apps/web/components/jobs/jobs-screen.tsx
+@@ -15,11 +15,11 @@
+  * raw string — neither crashes the list.
+  */
+ import { useState } from "react";
+-import { ListChecks, ChevronDown, ChevronRight } from "lucide-react";
++import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
+ import { Card } from "@/components/kit/card";
+ import { Badge, type BadgeProps } from "@/components/kit/badge";
+-import { Skeleton } from "@/components/kit/skeleton";
+ import { Icon } from "@/components/kit/icon";
++import { EmptyState, ErrorState, SkeletonCard } from "@/components/kit";
+ import { useJobs } from "@/lib/api/ai-hooks";
+ import { asJobStatus, type GenerationJobRead } from "@/lib/api/ai-types";
+ import { hu } from "@/lib/i18n/hu";
+@@ -132,45 +132,6 @@ function JobRow({ job }: { job: GenerationJobRead }) {
+   );
+ }
+ 
+-/** Skeleton shown while the first jobs fetch is in flight. */
+-function JobsLoading() {
+-  return (
+-    <div
+-      className="flex flex-col gap-3"
+-      role="status"
+-      aria-label={hu.jobs.loadingAria}
+-    >
+-      {[0, 1, 2].map((i) => (
+-        <Card key={i}>
+-          <div className="flex flex-col gap-2">
+-            <div className="flex items-center gap-2">
+-              <Skeleton width={120} height={14} />
+-              <Skeleton width={64} height={20} />
+-            </div>
+-            <Skeleton width={220} height={11} />
+-          </div>
+-        </Card>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-/** Empty state — the book has no AI jobs yet. */
+-function JobsEmpty() {
+-  return (
+-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-        <Icon icon={ListChecks} size={26} />
+-      </span>
+-      <p className="m-0 text-[15px] font-semibold text-text">
+-        {hu.jobs.emptyTitle}
+-      </p>
+-      <p className="m-0 max-w-[340px] text-[13px] leading-[1.5] text-text-muted">
+-        {hu.jobs.emptyHint}
+-      </p>
+-    </div>
+-  );
+-}
+ 
+ export interface JobsScreenProps {
+   /** Active book id (from the route). The list is scoped to it server-side. */
+@@ -191,18 +152,23 @@ export function JobsScreen({ bookId }: JobsScreenProps) {
+       </header>
+ 
+       {jobs.isError ? (
+-        <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+-          <p className="m-0 text-[14px] font-semibold text-danger-text">
+-            {hu.jobs.errorTitle}
+-          </p>
+-          <p className="m-0 max-w-md text-[13px] text-text-muted">
+-            {jobs.error?.message}
+-          </p>
+-        </div>
++        <ErrorState
++          message={hu.jobs.errorTitle}
++          detail={jobs.error?.message}
++          onRetry={() => void jobs.refetch()}
++        />
+       ) : jobs.isLoading ? (
+-        <JobsLoading />
++        <div className="flex flex-col gap-3" role="status" aria-label={hu.jobs.loadingAria}>
++          <SkeletonCard />
++          <SkeletonCard />
++          <SkeletonCard />
++        </div>
+       ) : (jobs.data ?? []).length === 0 ? (
+-        <JobsEmpty />
++        <EmptyState
++          icon={<Icon icon={ListChecks} size={26} />}
++          title={hu.jobs.emptyTitle}
++          description={hu.jobs.emptyHint}
++        />
+       ) : (
+         <div className="flex flex-col gap-3">
+           {(jobs.data ?? []).map((job) => (
+diff --git a/apps/web/components/plotlines/__tests__/plotlines-screen.test.tsx b/apps/web/components/plotlines/__tests__/plotlines-screen.test.tsx
+index 6984b60..9ecd3dd 100644
+--- a/apps/web/components/plotlines/__tests__/plotlines-screen.test.tsx
++++ b/apps/web/components/plotlines/__tests__/plotlines-screen.test.tsx
+@@ -70,9 +70,13 @@ describe("PlotlinesScreen", () => {
+         <PlotlinesScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
++    // EmptyState renders title as an h2.
+     await waitFor(() =>
+-      expect(screen.getByText(hu.plotlines.emptyTitle)).toBeInTheDocument(),
++      expect(
++        screen.getByRole("heading", { name: hu.plotlines.emptyTitle }),
++      ).toBeInTheDocument(),
+     );
++    // CTA wired via EmptyState action → opens PlotlineModal.
+     expect(
+       screen.getByRole("button", { name: hu.plotlines.emptyCta }),
+     ).toBeInTheDocument();
+@@ -89,11 +93,14 @@ describe("PlotlinesScreen", () => {
+         <PlotlinesScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
++    // ErrorState uses role="alert".
+     await waitFor(() =>
+-      expect(screen.getByText(hu.plotlines.error)).toBeInTheDocument(),
++      expect(screen.getByRole("alert")).toBeInTheDocument(),
+     );
++    expect(screen.getByText(hu.plotlines.error)).toBeInTheDocument();
++    // Retry button comes from ErrorState (uses hu.common.retry).
+     expect(
+-      screen.getByRole("button", { name: hu.plotlines.retry }),
++      screen.getByRole("button", { name: hu.common.retry }),
+     ).toBeInTheDocument();
+   });
+ 
+diff --git a/apps/web/components/plotlines/plotlines-screen.tsx b/apps/web/components/plotlines/plotlines-screen.tsx
+index 4bbc58e..31cfdd2 100644
+--- a/apps/web/components/plotlines/plotlines-screen.tsx
++++ b/apps/web/components/plotlines/plotlines-screen.tsx
+@@ -18,8 +18,7 @@
+ import { useMemo, useState } from "react";
+ import { Plus } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+-import { Spinner } from "@/components/kit/spinner";
+-import { Button } from "@/components/kit";
++import { Button, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
+ import { useBookProjectId } from "@/lib/api/ai-hooks";
+ import { usePlotlines, useBookTree } from "@/lib/api/hooks";
+ import { PLOTLINE_TYPES, type PlotlineRead } from "@/lib/api/types";
+@@ -112,34 +111,26 @@ export function PlotlinesScreen({ bookId }: Readonly<PlotlinesScreenProps>) {
+   const isError = projectIdQuery.isError || plotlinesQuery.isError;
+ 
+   if (isError) {
+-    const message = (projectIdQuery.error ?? plotlinesQuery.error)?.message;
++    const detail = (projectIdQuery.error ?? plotlinesQuery.error)?.message;
+     return (
+-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+-        <p className="m-0 text-[14px] font-semibold text-danger-text">
+-          {hu.plotlines.error}
+-        </p>
+-        {message ? (
+-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
+-        ) : null}
+-        <Button
+-          variant="secondary"
+-          size={32}
+-          onClick={() => {
++      <div className="flex flex-1 items-center justify-center px-6">
++        <ErrorState
++          message={hu.plotlines.error}
++          detail={detail}
++          onRetry={() => {
+             void plotlinesQuery.refetch();
+             if (projectIdQuery.isError) void projectIdQuery.refetch();
+           }}
+-        >
+-          {hu.plotlines.retry}
+-        </Button>
++          className="w-full max-w-md"
++        />
+       </div>
+     );
+   }
+ 
+   if (isLoading || !projectId) {
+     return (
+-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
+-        <Spinner size={14} />
+-        {hu.plotlines.loading}
++      <div className="flex flex-1 flex-col px-6 py-8">
++        <SkeletonList rows={4} className="mx-auto w-full max-w-3xl" />
+       </div>
+     );
+   }
+@@ -148,20 +139,16 @@ export function PlotlinesScreen({ bookId }: Readonly<PlotlinesScreenProps>) {
+   if (plotlines.length === 0) {
+     return (
+       <>
+-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-            <BrandStar size={26} />
+-          </span>
+-          <p className="m-0 text-[15px] font-semibold text-text">
+-            {hu.plotlines.emptyTitle}
+-          </p>
+-          <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
+-            {hu.plotlines.emptyHint}
+-          </p>
+-          <Button variant="cta" onClick={openCreate}>
+-            <Plus size={15} aria-hidden />
+-            {hu.plotlines.emptyCta}
+-          </Button>
++        <div className="flex flex-1 items-center justify-center px-6">
++          <EmptyState
++            icon={<BrandStar size={26} />}
++            title={hu.plotlines.emptyTitle}
++            description={hu.plotlines.emptyHint}
++            action={{
++              label: hu.plotlines.emptyCta,
++              onClick: openCreate,
++            }}
++          />
+         </div>
+         <PlotlineModal
+           open={modalOpen}
+diff --git a/apps/web/components/relations/__tests__/relations-screen.test.tsx b/apps/web/components/relations/__tests__/relations-screen.test.tsx
+index 17ad7f7..a80761c 100644
+--- a/apps/web/components/relations/__tests__/relations-screen.test.tsx
++++ b/apps/web/components/relations/__tests__/relations-screen.test.tsx
+@@ -86,11 +86,15 @@ describe("RelationsScreen", () => {
+         <RelationsScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
++    // EmptyState renders title as an h2.
+     await waitFor(() =>
+-      expect(screen.getByText("Még nincs kapcsolat")).toBeInTheDocument(),
++      expect(
++        screen.getByRole("heading", { name: hu.relations.emptyTitle }),
++      ).toBeInTheDocument(),
+     );
++    // CTA wired via EmptyState action.
+     expect(
+-      screen.getByRole("button", { name: "Első kapcsolat" }),
++      screen.getByRole("button", { name: hu.relations.emptyCta }),
+     ).toBeInTheDocument();
+   });
+ 
+@@ -260,9 +264,13 @@ describe("RelationsScreen", () => {
+         <RelationsScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
+-    // The screen shows its error copy rather than crashing / rendering blank.
++    // ErrorState uses role="alert" and includes a retry button.
+     await waitFor(() =>
+-      expect(screen.getByText(hu.relations.error)).toBeInTheDocument(),
++      expect(screen.getByRole("alert")).toBeInTheDocument(),
+     );
++    expect(screen.getByText(hu.relations.error)).toBeInTheDocument();
++    expect(
++      screen.getByRole("button", { name: hu.common.retry }),
++    ).toBeInTheDocument();
+   });
+ });
+diff --git a/apps/web/components/relations/relations-screen.tsx b/apps/web/components/relations/relations-screen.tsx
+index 35b1126..9b1cf8e 100644
+--- a/apps/web/components/relations/relations-screen.tsx
++++ b/apps/web/components/relations/relations-screen.tsx
+@@ -12,8 +12,7 @@
+ import { useMemo, useState } from "react";
+ import { Plus } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+-import { Spinner } from "@/components/kit/spinner";
+-import { Button } from "@/components/kit";
++import { Button, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
+ import { useBookProjectId } from "@/lib/api/ai-hooks";
+ import { useCodexEntries, useCodexRelations } from "@/lib/api/hooks";
+ import { buildGraphData } from "./graph-data";
+@@ -54,28 +53,31 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
+     projectIdQuery.isError || relationsQuery.isError || entriesQuery.isError;
+ 
+   if (isError) {
+-    const message = (
++    const detail = (
+       projectIdQuery.error ??
+       relationsQuery.error ??
+       entriesQuery.error
+     )?.message;
+     return (
+-      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+-        <p className="m-0 text-[14px] font-semibold text-danger-text">
+-          {hu.relations.error}
+-        </p>
+-        {message ? (
+-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
+-        ) : null}
++      <div className="flex flex-1 items-center justify-center px-6">
++        <ErrorState
++          message={hu.relations.error}
++          detail={detail}
++          onRetry={() => {
++            void relationsQuery.refetch();
++            void entriesQuery.refetch();
++            if (projectIdQuery.isError) void projectIdQuery.refetch();
++          }}
++          className="w-full max-w-md"
++        />
+       </div>
+     );
+   }
+ 
+   if (isLoading || !projectId) {
+     return (
+-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
+-        <Spinner size={14} />
+-        {hu.relations.loading}
++      <div className="flex flex-1 flex-col px-6 py-8">
++        <SkeletonList rows={4} className="mx-auto w-full max-w-2xl" />
+       </div>
+     );
+   }
+@@ -84,20 +86,16 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
+   if (graph.edges.length === 0) {
+     return (
+       <>
+-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-            <BrandStar size={26} />
+-          </span>
+-          <p className="m-0 text-[15px] font-semibold text-text">
+-            {hu.relations.emptyTitle}
+-          </p>
+-          <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
+-            {hu.relations.emptyHint}
+-          </p>
+-          <Button variant="cta" onClick={() => setModalOpen(true)}>
+-            <Plus size={15} aria-hidden />
+-            {hu.relations.emptyCta}
+-          </Button>
++        <div className="flex flex-1 items-center justify-center px-6">
++          <EmptyState
++            icon={<BrandStar size={26} />}
++            title={hu.relations.emptyTitle}
++            description={hu.relations.emptyHint}
++            action={{
++              label: hu.relations.emptyCta,
++              onClick: () => setModalOpen(true),
++            }}
++          />
+         </div>
+         <NewRelationModal
+           open={modalOpen}
+diff --git a/apps/web/components/timeline/__tests__/timeline-screen.test.tsx b/apps/web/components/timeline/__tests__/timeline-screen.test.tsx
+index 84b18ed..07cd876 100644
+--- a/apps/web/components/timeline/__tests__/timeline-screen.test.tsx
++++ b/apps/web/components/timeline/__tests__/timeline-screen.test.tsx
+@@ -288,12 +288,16 @@ describe("TimelineScreen", () => {
+         <TimelineScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
++    // EmptyState renders title as an h2.
+     await waitFor(() =>
+-      expect(screen.getByText(hu.timeline.emptyTitle)).toBeInTheDocument(),
++      expect(
++        screen.getByRole("heading", { name: hu.timeline.emptyTitle }),
++      ).toBeInTheDocument(),
+     );
+-    // The CTA routes to the Plan Board.
+-    const cta = screen.getByRole("button", { name: hu.timeline.emptyCta });
+-    expect(cta).toBeInTheDocument();
++    // The CTA is wired to the Plan Board via EmptyState action.
++    expect(
++      screen.getByRole("button", { name: hu.timeline.emptyCta }),
++    ).toBeInTheDocument();
+   });
+ 
+   it("surfaces an error with a retry button", async () => {
+@@ -307,11 +311,16 @@ describe("TimelineScreen", () => {
+         <TimelineScreen bookId={FAROSZ_BOOK.id} />
+       </Providers>,
+     );
++    // ErrorState uses role="alert".
+     await waitFor(() =>
+-      expect(screen.getByText(hu.timeline.error)).toBeInTheDocument(),
++      expect(screen.getByRole("alert")).toBeInTheDocument(),
+     );
+     expect(
+-      screen.getByRole("button", { name: hu.timeline.retry }),
++      screen.getByText(hu.timeline.error),
++    ).toBeInTheDocument();
++    // Retry button comes from ErrorState (uses hu.common.retry).
++    expect(
++      screen.getByRole("button", { name: hu.common.retry }),
+     ).toBeInTheDocument();
+   });
+ 
+diff --git a/apps/web/components/timeline/timeline-screen.tsx b/apps/web/components/timeline/timeline-screen.tsx
+index ea8fa53..fb51015 100644
+--- a/apps/web/components/timeline/timeline-screen.tsx
++++ b/apps/web/components/timeline/timeline-screen.tsx
+@@ -26,10 +26,8 @@
+  * draft / archived / anything else → "planned".
+  */
+ import { useEffect, useMemo, useRef } from "react";
+-import { ArrowRight } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+-import { Spinner } from "@/components/kit/spinner";
+-import { Button, StatusPill } from "@/components/kit";
++import { StatusPill, EmptyState, ErrorState, SkeletonList } from "@/components/kit";
+ import { Card } from "@/components/kit/card";
+ import { TimelineNode, TimelineSpine } from "@/components/kit/timeline";
+ import { useBookProjectId } from "@/lib/api/ai-hooks";
+@@ -183,34 +181,26 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
+ 
+   // Error — the book tree is the load-bearing source; surface its message + retry.
+   if (tree.isError || projectIdQuery.isError) {
+-    const message = (tree.error ?? projectIdQuery.error)?.message;
++    const detail = (tree.error ?? projectIdQuery.error)?.message;
+     return (
+-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+-        <p className="m-0 text-[14px] font-semibold text-danger-text">
+-          {hu.timeline.error}
+-        </p>
+-        {message ? (
+-          <p className="m-0 max-w-md text-[13px] text-text-muted">{message}</p>
+-        ) : null}
+-        <Button
+-          variant="secondary"
+-          size={32}
+-          onClick={() => {
++      <div className="flex flex-1 items-center justify-center px-6">
++        <ErrorState
++          message={hu.timeline.error}
++          detail={detail}
++          onRetry={() => {
+             void tree.refetch();
+             if (projectIdQuery.isError) void projectIdQuery.refetch();
+           }}
+-        >
+-          {hu.timeline.retry}
+-        </Button>
++          className="w-full max-w-md"
++        />
+       </div>
+     );
+   }
+ 
+   if (tree.isLoading) {
+     return (
+-      <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-muted">
+-        <Spinner size={14} />
+-        {hu.timeline.loading}
++      <div className="flex flex-1 flex-col px-6 py-8">
++        <SkeletonList rows={5} className="mx-auto w-full max-w-2xl" />
+       </div>
+     );
+   }
+@@ -218,25 +208,16 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
+   // Empty — a calm prompt + a CTA to the Plan Board, never a blank canvas.
+   if (totalScenes === 0) {
+     return (
+-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-          <BrandStar size={26} />
+-        </span>
+-        <p className="m-0 text-[15px] font-semibold text-text">
+-          {hu.timeline.emptyTitle}
+-        </p>
+-        <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
+-          {hu.timeline.emptyHint}
+-        </p>
+-        <Button
+-          variant="cta"
+-          onClick={() =>
+-            bookId && navTo(routes.book(bookId, "terv"))
+-          }
+-        >
+-          {hu.timeline.emptyCta}
+-          <ArrowRight size={15} aria-hidden />
+-        </Button>
++      <div className="flex flex-1 items-center justify-center px-6">
++        <EmptyState
++          icon={<BrandStar size={26} />}
++          title={hu.timeline.emptyTitle}
++          description={hu.timeline.emptyHint}
++          action={{
++            label: hu.timeline.emptyCta,
++            onClick: () => bookId && navTo(routes.book(bookId, "terv")),
++          }}
++        />
+       </div>
+     );
+   }

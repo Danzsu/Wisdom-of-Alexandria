@@ -1,0 +1,350 @@
+### git status
+ M apps/ai/app/jobs/image_job.py
+ M apps/ai/app/services/image_service.py
+ M apps/ai/tests/integration/test_image_job.py
+ M apps/ai/tests/integration/test_image_service.py
+?? .superpowers/sdd/
+
+### tracked diff (vs 400da05 = T4)
+diff --git a/apps/ai/app/jobs/image_job.py b/apps/ai/app/jobs/image_job.py
+index 6468749..15c77ba 100644
+--- a/apps/ai/app/jobs/image_job.py
++++ b/apps/ai/app/jobs/image_job.py
+@@ -27,7 +27,10 @@ from app.services.image_service import ImageService, image_service
+ logger = logging.getLogger(__name__)
+ 
+ # Required keys in ``GenerationJob.input_data`` for an image job.
+-_REQUIRED_INPUT = ("entity_type", "entity_id", "style", "model")
++# Covers need art_style + layout instead of style.
++_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model")
++_REQUIRED_COVER: tuple[str, ...] = ("art_style", "layout")
++_REQUIRED_CODEX: tuple[str, ...] = ("style",)
+ 
+ 
+ def run_image_job(job_id: str) -> None:
+@@ -61,7 +64,9 @@ async def _run_image_job(
+             return
+ 
+         params = job.input_data or {}
+-        missing = [k for k in _REQUIRED_INPUT if not params.get(k)]
++        is_cover = params.get("entity_type") == "cover"
++        required = _REQUIRED_COMMON + (_REQUIRED_COVER if is_cover else _REQUIRED_CODEX)
++        missing = [k for k in required if not params.get(k)]
+         if missing:
+             # Defensive: the producer is expected to populate input_data; record
+             # the contract violation as a clean failure instead of crashing.
+@@ -77,15 +82,29 @@ async def _run_image_job(
+         await db.commit()
+ 
+         try:
+-            asset = await images.generate_for_entity(
+-                db,
+-                project_id=job.project_id,
+-                entity_type=params["entity_type"],
+-                entity_id=uuid.UUID(str(params["entity_id"])),
+-                style=params["style"],
+-                model=params["model"],
+-                job_id=job.id,
+-            )
++            if is_cover:
++                asset = await images.generate_cover_for_book(
++                    db,
++                    project_id=job.project_id,
++                    book_id=uuid.UUID(str(params["entity_id"])),
++                    art_style=params["art_style"],
++                    layout=params["layout"],
++                    title=params.get("title") or "",
++                    author=params.get("author") or "",
++                    subtitle=params.get("subtitle"),
++                    model=params["model"],
++                    job_id=job.id,
++                )
++            else:
++                asset = await images.generate_for_entity(
++                    db,
++                    project_id=job.project_id,
++                    entity_type=params["entity_type"],
++                    entity_id=uuid.UUID(str(params["entity_id"])),
++                    style=params["style"],
++                    model=params["model"],
++                    job_id=job.id,
++                )
+             job.output_data = {"media_asset_id": str(asset.id)}
+             job.status = JobStatus.DONE
+             await db.commit()
+diff --git a/apps/ai/app/services/image_service.py b/apps/ai/app/services/image_service.py
+index 62f3cc2..6e62e30 100644
+--- a/apps/ai/app/services/image_service.py
++++ b/apps/ai/app/services/image_service.py
+@@ -19,12 +19,13 @@ from __future__ import annotations
+ import logging
+ import uuid
+ 
++from alexandria_core.models.book import Book
+ from alexandria_core.models.codex_entry import CodexEntry
+ from alexandria_core.models.media_asset import MediaAsset
+ from sqlalchemy import select
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+-from app.services import image_prompt
++from app.services import cover_compositor, image_prompt
+ from app.services.image_storage import (
+     SavedImage,
+     delete_image_files,
+@@ -118,6 +119,70 @@ class ImageService:
+         await db.refresh(asset)
+         return asset
+ 
++    async def generate_cover_for_book(
++        self,
++        db: AsyncSession,
++        *,
++        project_id: uuid.UUID,
++        book_id: uuid.UUID,
++        art_style: str,
++        layout: str,
++        title: str,
++        author: str,
++        subtitle: str | None,
++        model: str,
++        job_id: uuid.UUID | None = None,
++    ) -> MediaAsset:
++        """Generate a book cover: art (text-free) → composite typography → READY
++        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Loud on failure
++        (cleans up a partial file, re-raises). Raises ``ValueError`` if the book
++        is missing."""
++        book = await db.get(Book, book_id)
++        if book is None or book.project_id != project_id:
++            raise ValueError(f"book {book_id} not found for cover generation")
++
++        prompt = image_prompt.build_cover_prompt(book, art_style)
++        asset_id = uuid.uuid4()
++        saved: SavedImage | None = None
++        try:
++            result = await self.router.generate_image(
++                prompt, model=model, db=db, aspect_ratio="2:3"
++            )
++            composed = cover_compositor.compose_cover(
++                result.data, layout=layout, title=title, author=author, subtitle=subtitle
++            )
++            from alexandria_core.core.config import settings
++
++            saved = save_image(
++                settings.media_dir, project_id, asset_id, composed, "image/png"
++            )
++        except Exception:
++            if saved is not None:
++                delete_image_files(saved.file_path, saved.thumb_path)
++            raise
++
++        asset = MediaAsset(
++            id=asset_id,
++            project_id=project_id,
++            entity_type="cover",
++            entity_id=book_id,
++            status="ready",
++            file_path=saved.file_path,
++            thumb_path=saved.thumb_path,
++            mime="image/png",
++            width=saved.width,
++            height=saved.height,
++            model_name=result.model,
++            style=art_style,
++            prompt=prompt,
++            job_id=job_id,
++            is_canonical=False,
++        )
++        db.add(asset)
++        await db.commit()
++        await db.refresh(asset)
++        return asset
++
+     # ── listing ──────────────────────────────────────────────────────────────
+ 
+     async def list_for_entity(
+diff --git a/apps/ai/tests/integration/test_image_job.py b/apps/ai/tests/integration/test_image_job.py
+index 6abcb10..f51ad41 100644
+--- a/apps/ai/tests/integration/test_image_job.py
++++ b/apps/ai/tests/integration/test_image_job.py
+@@ -10,9 +10,11 @@ plus the dotted-path producer/consumer contract.
+ import importlib
+ import uuid
+ from contextlib import asynccontextmanager
++from types import SimpleNamespace
+ from unittest.mock import AsyncMock
+ 
+ import pytest
++from alexandria_core.models.book import Book
+ from alexandria_core.models.character import Character
+ from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
+ from alexandria_core.models.media_asset import MediaAsset
+@@ -59,6 +61,23 @@ async def _make_character(db: AsyncSession, project_id: uuid.UUID) -> Character:
+     return c
+ 
+ 
++async def _make_book(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str = "Rácz Dániel",
++) -> uuid.UUID:
++    b = Book(project_id=project_id, title=title, author=author)
++    db.add(b)
++    await db.commit()
++    await db.refresh(b)
++    return b.id
++
++
++# Alias for clarity in cover-branch tests (same shim as _session_factory).
++_single_session_factory = _session_factory
++
++
+ async def _make_image_job(
+     db: AsyncSession, project_id: uuid.UUID, input_data: dict
+ ) -> GenerationJob:
+@@ -216,3 +235,50 @@ def test_image_job_dotted_path_resolves():
+     module_path, _, attr = IMAGE_JOB_PATH.rpartition(".")
+     mod = importlib.import_module(module_path)
+     assert getattr(mod, attr) is run_image_job
++
++
++# ── cover branch ─────────────────────────────────────────────────────────────
++
++
++@pytest.mark.integration
++async def test_image_job_cover_branch(db_session, monkeypatch):
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++
++    job = GenerationJob(
++        job_type=JobType.IMAGE,
++        project_id=project_id,
++        status=JobStatus.PENDING,
++        model_name="gemini/x",
++        input_data={
++            "entity_type": "cover",
++            "entity_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++            "title": "Fárosz",
++            "author": "Rácz D.",
++            "subtitle": None,
++            "model": "gemini/x",
++        },
++    )
++    db_session.add(job)
++    await db_session.commit()
++    await db_session.refresh(job)
++
++    calls = {}
++
++    async def fake_cover(db, **kw):
++        calls.update(kw)
++        return SimpleNamespace(id=uuid.uuid4())
++
++    images = ImageService()
++    monkeypatch.setattr(images, "generate_cover_for_book", fake_cover)
++
++    await _run_image_job(
++        job.id,
++        session_factory=_single_session_factory(db_session),
++        images=images,
++    )
++    refreshed = await db_session.get(GenerationJob, job.id)
++    assert refreshed.status == JobStatus.DONE
++    assert calls["art_style"] == "cover_fantasy" and calls["layout"] == "classic_centered"
+diff --git a/apps/ai/tests/integration/test_image_service.py b/apps/ai/tests/integration/test_image_service.py
+index d65e827..2c1ecda 100644
+--- a/apps/ai/tests/integration/test_image_service.py
++++ b/apps/ai/tests/integration/test_image_service.py
+@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
+ 
+ import pytest
+ from alexandria_core.core.config import settings
++from alexandria_core.models.book import Book
+ from alexandria_core.models.codex_entry import CodexEntry
+ from alexandria_core.models.media_asset import MediaAsset
+ from alexandria_core.models.project import Project
+@@ -66,6 +67,19 @@ async def _make_character(db, project_id: uuid.UUID, name: str = "Aragorn") -> C
+     return entry
+ 
+ 
++async def _make_book(
++    db,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str = "Rácz Dániel",
++) -> uuid.UUID:
++    book = Book(project_id=project_id, title=title, author=author)
++    db.add(book)
++    await db.flush()
++    await db.commit()
++    return book.id
++
++
+ @pytest.fixture(autouse=True)
+ def _tmp_media_dir(tmp_path, monkeypatch):
+     media = tmp_path / "media"
+@@ -353,3 +367,60 @@ async def test_generation_failure_raises_and_leaves_no_partial(
+     for root, _dirs, files in os.walk(str(_tmp_media_dir)):
+         leftover.extend(files)
+     assert leftover == []
++
++
++# ── generate_cover_for_book ───────────────────────────────────────────────────
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_persists_cover_asset(
++    db_session, monkeypatch, tmp_path
++):
++    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
++
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++
++    async def fake_generate_image(
++        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
++    ):
++        buf = io.BytesIO()
++        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
++        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
++
++    svc = ImageService()
++    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
++
++    asset = await svc.generate_cover_for_book(
++        db_session,
++        project_id=project_id,
++        book_id=book_id,
++        art_style="cover_fantasy",
++        layout="classic_centered",
++        title="Fárosz",
++        author="Rácz D.",
++        subtitle=None,
++        model="gemini/x",
++    )
++    assert asset.entity_type == "cover"
++    assert asset.entity_id == book_id
++    assert asset.status == "ready"
++    assert asset.style == "cover_fantasy"
++    assert asset.width == 1600 and asset.height == 2560
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_missing_book_raises(db_session):
++    svc = ImageService()
++    with pytest.raises(ValueError):
++        await svc.generate_cover_for_book(
++            db_session,
++            project_id=uuid.uuid4(),
++            book_id=uuid.uuid4(),
++            art_style="cover_fantasy",
++            layout="classic_centered",
++            title="t",
++            author="a",
++            subtitle=None,
++            model="m",
++        )
+
+### untracked new files (excl scratch)

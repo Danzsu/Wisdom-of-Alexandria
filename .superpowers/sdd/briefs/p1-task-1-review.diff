@@ -1,0 +1,193 @@
+### git status
+ M apps/web/app/globals.css
+ M apps/web/components/kit/button.tsx
+?? .superpowers/sdd/
+?? apps/web/components/kit/__tests__/contrast.test.ts
+
+### tracked diff (vs eb9977d)
+diff --git a/apps/web/app/globals.css b/apps/web/app/globals.css
+index 91a23cd..ed5a799 100644
+--- a/apps/web/app/globals.css
++++ b/apps/web/app/globals.css
+@@ -20,7 +20,7 @@
+   --text: #2d2618;
+   --text-soft: #4c4332;
+   --text-muted: #6e6450;
+-  --text-faint: #a3977c;
++  --text-faint: #786a47;
+   --accent: #b8862b;
+   --accent-strong: #8a5f14;
+   --accent-hover: #76510f;
+@@ -40,6 +40,8 @@
+   --danger: #c2410c;
+   --danger-muted: #fcefe6;
+   --danger-text: #9a3412;
++  --danger-solid: #c2410c;
++  --danger-solid-fg: #fffdf7;
+   --pov1-bg: #fdf0d5;
+   --pov1-tx: #8a5a13;
+   --pov2-bg: #fbe4e9;
+@@ -79,7 +81,7 @@
+   --text: #f0e8d6;
+   --text-soft: #d8cdb4;
+   --text-muted: #b5a98b;
+-  --text-faint: #857a61;
++  --text-faint: #9b8f6e;
+   --accent: #d9a84e;
+   --accent-strong: #d9a84e;
+   --accent-hover: #e6ba66;
+@@ -99,6 +101,8 @@
+   --danger: #e07a4f;
+   --danger-muted: #2a160d;
+   --danger-text: #f0a07f;
++  --danger-solid: #b5431f;
++  --danger-solid-fg: #fff7f3;
+   --pov1-bg: #3a2c10;
+   --pov1-tx: #e6b860;
+   --pov2-bg: #3a1b24;
+@@ -157,6 +161,8 @@
+   --color-danger: var(--danger);
+   --color-danger-muted: var(--danger-muted);
+   --color-danger-text: var(--danger-text);
++  --color-danger-solid: var(--danger-solid);
++  --color-danger-solid-fg: var(--danger-solid-fg);
+   --color-pov1-bg: var(--pov1-bg);
+   --color-pov1-tx: var(--pov1-tx);
+   --color-pov2-bg: var(--pov2-bg);
+diff --git a/apps/web/components/kit/button.tsx b/apps/web/components/kit/button.tsx
+index 67af5de..da29dcf 100644
+--- a/apps/web/components/kit/button.tsx
++++ b/apps/web/components/kit/button.tsx
+@@ -17,7 +17,7 @@ const buttonVariants = cva(
+         success:
+           "border-none bg-success text-success-fg font-semibold hover:brightness-95",
+         destructive:
+-          "border-none bg-danger text-white font-semibold hover:brightness-95",
++          "border-none bg-danger-solid text-danger-solid-fg font-semibold hover:brightness-95",
+         "accent-outline":
+           "border border-accent bg-accent-muted text-accent-text font-semibold hover:bg-accent-strong hover:text-accent-fg",
+         dashed:
+
+### untracked (excl scratch)
+===== apps/web/components/kit/__tests__/contrast.test.ts =====
+/**
+ * WCAG-AA contrast regression guard — Task 1 (Design-System Foundation Phase 1).
+ *
+ * These tests are fully deterministic: they embed the exact hex values that were
+ * WCAG-verified before being written into globals.css, and assert 4.5:1 minimum
+ * contrast (AA level for normal-weight text).
+ *
+ * Rationale: freezes the fix against accidental future token edits.  No browser
+ * or CSS parsing is involved — the numbers are hardcoded by design.
+ */
+
+import { describe, expect, it } from "vitest";
+
+// ---------------------------------------------------------------------------
+// WCAG relative-luminance helper
+// ---------------------------------------------------------------------------
+
+/** Convert a single 8-bit channel value [0-255] to linear light. */
+function toLinear(c8: number): number {
+  const c = c8 / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/** WCAG relative luminance of a hex color string, e.g. "#fffdf7". */
+function relativeLuminance(hex: string): number {
+  const h = hex.replace("#", "");
+  const r = Number.parseInt(h.slice(0, 2), 16);
+  const g = Number.parseInt(h.slice(2, 4), 16);
+  const b = Number.parseInt(h.slice(4, 6), 16);
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * WCAG contrast ratio between a foreground and background hex.
+ * Returns a value between 1 (no contrast) and 21 (black on white).
+ */
+export function contrastRatio(hexFg: string, hexBg: string): number {
+  const L1 = relativeLuminance(hexFg);
+  const L2 = relativeLuminance(hexBg);
+  const lighter = Math.max(L1, L2);
+  const darker = Math.min(L1, L2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+// ---------------------------------------------------------------------------
+// Token fixture — these MUST match the values written into globals.css.
+// ---------------------------------------------------------------------------
+
+const LIGHT = {
+  bg: "#f6f1e6",
+  surface: "#fffdf7",
+  textFaint: "#786a47", // was #a3977c (2.56:1) — FAIL; new value passes AA
+  textMuted: "#6e6450", // regression guard
+  dangerSolid: "#c2410c",
+  dangerSolidFg: "#fffdf7",
+};
+
+const DARK = {
+  bg: "#1b1712",
+  surface: "#252019",
+  surfaceMuted: "#2e2820",
+  textFaint: "#9b8f6e", // was #857a61 (4.21:1) — FAIL; nudged one step from #9a8e6d to clear surface-muted
+  textMuted: "#b5a98b", // regression guard
+  dangerSolid: "#b5431f",
+  dangerSolidFg: "#fff7f3",
+};
+
+const AA_NORMAL = 4.5;
+
+// ---------------------------------------------------------------------------
+// Assertions
+// ---------------------------------------------------------------------------
+
+describe("WCAG-AA contrast — light theme", () => {
+  it("--text-faint on --bg >= 4.5:1", () => {
+    const ratio = contrastRatio(LIGHT.textFaint, LIGHT.bg);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--text-faint on --surface >= 4.5:1", () => {
+    const ratio = contrastRatio(LIGHT.textFaint, LIGHT.surface);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--text-muted on --bg >= 4.5:1 (regression guard)", () => {
+    const ratio = contrastRatio(LIGHT.textMuted, LIGHT.bg);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--danger-solid-fg on --danger-solid >= 4.5:1", () => {
+    const ratio = contrastRatio(LIGHT.dangerSolidFg, LIGHT.dangerSolid);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+});
+
+describe("WCAG-AA contrast — dark theme", () => {
+  it("--text-faint on --bg >= 4.5:1", () => {
+    const ratio = contrastRatio(DARK.textFaint, DARK.bg);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--text-faint on --surface >= 4.5:1", () => {
+    const ratio = contrastRatio(DARK.textFaint, DARK.surface);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--text-faint on --surface-muted >= 4.5:1", () => {
+    const ratio = contrastRatio(DARK.textFaint, DARK.surfaceMuted);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--text-muted on --bg >= 4.5:1 (regression guard)", () => {
+    const ratio = contrastRatio(DARK.textMuted, DARK.bg);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it("--danger-solid-fg on --danger-solid >= 4.5:1", () => {
+    const ratio = contrastRatio(DARK.dangerSolidFg, DARK.dangerSolid);
+    expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+});

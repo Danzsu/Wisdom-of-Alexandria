@@ -1,0 +1,95 @@
+### git status
+ M apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
+ M apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
+ M apps/web/lib/i18n/hu.ts
+?? .superpowers/sdd/
+
+### tracked diff (vs 96bbf36 = T8)
+diff --git a/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx b/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
+index 2427e22..04f30b6 100644
+--- a/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
++++ b/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
+@@ -36,6 +36,8 @@ describe("Book settings page", () => {
+ 
+   it("renders the author field on the Könyv tab (default)", async () => {
+     renderSettings();
++    // The metadata "Szerző" is distinct from the cover panel's "Szerző a
++    // borítón", so the label is unambiguous.
+     expect(
+       await screen.findByLabelText(hu.books.authorLabel),
+     ).toBeInTheDocument();
+@@ -55,15 +57,23 @@ describe("Book settings page", () => {
+       ),
+     );
+     renderSettings();
+-    const author = await screen.findByLabelText(hu.books.authorLabel);
+-    await user.clear(author);
+-    await user.type(author, "Rácz Dániel");
++    const metadataAuthorField = await screen.findByLabelText(
++      hu.books.authorLabel,
++    );
++    await user.clear(metadataAuthorField);
++    await user.type(metadataAuthorField, "Rácz Dániel");
+     await user.click(screen.getByRole("button", { name: hu.books.save }));
+     await waitFor(() =>
+       expect(patched.at(-1)).toMatchObject({ author: "Rácz Dániel" }),
+     );
+   });
+ 
++  it("shows the cover generator section on the Könyv tab (default)", async () => {
++    renderSettings();
++    expect(await screen.findByText(hu.covers.title)).toBeInTheDocument();
++    expect(await screen.findByLabelText(hu.covers.artStyleLabel)).toBeInTheDocument();
++  });
++
+   it("switching to AI / Szolgáltatók tab renders the provider hub", async () => {
+     const user = userEvent.setup();
+     renderSettings();
+diff --git a/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx b/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
+index f5dd954..93bdea5 100644
+--- a/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
++++ b/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
+@@ -14,6 +14,7 @@ import { useParams } from "next/navigation";
+ import { useResolvedBook } from "@/lib/api/export-hooks";
+ import { useUpdateBook } from "@/lib/api/hooks";
+ import { Button, FieldLabel, FormInput, toast } from "@/components/kit";
++import { CoverPanel } from "@/components/book/cover-panel";
+ import { hu } from "@/lib/i18n/hu";
+ 
+ export function BookTab() {
+@@ -122,6 +123,16 @@ export function BookTab() {
+           </Button>
+         </div>
+       </form>
++
++      <hr className="my-8 border-border" />
++
++      {bookQuery.data ? (
++        <CoverPanel
++          bookId={bookQuery.data.id}
++          bookTitle={bookQuery.data.title}
++          bookAuthor={bookQuery.data.author ?? null}
++        />
++      ) : null}
+     </>
+   );
+ }
+diff --git a/apps/web/lib/i18n/hu.ts b/apps/web/lib/i18n/hu.ts
+index 3b8817a..a1ac09a 100644
+--- a/apps/web/lib/i18n/hu.ts
++++ b/apps/web/lib/i18n/hu.ts
+@@ -1611,8 +1611,10 @@ export const hu = {
+     title: "Borító",
+     artStyleLabel: "Stílus",
+     layoutLabel: "Elrendezés",
+-    titleLabel: "Cím",
+-    authorLabel: "Szerző",
++    // Cover-specific labels (distinct from the book metadata "Cím"/"Szerző" on
++    // the same tab) — these are the text rendered ONTO the cover image.
++    titleLabel: "Cím a borítón",
++    authorLabel: "Szerző a borítón",
+     subtitleLabel: "Alcím (opcionális)",
+     generate: "Borító generálása",
+     generating: "Generálás…",
+
+### untracked new files (excl scratch)

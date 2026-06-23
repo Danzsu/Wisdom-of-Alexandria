@@ -1,0 +1,316 @@
+### git status
+ M apps/web/app/kitchen-sink/page.tsx
+ M apps/web/components/kit/__tests__/progress-bar.test.tsx
+ M apps/web/components/kit/__tests__/status-dot.test.tsx
+ M apps/web/components/kit/__tests__/tab.test.tsx
+ M apps/web/components/kit/progress-bar.tsx
+ M apps/web/components/kit/status-dot.tsx
+ M apps/web/lib/api/__tests__/client.test.ts
+ M apps/web/lib/api/client.ts
+?? .superpowers/sdd/
+
+### tracked diff (vs 97c583d = T1)
+diff --git a/apps/web/app/kitchen-sink/page.tsx b/apps/web/app/kitchen-sink/page.tsx
+index bef3c3e..567c445 100644
+--- a/apps/web/app/kitchen-sink/page.tsx
++++ b/apps/web/app/kitchen-sink/page.tsx
+@@ -365,7 +365,7 @@ export default function KitchenSinkPage() {
+           </TabBar>
+         </div>
+         <Specimen label="vertical (inspector)">
+-          <div className="flex w-48 gap-2 rounded-lg border border-border p-1">
++          <TabBar aria-label="Inspektor panel" className="w-48 gap-2 rounded-lg border border-border p-1">
+             <Tab orientation="vertical" active icon={<Icon icon={Wand2} />}>
+               AI
+             </Tab>
+@@ -375,7 +375,7 @@ export default function KitchenSinkPage() {
+             <Tab orientation="vertical" icon={<Icon icon={User} />}>
+               Jegyzet
+             </Tab>
+-          </div>
++          </TabBar>
+         </Specimen>
+       </Section>
+ 
+diff --git a/apps/web/components/kit/__tests__/progress-bar.test.tsx b/apps/web/components/kit/__tests__/progress-bar.test.tsx
+index fefcf18..17ca689 100644
+--- a/apps/web/components/kit/__tests__/progress-bar.test.tsx
++++ b/apps/web/components/kit/__tests__/progress-bar.test.tsx
+@@ -1,7 +1,32 @@
+ import { describe, expect, it } from "vitest";
+ import { render, screen } from "@testing-library/react";
++import { axe } from "vitest-axe";
+ import { ProgressBar } from "@/components/kit/progress-bar";
+ 
++describe("ProgressBar — accessibility (T2)", () => {
++  it("exposes an accessible name from aria-label and sets valuetext", () => {
++    render(<ProgressBar value={30} aria-label="Feltöltés" />);
++    const bar = screen.getByRole("progressbar", { name: "Feltöltés" });
++    expect(bar).toHaveAttribute("aria-valuetext", "30%");
++  });
++
++  it("has a default accessible name when none is given", () => {
++    render(<ProgressBar value={10} />);
++    expect(screen.getByRole("progressbar")).toHaveAccessibleName();
++  });
++
++  it("does not set valuetext when indeterminate", () => {
++    render(<ProgressBar indeterminate aria-label="Betöltés" />);
++    const bar = screen.getByRole("progressbar", { name: "Betöltés" });
++    expect(bar).not.toHaveAttribute("aria-valuetext");
++  });
++
++  it("is axe-clean with an explicit aria-label", async () => {
++    const { container } = render(<ProgressBar value={50} aria-label="X" />);
++    expect(await axe(container)).toHaveNoViolations();
++  });
++});
++
+ describe("ProgressBar", () => {
+   it("renders a determinate fill at the given width and exposes aria values", () => {
+     render(<ProgressBar value={42} />);
+diff --git a/apps/web/components/kit/__tests__/status-dot.test.tsx b/apps/web/components/kit/__tests__/status-dot.test.tsx
+index 467e38a..a5e4888 100644
+--- a/apps/web/components/kit/__tests__/status-dot.test.tsx
++++ b/apps/web/components/kit/__tests__/status-dot.test.tsx
+@@ -1,7 +1,29 @@
+ import { describe, expect, it } from "vitest";
+-import { render } from "@testing-library/react";
++import { render, screen } from "@testing-library/react";
+ import { StatusDot } from "@/components/kit/status-dot";
+ 
++describe("StatusDot — accessibility (T3)", () => {
++  it("a labelled dot has role=img so the label is valid", () => {
++    render(<StatusDot variant="danger" aria-label="Eredeti" />);
++    expect(screen.getByRole("img", { name: "Eredeti" })).toBeInTheDocument();
++  });
++
++  it("an unlabelled dot is hidden from AT via aria-hidden", () => {
++    const { container } = render(<StatusDot variant="success" />);
++    expect(container.querySelector("span")).toHaveAttribute("aria-hidden", "true");
++  });
++
++  it("a labelled timeline treatment has role=img", () => {
++    render(<StatusDot treatment="timeline" aria-label="Idővonal csomópont" />);
++    expect(screen.getByRole("img", { name: "Idővonal csomópont" })).toBeInTheDocument();
++  });
++
++  it("an unlabelled timeline treatment is aria-hidden", () => {
++    const { container } = render(<StatusDot treatment="timeline" />);
++    expect(container.querySelector("span")).toHaveAttribute("aria-hidden", "true");
++  });
++});
++
+ describe("StatusDot", () => {
+   it("applies the colour variant class", () => {
+     const { container } = render(<StatusDot variant="success" />);
+diff --git a/apps/web/components/kit/__tests__/tab.test.tsx b/apps/web/components/kit/__tests__/tab.test.tsx
+index 7af0217..2678ed6 100644
+--- a/apps/web/components/kit/__tests__/tab.test.tsx
++++ b/apps/web/components/kit/__tests__/tab.test.tsx
+@@ -97,3 +97,57 @@ describe("Tab", () => {
+     );
+   });
+ });
++
++/** Walk the DOM and assert every role="tab" element has a role="tablist" ancestor. */
++function assertTabsHaveTablistAncestor(container: HTMLElement): void {
++    const tabs = container.querySelectorAll('[role="tab"]');
++    for (const tab of tabs) {
++      let ancestor: Element | null = tab.parentElement;
++      let found = false;
++      while (ancestor) {
++        if (ancestor.getAttribute("role") === "tablist") {
++          found = true;
++          break;
++        }
++        ancestor = ancestor.parentElement;
++      }
++      expect(
++        found,
++        `role="tab" element ("${tab.textContent?.trim()}") has no role="tablist" ancestor`,
++      ).toBe(true);
++    }
++}
++
++describe("Tab — tablist parent requirement (T4)", () => {
++  it("bare Tab elements outside a TabBar violate the tablist requirement", () => {
++    // Confirm the structural rule: a role="tab" MUST have a role="tablist" ancestor.
++    // This test documents the broken pattern — the fix is to wrap in a TabBar.
++    const { container } = render(
++      <div>
++        <Tab active>AI</Tab>
++        <Tab>Codex</Tab>
++      </div>,
++    );
++    const tabs = container.querySelectorAll('[role="tab"]');
++    const hasMissingParent = Array.from(tabs).some((tab) => {
++      let ancestor: Element | null = tab.parentElement;
++      while (ancestor) {
++        if (ancestor.getAttribute("role") === "tablist") return false;
++        ancestor = ancestor.parentElement;
++      }
++      return true;
++    });
++    expect(hasMissingParent).toBe(true);
++  });
++
++  it("all role=tab elements have a role=tablist ancestor when wrapped in TabBar", () => {
++    const { container } = render(
++      <TabBar aria-label="Inspektor">
++        <Tab active>AI</Tab>
++        <Tab>Codex</Tab>
++        <Tab>Jegyzet</Tab>
++      </TabBar>,
++    );
++    assertTabsHaveTablistAncestor(container);
++  });
++});
+diff --git a/apps/web/components/kit/progress-bar.tsx b/apps/web/components/kit/progress-bar.tsx
+index 068b134..e71c845 100644
+--- a/apps/web/components/kit/progress-bar.tsx
++++ b/apps/web/components/kit/progress-bar.tsx
+@@ -42,6 +42,7 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
+       indeterminate = false,
+       value = 0,
+       showLabel = false,
++      "aria-label": ariaLabel,
+       ...domProps
+     },
+     ref,
+@@ -52,9 +53,11 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
+         <div
+           ref={ref}
+           role="progressbar"
++          aria-label={ariaLabel ?? "Folyamatjelző"}
+           aria-valuemin={indeterminate ? undefined : 0}
+           aria-valuemax={indeterminate ? undefined : 100}
+           aria-valuenow={indeterminate ? undefined : Math.round(pct)}
++          aria-valuetext={indeterminate ? undefined : `${Math.round(pct)}%`}
+           className={cn(
+             "h-[5px] flex-1 overflow-hidden rounded-full bg-accent-muted",
+             className,
+diff --git a/apps/web/components/kit/status-dot.tsx b/apps/web/components/kit/status-dot.tsx
+index f46b95e..31b6f02 100644
+--- a/apps/web/components/kit/status-dot.tsx
++++ b/apps/web/components/kit/status-dot.tsx
+@@ -53,12 +53,18 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
+     { className, variant, size, treatment, "aria-label": ariaLabel, ...props },
+     ref,
+   ) {
++    // When a label is provided the span must have role="img" so the aria-label
++    // is valid (aria-label on a role-less span is a prohibited attribute).
++    // When no label is given the dot is purely decorative and is hidden from AT.
++    const a11y = ariaLabel
++      ? ({ role: "img" as const, "aria-label": ariaLabel })
++      : ({ "aria-hidden": true });
++
+     if (treatment === "timeline") {
+       return (
+         <span
+           ref={ref}
+-          aria-label={ariaLabel}
+-          aria-hidden={ariaLabel ? undefined : true}
++          {...a11y}
+           className={cn(
+             "inline-block h-4 w-4 flex-none rounded-full border-[3px] border-bg bg-accent shadow-[0_0_0_1px_var(--border)]",
+             className,
+@@ -71,8 +77,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
+       return (
+         <span
+           ref={ref}
+-          aria-label={ariaLabel}
+-          aria-hidden={ariaLabel ? undefined : true}
++          {...a11y}
+           className={cn(
+             "inline-block h-4 w-4 flex-none rounded-full border-2 border-dashed border-border-strong bg-surface",
+             className,
+@@ -85,8 +90,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
+       return (
+         <span
+           ref={ref}
+-          aria-label={ariaLabel}
+-          aria-hidden={ariaLabel ? undefined : true}
++          {...a11y}
+           className={cn(
+             statusDotVariants({ variant }),
+             "h-[9px] w-[9px] border-[1.5px] border-surface",
+@@ -99,8 +103,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(
+     return (
+       <span
+         ref={ref}
+-        aria-label={ariaLabel}
+-        aria-hidden={ariaLabel ? undefined : true}
++        {...a11y}
+         className={cn(statusDotVariants({ variant, size }), className)}
+         {...props}
+       />
+diff --git a/apps/web/lib/api/__tests__/client.test.ts b/apps/web/lib/api/__tests__/client.test.ts
+index 81083df..f2d2cda 100644
+--- a/apps/web/lib/api/__tests__/client.test.ts
++++ b/apps/web/lib/api/__tests__/client.test.ts
+@@ -108,6 +108,31 @@ describe("apiFetch", () => {
+   });
+ });
+ 
++describe("apiFetch — transport errors (T5)", () => {
++  it("surfaces a localized message (not the raw browser string) on fetch failure", async () => {
++    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
++      new TypeError("Failed to fetch"),
++    );
++    await expect(apiFetch("/projects")).rejects.toMatchObject({
++      status: 0,
++      message: "Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot.",
++    });
++  });
++
++  it("re-throws an AbortError without converting it to an ApiError", async () => {
++    const abortError = new DOMException("The user aborted a request.", "AbortError");
++    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(abortError);
++    let thrown: unknown;
++    try {
++      await apiFetch("/projects");
++    } catch (err) {
++      thrown = err;
++    }
++    expect(thrown).toBeInstanceOf(DOMException);
++    expect(thrown).not.toBeInstanceOf(ApiError);
++  });
++});
++
+ describe("getAuthToken — localStorage fallback (A10.2)", () => {
+   it("warns (without logging the token) and falls back when localStorage throws", () => {
+     // Force a localStorage failure (private mode / disabled storage). Spying on
+diff --git a/apps/web/lib/api/client.ts b/apps/web/lib/api/client.ts
+index 4dd2b55..8b40de3 100644
+--- a/apps/web/lib/api/client.ts
++++ b/apps/web/lib/api/client.ts
+@@ -170,13 +170,19 @@ export async function apiFetch<T>(
+       signal,
+     });
+   } catch (cause) {
+-    // Network / transport failure (CORS, server down, aborted). Surface it as a
+-    // typed error rather than letting an opaque TypeError bubble up.
+-    const message =
+-      cause instanceof Error
+-        ? cause.message
+-        : "Nem sikerült elérni a szervert.";
+-    throw new ApiError(0, message, cause);
++    // An intentional abort (e.g. React Query cancellation) must propagate as-is —
++    // do NOT convert it to an ApiError; callers check for AbortError explicitly.
++    if (cause instanceof DOMException && cause.name === "AbortError") {
++      throw cause;
++    }
++    // Network / transport failure (CORS, server down, DNS failure). The browser's
++    // raw "Failed to fetch" is dev jargon — never show it to the user. Surface a
++    // fixed localized message; keep the original cause as the body for debugging.
++    throw new ApiError(
++      0,
++      "Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot.",
++      cause,
++    );
+   }
+ 
+   const parsed = await parseJson(res);
+
+### untracked (excl scratch)

@@ -1,0 +1,3945 @@
+### Phase-2 cover feature — commits 1aba97c..HEAD
+24bf7b6 test(covers): cross-resource cover flow (generate->job->list->canonical->serve)
+031b4bf fix(images): single-asset lifecycle — job updates the placeholder, not a 2nd row
+7729d7a feat(covers): mount cover generator in the Könyv settings tab
+96bbf36 feat(covers): cover panel component + hu.covers
+5f17b8e feat(covers): FE covers API + hooks + MSW
+8349b1b feat(covers): POST /ai/covers + styles/layouts endpoints + regen shared-types
+83166f6 feat(covers): generate_cover_for_book + image-job cover branch
+400da05 feat(covers): Pillow cover compositor + layouts + bundled OFL fonts
+2d193c0 feat(covers): cover art-style presets + build_cover_prompt
+036d1d4 feat(books): edit Book.author in settings (Könyv/AI tabs) + regen shared-types
+2fea8b1 feat(books): add Book.author field (model + migration + schema)
+
+### diff --stat
+ apps/ai/app/api/v1/covers.py                       | 139 ++++++
+ apps/ai/app/api/v1/images.py                       |   1 +
+ apps/ai/app/api/v1/router.py                       |   2 +
+ apps/ai/app/jobs/image_job.py                      |  54 ++-
+ apps/ai/app/schemas/cover.py                       |  19 +
+ apps/ai/app/services/cover_compositor.py           | 167 +++++++
+ apps/ai/app/services/image_prompt.py               |  48 ++
+ apps/ai/app/services/image_service.py              | 112 ++++-
+ apps/ai/tests/integration/test_cover_flow.py       | 210 +++++++++
+ apps/ai/tests/integration/test_covers_endpoints.py | 186 ++++++++
+ apps/ai/tests/integration/test_image_job.py        | 302 ++++++++++++-
+ apps/ai/tests/integration/test_image_service.py    | 287 +++++++++++-
+ apps/ai/tests/unit/test_cover_compositor.py        |  53 +++
+ apps/ai/tests/unit/test_image_prompt.py            |  41 ++
+ .../versions/91516a452442_initial_schema.py        |   2 +-
+ .../versions/a7b3c1d2e4f5_add_book_author.py       |  33 ++
+ apps/api/app/schemas/book.py                       |   3 +
+ apps/api/tests/integration/test_books.py           |  23 +
+ .../[bookId]/beallitasok/__tests__/page.test.tsx   |  92 ++++
+ .../(app)/konyv/[bookId]/beallitasok/book-tab.tsx  | 138 ++++++
+ .../app/(app)/konyv/[bookId]/beallitasok/page.tsx  |  57 ++-
+ .../components/book/__tests__/cover-panel.test.tsx |  50 +++
+ apps/web/components/book/cover-panel.tsx           | 493 +++++++++++++++++++++
+ .../create-book-flow.integration.test.tsx          |   1 +
+ .../projects/__tests__/new-book-wizard.test.tsx    |   1 +
+ apps/web/lib/api/__tests__/covers.test.ts          |  48 ++
+ apps/web/lib/api/cover-hooks.ts                    |  23 +
+ apps/web/lib/api/covers.ts                         |  50 +++
+ apps/web/lib/api/image-types.ts                    |   9 +
+ apps/web/lib/api/types.ts                          |   3 +
+ apps/web/lib/i18n/hu.ts                            |  59 +++
+ apps/web/test/msw/fixtures.ts                      |  16 +
+ apps/web/test/msw/handlers.ts                      |  19 +
+ packages/db/alexandria_core/models/book.py         |   3 +
+ packages/prompts/hu/cover_styles/cover_fantasy.md  |   3 +
+ packages/prompts/hu/cover_styles/cover_literary.md |   3 +
+ packages/prompts/hu/cover_styles/cover_minimal.md  |   3 +
+ packages/prompts/hu/cover_styles/cover_romance.md  |   3 +
+ packages/prompts/hu/cover_styles/cover_thriller.md |   3 +
+ 39 files changed, 2704 insertions(+), 55 deletions(-)
+
+### NOTE: packages/shared (regenerated openapi-typescript) + apps/ai/fonts (binary OFL TTFs) excluded.
+
+### full diff (-U8)
+diff --git a/apps/ai/app/api/v1/covers.py b/apps/ai/app/api/v1/covers.py
+new file mode 100644
+index 0000000..34c79e5
+--- /dev/null
++++ b/apps/ai/app/api/v1/covers.py
+@@ -0,0 +1,139 @@
++"""Book cover generation HTTP layer (Phase 2).
++
++POST /ai/covers enqueues a cover job (a MediaAsset with entity_type="cover").
++Validation 422s are raised BEFORE any create and OUTSIDE the try, so they are
++never re-wrapped into the enqueue 502. List/canonical/delete/serve reuse the
++Phase-1 /ai/images + /ai/media endpoints (entity_type="cover").
++"""
++import logging
++
++from alexandria_core.core.deps import get_current_user, get_db
++from alexandria_core.core.errors import safe_error
++from alexandria_core.models.book import Book
++from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
++from alexandria_core.models.media_asset import MediaAsset
++from fastapi import APIRouter, Depends, HTTPException, status
++from sqlalchemy.ext.asyncio import AsyncSession
++
++from app.api.v1.images import _resolve_image_model
++from app.schemas.cover import CoverGenerateRequest, CoverLayoutInfo
++from app.schemas.media_asset import ImageStyleInfo, MediaAssetRead
++from app.services.cover_compositor import available_cover_layouts
++from app.services.image_prompt import available_cover_styles
++from app.services.job_queue import enqueue_image_job
++
++logger = logging.getLogger(__name__)
++
++router = APIRouter(prefix="/ai", tags=["covers"])
++
++
++@router.post("/covers", response_model=MediaAssetRead, status_code=status.HTTP_202_ACCEPTED)
++async def generate_cover(
++    data: CoverGenerateRequest,
++    db: AsyncSession = Depends(get_db),
++    _: str = Depends(get_current_user),
++) -> MediaAssetRead:
++    """Enqueue a cover-generation job for a Book.
++
++    Creates a ``generating`` MediaAsset + an IMAGE GenerationJob, hands the job
++    id to the worker queue, and returns the asset (202). All validation (art_style,
++    layout, book existence, model availability) happens BEFORE anything is created
++    and OUTSIDE the try, so a 422 is never re-wrapped into a 502.
++    """
++    # ── Validation (all 422s, BEFORE any create, OUTSIDE the try) ──────────────
++    if data.art_style not in {s.slug for s in available_cover_styles()}:
++        raise HTTPException(status_code=422, detail="invalid cover art_style")
++
++    if data.layout not in {lay.slug for lay in available_cover_layouts()}:
++        raise HTTPException(status_code=422, detail="invalid cover layout")
++
++    book = await db.get(Book, data.book_id)
++    if book is None:
++        raise HTTPException(status_code=422, detail="book_id does not exist")
++
++    model = data.model or await _resolve_image_model(db)
++    if model is None:
++        raise HTTPException(status_code=422, detail="no image model configured")
++
++    title = (data.title or book.title or "").strip()
++    author = (data.author if data.author is not None else (book.author or "")).strip()
++
++    # ── Create + enqueue ──────────────────────────────────────────────────────
++    asset = MediaAsset(
++        status="generating",
++        project_id=book.project_id,
++        entity_type="cover",
++        entity_id=book.id,
++        style=data.art_style,
++        model_name=model,
++    )
++    db.add(asset)
++    await db.commit()
++    await db.refresh(asset)
++
++    job = GenerationJob(
++        job_type=JobType.IMAGE,
++        project_id=book.project_id,
++        status=JobStatus.PENDING,
++        model_name=model,
++        input_data={
++            "entity_type": "cover",
++            "entity_id": str(book.id),
++            "art_style": data.art_style,
++            "layout": data.layout,
++            "title": title,
++            "author": author,
++            "subtitle": data.subtitle,
++            "model": model,
++            "asset_id": str(asset.id),
++        },
++    )
++    db.add(job)
++    await db.commit()
++    await db.refresh(job)
++
++    asset.job_id = job.id
++    await db.commit()
++    await db.refresh(asset)
++
++    try:
++        enqueue_image_job(job.id)
++    except Exception as exc:
++        # The rows exist but could not be queued (e.g. Redis unreachable). Mark
++        # BOTH failed so neither dangles. The 502 detail is a FIXED message — the
++        # enqueue exception can carry the broker URL + credentials and safe_error
++        # only bounds (does not strip secrets) — so it is never echoed; the cause
++        # is logged server-side (sanitized).
++        logger.warning("Cover job enqueue failed: %s", safe_error(exc))
++        job.status = JobStatus.FAILED
++        job.error_message = "A feladat sorba állítása nem sikerült."
++        asset.status = "failed"
++        await db.commit()
++        raise HTTPException(
++            status_code=status.HTTP_502_BAD_GATEWAY,
++            detail="Could not enqueue cover job (queue unavailable).",
++        )
++
++    return MediaAssetRead.model_validate(asset)
++
++
++@router.get("/covers/styles", response_model=list[ImageStyleInfo])
++async def list_cover_styles(
++    _: str = Depends(get_current_user),
++) -> list[ImageStyleInfo]:
++    """List the available cover art-style presets."""
++    return [
++        ImageStyleInfo(slug=s.slug, label=s.label, entity_type=s.entity_type)
++        for s in available_cover_styles()
++    ]
++
++
++@router.get("/covers/layouts", response_model=list[CoverLayoutInfo])
++async def list_cover_layouts(
++    _: str = Depends(get_current_user),
++) -> list[CoverLayoutInfo]:
++    """List the available cover typography layouts."""
++    return [
++        CoverLayoutInfo(slug=lay.slug, label=lay.label)
++        for lay in available_cover_layouts()
++    ]
+diff --git a/apps/ai/app/api/v1/images.py b/apps/ai/app/api/v1/images.py
+index b1c2bdb..e4969b8 100644
+--- a/apps/ai/app/api/v1/images.py
++++ b/apps/ai/app/api/v1/images.py
+@@ -123,16 +123,17 @@ async def create_image(
+         project_id=data.project_id,
+         status=JobStatus.PENDING,
+         model_name=model,
+         input_data={
+             "entity_type": data.entity_type,
+             "entity_id": str(data.entity_id),
+             "style": data.style,
+             "model": model,
++            "asset_id": str(asset.id),
+         },
+     )
+     db.add(job)
+     await db.commit()
+     await db.refresh(job)
+ 
+     asset.job_id = job.id
+     await db.commit()
+diff --git a/apps/ai/app/api/v1/router.py b/apps/ai/app/api/v1/router.py
+index 6a9aada..0dd6e10 100644
+--- a/apps/ai/app/api/v1/router.py
++++ b/apps/ai/app/api/v1/router.py
+@@ -1,12 +1,14 @@
+ from fastapi import APIRouter
+ 
+ from app.api.v1.ai import router as ai_router
++from app.api.v1.covers import router as covers_router
+ from app.api.v1.images import router as images_router
+ from app.api.v1.jobs import router as jobs_router
+ from app.api.v1.providers import router as providers_router
+ 
+ api_router = APIRouter()
+ api_router.include_router(jobs_router)
+ api_router.include_router(ai_router)
+ api_router.include_router(images_router)
++api_router.include_router(covers_router)
+ api_router.include_router(providers_router)
+diff --git a/apps/ai/app/jobs/image_job.py b/apps/ai/app/jobs/image_job.py
+index 6468749..5f60d1a 100644
+--- a/apps/ai/app/jobs/image_job.py
++++ b/apps/ai/app/jobs/image_job.py
+@@ -15,24 +15,30 @@ logging a raw (possibly secret-bearing) traceback.
+ 
+ import asyncio
+ import logging
+ import uuid
+ 
+ from alexandria_core.core.errors import safe_error
+ from alexandria_core.db.session import AsyncSessionLocal
+ from alexandria_core.models.generation_job import JobStatus
++from alexandria_core.models.media_asset import MediaAsset
+ 
+ from app.services.crud_generation_job import get_job
+ from app.services.image_service import ImageService, image_service
+ 
+ logger = logging.getLogger(__name__)
+ 
+ # Required keys in ``GenerationJob.input_data`` for an image job.
+-_REQUIRED_INPUT = ("entity_type", "entity_id", "style", "model")
++# Covers need art_style + layout instead of style.
++# ``asset_id`` is the placeholder MediaAsset the endpoint created; the service
++# UPDATES that row rather than creating a new one (single-asset lifecycle).
++_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model", "asset_id")
++_REQUIRED_COVER: tuple[str, ...] = ("art_style", "layout")
++_REQUIRED_CODEX: tuple[str, ...] = ("style",)
+ 
+ 
+ def run_image_job(job_id: str) -> None:
+     """RQ entrypoint (synchronous).
+ 
+     RQ invokes job functions synchronously, so bridge to the async generation
+     path via ``asyncio.run``. ``job_id`` arrives as a ``str`` (RQ serialization)
+     and is parsed back to a UUID. This is the dotted path referenced by
+@@ -56,49 +62,73 @@ async def _run_image_job(
+     """
+     async with session_factory() as db:
+         job = await get_job(db, job_id)
+         if job is None:
+             logger.warning("Image job %s not found; nothing to do.", job_id)
+             return
+ 
+         params = job.input_data or {}
+-        missing = [k for k in _REQUIRED_INPUT if not params.get(k)]
++        is_cover = params.get("entity_type") == "cover"
++        required = _REQUIRED_COMMON + (_REQUIRED_COVER if is_cover else _REQUIRED_CODEX)
++        missing = [k for k in required if not params.get(k)]
+         if missing:
+             # Defensive: the producer is expected to populate input_data; record
+             # the contract violation as a clean failure instead of crashing.
+             job.status = JobStatus.FAILED
+             job.error_message = (
+                 "A képgenerálási feladatból hiányzó mező: " + ", ".join(missing)
+             )
+             await db.commit()
+             logger.error("Image job %s missing input fields: %s", job_id, missing)
+             return
+ 
+         job.status = JobStatus.RUNNING
+         await db.commit()
+ 
++        asset_id = uuid.UUID(str(params["asset_id"]))
+         try:
+-            asset = await images.generate_for_entity(
+-                db,
+-                project_id=job.project_id,
+-                entity_type=params["entity_type"],
+-                entity_id=uuid.UUID(str(params["entity_id"])),
+-                style=params["style"],
+-                model=params["model"],
+-                job_id=job.id,
+-            )
++            if is_cover:
++                asset = await images.generate_cover_for_book(
++                    db,
++                    project_id=job.project_id,
++                    book_id=uuid.UUID(str(params["entity_id"])),
++                    art_style=params["art_style"],
++                    layout=params["layout"],
++                    title=params.get("title") or "",
++                    author=params.get("author") or "",
++                    subtitle=params.get("subtitle"),
++                    model=params["model"],
++                    asset_id=asset_id,
++                    job_id=job.id,
++                )
++            else:
++                asset = await images.generate_for_entity(
++                    db,
++                    project_id=job.project_id,
++                    entity_type=params["entity_type"],
++                    entity_id=uuid.UUID(str(params["entity_id"])),
++                    style=params["style"],
++                    model=params["model"],
++                    asset_id=asset_id,
++                    job_id=job.id,
++                )
+             job.output_data = {"media_asset_id": str(asset.id)}
+             job.status = JobStatus.DONE
+             await db.commit()
+         except Exception as exc:
+             # The generate transaction may be poisoned; roll back so the
+             # status/error update commits on a clean session, then re-load the
+             # job (rollback expires the prior instance).
+             await db.rollback()
+             failed = await get_job(db, job_id)
+             if failed is not None:
+                 failed.status = JobStatus.FAILED
+                 failed.error_message = safe_error(exc)
+-                await db.commit()
++            # Flip the placeholder to 'failed' so the FE spinner stops; guard
++            # against a missing asset (deleted between enqueue and execution).
++            placeholder = await db.get(MediaAsset, asset_id)
++            if placeholder is not None:
++                placeholder.status = "failed"
++            await db.commit()
+             # Log a SANITIZED message only — never logger.exception(), whose raw
+             # traceback could embed a provider secret.
+             logger.error("Image job %s failed: %s", job_id, safe_error(exc))
+diff --git a/apps/ai/app/schemas/cover.py b/apps/ai/app/schemas/cover.py
+new file mode 100644
+index 0000000..3cca433
+--- /dev/null
++++ b/apps/ai/app/schemas/cover.py
+@@ -0,0 +1,19 @@
++"""Schemas for the cover-generation HTTP layer (Phase 2)."""
++import uuid
++
++from pydantic import BaseModel, Field
++
++
++class CoverGenerateRequest(BaseModel):
++    book_id: uuid.UUID
++    art_style: str = Field(min_length=1)
++    layout: str = Field(min_length=1)
++    title: str | None = None  # defaults to book.title
++    author: str | None = None  # defaults to book.author
++    subtitle: str | None = None
++    model: str | None = None  # defaults to the provider's image_model
++
++
++class CoverLayoutInfo(BaseModel):
++    slug: str
++    label: str
+diff --git a/apps/ai/app/services/cover_compositor.py b/apps/ai/app/services/cover_compositor.py
+new file mode 100644
+index 0000000..8474fb4
+--- /dev/null
++++ b/apps/ai/app/services/cover_compositor.py
+@@ -0,0 +1,167 @@
++"""Cover typography compositor (Phase 2).
++
++Takes generated background art and an ebook-cover layout, crops to the exact KDP
++ebook size (1600x2560 / 1:1.6) and draws the title/author/optional subtitle with
++bundled OFL fonts (Pillow ImageDraw). Diffusion models render text poorly, so the
++art is generated text-free (see build_cover_prompt) and typography is composited
++here — deterministically, per layout.
++"""
++from __future__ import annotations
++
++import io
++from dataclasses import dataclass
++from pathlib import Path
++
++from PIL import Image, ImageDraw, ImageFont
++
++COVER_W = 1600
++COVER_H = 2560
++_MARGIN = 120  # side margin in px
++
++_FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"
++
++
++@dataclass(frozen=True)
++class CoverLayout:
++    slug: str
++    label: str
++    title_font: str          # ttf filename in _FONTS_DIR
++    author_font: str
++    anchor: str              # "top" | "center" | "bottom"
++    title_color: tuple[int, int, int]
++    scrim: bool              # darken the text band for legibility
++
++
++LAYOUTS: dict[str, CoverLayout] = {
++    "classic_centered": CoverLayout(
++        "classic_centered", "Klasszikus, középre",
++        "Literata-Bold.ttf", "Inter-Medium.ttf", "center", (245, 242, 236), False),
++    "bottom_scrim": CoverLayout(
++        "bottom_scrim", "Alsó sávban",
++        "Literata-Bold.ttf", "Inter-Medium.ttf", "bottom", (255, 255, 255), True),
++    "top_minimal": CoverLayout(
++        "top_minimal", "Felül, minimál",
++        "Inter-Bold.ttf", "Inter-Regular.ttf", "top", (255, 255, 255), True),
++}
++
++
++def available_cover_layouts() -> list[CoverLayout]:
++    return list(LAYOUTS.values())
++
++
++def _require_layout(layout: str) -> CoverLayout:
++    if layout not in LAYOUTS:
++        names = ", ".join(sorted(LAYOUTS))
++        raise ValueError(f"Unknown cover layout {layout!r}. Valid: {names}.")
++    return LAYOUTS[layout]
++
++
++def _font(filename: str, size: int) -> ImageFont.FreeTypeFont:
++    path = _FONTS_DIR / filename
++    if not path.exists():
++        raise ValueError(f"cover font missing: {path}")
++    return ImageFont.truetype(str(path), size)
++
++
++def _cover_crop(img: Image.Image, w: int, h: int) -> Image.Image:
++    """Scale to cover the target box, then center-crop to exactly (w, h)."""
++    scale = max(w / img.width, h / img.height)
++    resized = img.resize((round(img.width * scale), round(img.height * scale)))
++    left = (resized.width - w) // 2
++    top = (resized.height - h) // 2
++    return resized.crop((left, top, left + w, top + h))
++
++
++def _wrap(draw, text: str, font, max_w: int) -> list[str]:
++    words = text.split()
++    lines: list[str] = []
++    cur = ""
++    for word in words:
++        trial = f"{cur} {word}".strip()
++        if not cur or draw.textlength(trial, font=font) <= max_w:
++            cur = trial
++        else:
++            lines.append(cur)
++            cur = word
++    if cur:
++        lines.append(cur)
++    return lines or [text]
++
++
++def _fit(draw, text: str, font_file: str, max_w: int, max_size: int, min_size: int = 28):
++    size = max_size
++    while size >= min_size:
++        font = _font(font_file, size)
++        lines = _wrap(draw, text, font, max_w)
++        if all(draw.textlength(ln, font=font) <= max_w for ln in lines):
++            return font, lines
++        size -= 4
++    font = _font(font_file, min_size)
++    return font, _wrap(draw, text, font, max_w)
++
++
++def _apply_scrim(canvas: Image.Image, anchor: str) -> None:
++    """Darken a vertical band behind the text for legibility."""
++    # Use the canvas's own size (not the module constants) so the scrim is
++    # correct even if this is ever called on a differently-sized canvas.
++    w, h = canvas.size
++    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
++    od = ImageDraw.Draw(overlay)
++    band = h // 2
++    if anchor == "top":
++        od.rectangle((0, 0, w, band), fill=(0, 0, 0, 130))
++    elif anchor == "bottom":
++        od.rectangle((0, h - band, w, h), fill=(0, 0, 0, 150))
++    else:  # center
++        od.rectangle((0, h // 3, w, h * 2 // 3), fill=(0, 0, 0, 110))
++    canvas.paste(Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB"), (0, 0))
++
++
++def compose_cover(
++    background_png: bytes,
++    *,
++    layout: str,
++    title: str,
++    author: str,
++    subtitle: str | None = None,
++) -> bytes:
++    """Composite typography onto the background; return a 1600x2560 PNG."""
++    spec = _require_layout(layout)
++    with Image.open(io.BytesIO(background_png)) as bg:
++        bg.load()
++        canvas = _cover_crop(bg.convert("RGB"), COVER_W, COVER_H)
++
++    if spec.scrim:
++        _apply_scrim(canvas, spec.anchor)
++
++    draw = ImageDraw.Draw(canvas)
++    max_w = COVER_W - 2 * _MARGIN
++    title_font, title_lines = _fit(draw, title, spec.title_font, max_w, max_size=150)
++    author_font = _font(spec.author_font, 64)
++
++    title_h = sum(
++        (draw.textbbox((0, 0), ln, font=title_font)[3]) + 12 for ln in title_lines
++    )
++    author_h = draw.textbbox((0, 0), author, font=author_font)[3] if author else 0
++    block_h = title_h + (author_h + 40 if author else 0)
++
++    if spec.anchor == "top":
++        y = _MARGIN + 40
++    elif spec.anchor == "bottom":
++        y = COVER_H - _MARGIN - block_h
++    else:
++        y = (COVER_H - block_h) // 2
++
++    for ln in title_lines:
++        w = draw.textlength(ln, font=title_font)
++        draw.text(((COVER_W - w) / 2, y), ln, font=title_font, fill=spec.title_color)
++        y += draw.textbbox((0, 0), ln, font=title_font)[3] + 12
++
++    if author:
++        y += 28
++        w = draw.textlength(author, font=author_font)
++        draw.text(((COVER_W - w) / 2, y), author, font=author_font, fill=spec.title_color)
++
++    out = io.BytesIO()
++    canvas.save(out, "PNG")
++    return out.getvalue()
+diff --git a/apps/ai/app/services/image_prompt.py b/apps/ai/app/services/image_prompt.py
+index 8febc0b..d44601c 100644
+--- a/apps/ai/app/services/image_prompt.py
++++ b/apps/ai/app/services/image_prompt.py
+@@ -132,8 +132,56 @@ def build_codex_prompt(entry, style: str) -> str:
+     return _assemble(
+         style,
+         name=entry.title,
+         description=description,
+         geography=geography,
+         atmosphere=atmosphere,
+         extra="",
+     )
++
++
++# --- Cover styles (Phase 2) -------------------------------------------------
++
++COVER_STYLES: dict[str, ImageStyle] = {
++    "cover_literary": ImageStyle("cover_literary", "Irodalmi", "cover"),
++    "cover_fantasy": ImageStyle("cover_fantasy", "Fantasy", "cover"),
++    "cover_thriller": ImageStyle("cover_thriller", "Thriller", "cover"),
++    "cover_romance": ImageStyle("cover_romance", "Romantikus", "cover"),
++    "cover_minimal": ImageStyle("cover_minimal", "Minimalista", "cover"),
++}
++
++
++def _cover_styles_dir() -> Path:
++    docker = Path("/app/prompts/hu/cover_styles")
++    if docker.exists():
++        return docker
++    repo_root = Path(__file__).parent.parent.parent.parent.parent
++    return repo_root / "packages" / "prompts" / "hu" / "cover_styles"
++
++
++_cover_loader = PromptLoader(prompts_dir=_cover_styles_dir())
++
++
++def available_cover_styles() -> list[ImageStyle]:
++    """Return the registered cover art-style presets."""
++    return list(COVER_STYLES.values())
++
++
++def build_cover_prompt(book, art_style: str) -> str:
++    """Build a cover-art prompt for a Book in the given cover art-style.
++
++    ``book`` is duck-typed: ``title``, ``genre``, ``synopsis``. The art-style must
++    be a known cover style (``ValueError`` otherwise). The STYLE block forbids any
++    in-art text and requests negative space (typography is composited app-side).
++    Blank genre/synopsis fall back to graceful Hungarian phrases — never leaks a
++    ``{token}`` or the literal ``"None"``.
++    """
++    if art_style not in COVER_STYLES:
++        names = ", ".join(sorted(COVER_STYLES))
++        raise ValueError(f"Unknown cover style {art_style!r}. Valid: {names}.")
++    genre = _clean(getattr(book, "genre", None)) or "általános szépirodalom"
++    synopsis = _clean(getattr(book, "synopsis", None)) or "egy meg nem nevezett történet"
++    style_block = _cover_loader.load_system(art_style)
++    body = _cover_loader.load_user(
++        art_style, title=book.title, genre=genre, synopsis=synopsis
++    )
++    return f"{style_block} {body}"
+diff --git a/apps/ai/app/services/image_service.py b/apps/ai/app/services/image_service.py
+index 62f3cc2..43ca313 100644
+--- a/apps/ai/app/services/image_service.py
++++ b/apps/ai/app/services/image_service.py
+@@ -14,22 +14,23 @@ a half-baked asset. The RQ job layer (T6) owns turning that exception into a
+ persisted ``failed`` status, so this service must not swallow it.
+ """
+ 
+ from __future__ import annotations
+ 
+ import logging
+ import uuid
+ 
++from alexandria_core.models.book import Book
+ from alexandria_core.models.codex_entry import CodexEntry
+ from alexandria_core.models.media_asset import MediaAsset
+ from sqlalchemy import select
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+-from app.services import image_prompt
++from app.services import cover_compositor, image_prompt
+ from app.services.image_storage import (
+     SavedImage,
+     delete_image_files,
+     save_image,
+ )
+ from app.services.model_router import ModelRouter, model_router
+ 
+ logger = logging.getLogger(__name__)
+@@ -47,39 +48,45 @@ class ImageService:
+         self,
+         db: AsyncSession,
+         *,
+         project_id: uuid.UUID,
+         entity_type: str,
+         entity_id: uuid.UUID,
+         style: str,
+         model: str,
++        asset_id: uuid.UUID,
+         job_id: uuid.UUID | None = None,
+     ) -> MediaAsset:
+-        """Generate an image for a Codex entry and persist a READY asset.
++        """Generate an image for a Codex entry and update the EXISTING placeholder.
+ 
+         ``entity_id`` is a ``CodexEntry`` id; ``entity_type`` is its expected
+         ``entry_type`` ("character" | "location"). Reuses the entity's current
+         canonical image (if any, and readable) as a reference image so successive
+         generations stay visually consistent. Raises ``ValueError`` if the entry
+-        is missing OR its ``entry_type`` does not match ``entity_type``. On ANY
+-        failure during the provider call or save step, removes any partial file
+-        and re-raises (loud).
++        is missing OR its ``entry_type`` does not match ``entity_type``, or if the
++        placeholder asset ``asset_id`` does not exist. On ANY failure during the
++        provider call or save step, removes any partial file and re-raises (loud).
+         """
++        asset = await db.get(MediaAsset, asset_id)
++        if asset is None:
++            raise ValueError(
++                f"placeholder asset {asset_id} not found for image generation"
++            )
++
+         entry = await db.get(CodexEntry, entity_id)
+         if entry is None or entry.entry_type != entity_type:
+             raise ValueError(
+                 f"codex entry {entity_id} not found or not a {entity_type} "
+                 "for image generation"
+             )
+ 
+         prompt = image_prompt.build_codex_prompt(entry, style)
+         reference = await self._canonical_reference_bytes(db, entity_type, entity_id)
+ 
+-        asset_id = uuid.uuid4()
+         saved: SavedImage | None = None
+         try:
+             result = await self.router.generate_image(
+                 prompt,
+                 model=model,
+                 db=db,
+                 reference_images=reference,
+                 aspect_ratio="2:3",
+@@ -91,34 +98,91 @@ class ImageService:
+             )
+         except Exception:
+             # Loud: clean up any partial file, then re-raise so the job layer can
+             # persist the failed status. NEVER persist a ready/partial asset here.
+             if saved is not None:
+                 delete_image_files(saved.file_path, saved.thumb_path)
+             raise
+ 
+-        asset = MediaAsset(
+-            id=asset_id,
+-            project_id=project_id,
+-            entity_type=entity_type,
+-            entity_id=entity_id,
+-            status="ready",
+-            file_path=saved.file_path,
+-            thumb_path=saved.thumb_path,
+-            mime=result.mime,
+-            width=saved.width,
+-            height=saved.height,
+-            model_name=result.model,
+-            style=style,
+-            prompt=prompt,
+-            job_id=job_id,
+-            is_canonical=False,
+-        )
+-        db.add(asset)
++        # Update the existing placeholder in-place — never create a second row.
++        asset.file_path = saved.file_path
++        asset.thumb_path = saved.thumb_path
++        asset.mime = result.mime
++        asset.width = saved.width
++        asset.height = saved.height
++        asset.model_name = result.model
++        asset.prompt = prompt
++        asset.status = "ready"
++        if job_id is not None:
++            asset.job_id = job_id
++        await db.commit()
++        await db.refresh(asset)
++        return asset
++
++    async def generate_cover_for_book(
++        self,
++        db: AsyncSession,
++        *,
++        project_id: uuid.UUID,
++        book_id: uuid.UUID,
++        art_style: str,
++        layout: str,
++        title: str,
++        author: str,
++        subtitle: str | None,
++        model: str,
++        asset_id: uuid.UUID,
++        job_id: uuid.UUID | None = None,
++    ) -> MediaAsset:
++        """Generate a book cover: art (text-free) → composite typography → READY
++        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Updates the
++        EXISTING placeholder identified by ``asset_id`` in-place rather than
++        creating a new row. Loud on failure (cleans up a partial file, re-raises).
++        Raises ``ValueError`` if the book or the placeholder asset is missing."""
++        asset = await db.get(MediaAsset, asset_id)
++        if asset is None:
++            raise ValueError(
++                f"placeholder asset {asset_id} not found for cover generation"
++            )
++
++        book = await db.get(Book, book_id)
++        if book is None or book.project_id != project_id:
++            raise ValueError(f"book {book_id} not found for cover generation")
++
++        prompt = image_prompt.build_cover_prompt(book, art_style)
++        saved: SavedImage | None = None
++        try:
++            result = await self.router.generate_image(
++                prompt, model=model, db=db, aspect_ratio="2:3"
++            )
++            composed = cover_compositor.compose_cover(
++                result.data, layout=layout, title=title, author=author, subtitle=subtitle
++            )
++            from alexandria_core.core.config import settings
++
++            saved = save_image(
++                settings.media_dir, project_id, asset_id, composed, "image/png"
++            )
++        except Exception:
++            if saved is not None:
++                delete_image_files(saved.file_path, saved.thumb_path)
++            raise
++
++        # Update the existing placeholder in-place — never create a second row.
++        asset.file_path = saved.file_path
++        asset.thumb_path = saved.thumb_path
++        asset.mime = "image/png"
++        asset.width = saved.width
++        asset.height = saved.height
++        asset.model_name = result.model
++        asset.prompt = prompt
++        asset.status = "ready"
++        if job_id is not None:
++            asset.job_id = job_id
+         await db.commit()
+         await db.refresh(asset)
+         return asset
+ 
+     # ── listing ──────────────────────────────────────────────────────────────
+ 
+     async def list_for_entity(
+         self, db: AsyncSession, entity_type: str, entity_id: uuid.UUID
+diff --git a/apps/ai/tests/integration/test_cover_flow.py b/apps/ai/tests/integration/test_cover_flow.py
+new file mode 100644
+index 0000000..4efcf3f
+--- /dev/null
++++ b/apps/ai/tests/integration/test_cover_flow.py
+@@ -0,0 +1,210 @@
++"""Cross-resource cover flow integration test (Task 10).
++
++Exercises the full end-to-end cover pipeline with NO Redis and NO real
++provider call:
++
++  POST /ai/covers
++    → job captured via monkeypatched enqueue_image_job
++  → _run_image_job inline against the test DB session
++    (ImageService with a fake router that returns a small real PNG;
++     CoverCompositor runs for real — fonts are bundled)
++  → GET /ai/images?entity_type=cover&entity_id=<book_id>
++    → exactly 1 "ready" cover, entity_type == "cover"
++  → POST /ai/images/<id>/canonical
++    → is_canonical == True
++  → GET /ai/media/<id>
++    → 200, content-type image/*
++"""
++
++from __future__ import annotations
++
++import io
++import uuid
++from contextlib import asynccontextmanager
++from unittest.mock import AsyncMock
++
++import pytest
++from alexandria_core.core.config import settings
++from alexandria_core.models.book import Book
++from alexandria_core.models.project import Project
++from alexandria_core.models.provider import Provider
++from PIL import Image
++from sqlalchemy.ext.asyncio import AsyncSession
++
++from app.jobs.image_job import _run_image_job
++from app.services.image_service import ImageService
++from app.services.model_router import ImageResult
++
++pytestmark = pytest.mark.asyncio
++
++
++# ── helpers ───────────────────────────────────────────────────────────────────
++
++
++def _session_factory(db_session: AsyncSession):
++    """Inject the test's transactional session as the worker's session factory.
++
++    Mirrors the shim in test_image_job.py: the context manager yields the
++    session without closing it (the fixture owns its lifecycle).
++    """
++
++    @asynccontextmanager
++    async def _factory():
++        yield db_session
++
++    return _factory
++
++
++async def _make_project(db: AsyncSession) -> uuid.UUID:
++    project = Project(title="Borító flow projekt")
++    db.add(project)
++    await db.commit()
++    await db.refresh(project)
++    return project.id
++
++
++async def _make_book(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str = "Rácz Dániel",
++) -> uuid.UUID:
++    book = Book(project_id=project_id, title=title, author=author)
++    db.add(book)
++    await db.commit()
++    await db.refresh(book)
++    return book.id
++
++
++async def _make_provider_with_image_model(
++    db: AsyncSession,
++    image_model: str = "gemini/imagen-3",
++) -> Provider:
++    provider = Provider(
++        type="gemini",
++        label="Borító képgeneráló",
++        image_model=image_model,
++        enabled=True,
++    )
++    db.add(provider)
++    await db.commit()
++    await db.refresh(provider)
++    return provider
++
++
++def _fake_router(color: tuple[int, int, int] = (12, 34, 56)) -> AsyncMock:
++    """Build a stub ModelRouter whose generate_image returns a real small PNG.
++
++    The PNG is intentionally the right aspect-ratio for a 2:3 cover so the
++    compositor's crop step is trivial (no scale-up needed).
++    """
++    buf = io.BytesIO()
++    Image.new("RGB", (1024, 1536), color).save(buf, "PNG")
++    png_bytes = buf.getvalue()
++
++    router = AsyncMock()
++    router.generate_image = AsyncMock(
++        return_value=ImageResult(data=png_bytes, mime="image/png", model="gemini/x")
++    )
++    return router
++
++
++# ── flow test ─────────────────────────────────────────────────────────────────
++
++
++@pytest.mark.integration
++async def test_cover_end_to_end(
++    client,
++    auth_headers,
++    db_session: AsyncSession,
++    monkeypatch,
++    tmp_path,
++):
++    """POST /ai/covers → run the job inline (mocked provider) → the cover
++    appears in GET /ai/images?entity_type=cover as 'ready' → can be made
++    canonical → GET /ai/media streams image bytes."""
++
++    # ── 1. redirect media_dir to a writable tmp location ──────────────────────
++    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
++
++    # ── 2. capture the enqueued job id (skip Redis) ────────────────────────────
++    captured_job_id: list[uuid.UUID] = []
++    import app.api.v1.covers as covers_mod
++
++    monkeypatch.setattr(
++        covers_mod,
++        "enqueue_image_job",
++        lambda jid: captured_job_id.append(jid),
++    )
++
++    # ── 3. seed DB fixtures ────────────────────────────────────────────────────
++    await _make_provider_with_image_model(db_session, "gemini/x")
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(
++        db_session, project_id, title="Fárosz", author="Rácz D."
++    )
++
++    # ── 4. POST /ai/covers → 202 ───────────────────────────────────────────────
++    post_resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++        },
++    )
++    assert post_resp.status_code == 202, post_resp.text
++    post_body = post_resp.json()
++    assert post_body["entity_type"] == "cover"
++    assert post_body["status"] == "generating"
++    assert len(captured_job_id) == 1
++
++    # ── 5. run the job inline (real compositor, fake provider) ─────────────────
++    fake_images = ImageService(router=_fake_router())
++    await _run_image_job(
++        captured_job_id[0],
++        session_factory=_session_factory(db_session),
++        images=fake_images,
++    )
++
++    # ── 6. GET /ai/images?entity_type=cover&entity_id=<book_id> ───────────────
++    # The POST creates a "generating" placeholder; the job UPDATES that same row
++    # to "ready". Exactly ONE cover total, and it must be "ready".
++    list_resp = await client.get(
++        f"/api/v1/ai/images?entity_type=cover&entity_id={book_id}",
++        headers=auth_headers,
++    )
++    assert list_resp.status_code == 200, list_resp.text
++    all_covers = list_resp.json()
++    assert all(c["entity_type"] == "cover" for c in all_covers)
++    assert len(all_covers) == 1, (
++        f"expected exactly 1 cover asset total (single-asset lifecycle), "
++        f"got {len(all_covers)} (statuses: {[c['status'] for c in all_covers]})"
++    )
++    cover = all_covers[0]
++    assert cover["status"] == "ready", f"cover status was '{cover['status']}', expected 'ready'"
++    assert cover["entity_id"] == str(book_id)
++    cover_id = cover["id"]
++    # The cover_id must be the placeholder id returned in the POST response.
++    assert cover_id == post_body["id"], "job must update the placeholder, not create a new row"
++
++    # ── 7. POST /ai/images/<id>/canonical → is_canonical flipped ──────────────
++    canon_resp = await client.post(
++        f"/api/v1/ai/images/{cover_id}/canonical",
++        headers=auth_headers,
++    )
++    assert canon_resp.status_code == 200, canon_resp.text
++    assert canon_resp.json()["is_canonical"] is True
++
++    # ── 8. GET /ai/media/<id> → real PNG bytes ─────────────────────────────────
++    media_resp = await client.get(
++        f"/api/v1/ai/media/{cover_id}",
++        headers=auth_headers,
++    )
++    assert media_resp.status_code == 200, media_resp.text
++    assert media_resp.headers["content-type"].startswith("image/")
++    # The compositor produces a 1600×2560 PNG; confirm we got a real PNG back.
++    with Image.open(io.BytesIO(media_resp.content)) as img:
++        assert img.format == "PNG"
++        assert img.size == (1600, 2560)
+diff --git a/apps/ai/tests/integration/test_covers_endpoints.py b/apps/ai/tests/integration/test_covers_endpoints.py
+new file mode 100644
+index 0000000..3c976a4
+--- /dev/null
++++ b/apps/ai/tests/integration/test_covers_endpoints.py
+@@ -0,0 +1,186 @@
++"""Cover-generation HTTP layer (Phase 2) — endpoint contract tests.
++
++Tests the following routes:
++- POST /api/v1/ai/covers         → 202 with generating MediaAsset
++- GET  /api/v1/ai/covers/styles  → list of cover art-style presets
++- GET  /api/v1/ai/covers/layouts → list of cover layouts
++- 422 for bad art_style / bad layout / missing book / no model
++
++Redis/worker are never touched: ``enqueue_image_job`` is monkeypatched out in
++the happy-path test so the test stays self-contained.
++"""
++
++import uuid
++
++import pytest
++from alexandria_core.models.book import Book
++from alexandria_core.models.project import Project
++from alexandria_core.models.provider import Provider
++from httpx import AsyncClient
++from sqlalchemy.ext.asyncio import AsyncSession
++
++pytestmark = pytest.mark.asyncio
++
++
++# ── Test helpers ──────────────────────────────────────────────────────────────
++
++
++async def _make_project(db: AsyncSession) -> uuid.UUID:
++    project = Project(title="Borító projekt")
++    db.add(project)
++    await db.commit()
++    await db.refresh(project)
++    return project.id
++
++
++async def _make_book(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str | None = "Rácz Dániel",
++) -> uuid.UUID:
++    book = Book(project_id=project_id, title=title, author=author)
++    db.add(book)
++    await db.commit()
++    await db.refresh(book)
++    return book.id
++
++
++async def _make_provider_with_image_model(
++    db: AsyncSession, image_model: str = "gemini/imagen-3"
++) -> Provider:
++    provider = Provider(
++        type="gemini",
++        label="Borító képgeneráló",
++        image_model=image_model,
++        enabled=True,
++    )
++    db.add(provider)
++    await db.commit()
++    await db.refresh(provider)
++    return provider
++
++
++# ── POST /ai/covers — validation 422s ────────────────────────────────────────
++
++
++async def test_post_cover_unknown_book_is_422(
++    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
++):
++    resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(uuid.uuid4()),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++        },
++    )
++    assert resp.status_code == 422
++
++
++async def test_post_cover_bad_style_is_422(
++    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
++):
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++    resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(book_id),
++            "art_style": "realistic_portrait",
++            "layout": "classic_centered",
++        },
++    )
++    assert resp.status_code == 422
++
++
++async def test_post_cover_bad_layout_is_422(
++    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
++):
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++    resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "nope",
++        },
++    )
++    assert resp.status_code == 422
++
++
++async def test_post_cover_no_model_configured_is_422(
++    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
++):
++    """Valid style+layout+book but NO enabled provider with an image_model → 422
++    BEFORE any asset/job is created (the model check is the 4th validation)."""
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++    resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++        },
++    )
++    assert resp.status_code == 422
++    assert "model" in resp.json()["detail"].lower()
++
++
++# ── POST /ai/covers — happy path ──────────────────────────────────────────────
++
++
++async def test_post_cover_happy_path_creates_generating_asset(
++    client: AsyncClient,
++    auth_headers: dict,
++    db_session: AsyncSession,
++    monkeypatch,
++):
++    import app.api.v1.covers as covers_mod
++
++    enq: list[uuid.UUID] = []
++    monkeypatch.setattr(covers_mod, "enqueue_image_job", lambda jid: enq.append(jid))
++
++    # Seed an enabled provider with an image model so _resolve_image_model returns it.
++    await _make_provider_with_image_model(db_session, "gemini/x")
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++
++    resp = await client.post(
++        "/api/v1/ai/covers",
++        headers=auth_headers,
++        json={
++            "book_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++        },
++    )
++    assert resp.status_code == 202
++    body = resp.json()
++    assert body["entity_type"] == "cover"
++    assert body["status"] == "generating"
++    assert body["style"] == "cover_fantasy"
++    assert len(enq) == 1
++
++
++# ── GET /ai/covers/styles + /ai/covers/layouts ────────────────────────────────
++
++
++async def test_get_cover_styles_and_layouts(
++    client: AsyncClient, auth_headers: dict
++):
++    styles_resp = await client.get("/api/v1/ai/covers/styles", headers=auth_headers)
++    assert styles_resp.status_code == 200
++    styles = styles_resp.json()
++    assert any(s["slug"] == "cover_fantasy" for s in styles)
++
++    layouts_resp = await client.get("/api/v1/ai/covers/layouts", headers=auth_headers)
++    assert layouts_resp.status_code == 200
++    layouts = layouts_resp.json()
++    assert any(lay["slug"] == "classic_centered" for lay in layouts)
+diff --git a/apps/ai/tests/integration/test_image_job.py b/apps/ai/tests/integration/test_image_job.py
+index 6abcb10..45b77cd 100644
+--- a/apps/ai/tests/integration/test_image_job.py
++++ b/apps/ai/tests/integration/test_image_job.py
+@@ -5,19 +5,21 @@ Driven directly (no Redis, no worker process) against the test DB via an injecte
+ pending -> running -> done/failed state machine, the persisted media_asset_id, the
+ missing-required-input failure, and the sanitized failure path (mutation-proven),
+ plus the dotted-path producer/consumer contract.
+ """
+ 
+ import importlib
+ import uuid
+ from contextlib import asynccontextmanager
++from types import SimpleNamespace
+ from unittest.mock import AsyncMock
+ 
+ import pytest
++from alexandria_core.models.book import Book
+ from alexandria_core.models.character import Character
+ from alexandria_core.models.generation_job import GenerationJob, JobStatus, JobType
+ from alexandria_core.models.media_asset import MediaAsset
+ from alexandria_core.models.project import Project
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from app.jobs.image_job import _run_image_job, run_image_job
+ from app.services.image_service import ImageService
+@@ -54,91 +56,133 @@ async def _make_project(db: AsyncSession) -> uuid.UUID:
+ async def _make_character(db: AsyncSession, project_id: uuid.UUID) -> Character:
+     c = Character(project_id=project_id, name="Aristarkhosz")
+     db.add(c)
+     await db.commit()
+     await db.refresh(c)
+     return c
+ 
+ 
++async def _make_book(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str = "Rácz Dániel",
++) -> uuid.UUID:
++    b = Book(project_id=project_id, title=title, author=author)
++    db.add(b)
++    await db.commit()
++    await db.refresh(b)
++    return b.id
++
++
++# Alias for clarity in cover-branch tests (same shim as _session_factory).
++_single_session_factory = _session_factory
++
++
+ async def _make_image_job(
+     db: AsyncSession, project_id: uuid.UUID, input_data: dict
+ ) -> GenerationJob:
+     job = GenerationJob(
+         project_id=project_id,
+         job_type=JobType.IMAGE,
+         status=JobStatus.PENDING,
+         input_data=input_data,
+     )
+     db.add(job)
+     await db.commit()
+     await db.refresh(job)
+     return job
+ 
+ 
+-def _input(char_id: uuid.UUID, **overrides) -> dict:
++def _input(char_id: uuid.UUID, asset_id: uuid.UUID | None = None, **overrides) -> dict:
+     data = {
+         "entity_type": "character",
+         "entity_id": str(char_id),
+         "style": "realistic_portrait",
+         "model": "gemini/gemini-3.1-flash-image",
++        "asset_id": str(asset_id) if asset_id is not None else str(uuid.uuid4()),
+     }
+     data.update(overrides)
+     return data
+ 
+ 
++async def _make_placeholder(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    entity_type: str,
++    entity_id: uuid.UUID,
++    style: str = "realistic_portrait",
++) -> MediaAsset:
++    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
++    ph = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type=entity_type,
++        entity_id=entity_id,
++        style=style,
++        model_name="gemini/x",
++    )
++    db.add(ph)
++    await db.commit()
++    await db.refresh(ph)
++    return ph
++
++
+ @pytest.mark.integration
+ async def test_image_job_runs_and_records_media_asset(db_session):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+ 
+-    asset_id = uuid.uuid4()
+     images = AsyncMock(spec=ImageService)
+     images.generate_for_entity.return_value = MediaAsset(
+-        id=asset_id,
++        id=placeholder.id,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         status="ready",
+     )
+ 
+     await _run_image_job(
+         job.id, session_factory=_session_factory(db_session), images=images
+     )
+ 
+     await db_session.refresh(job)
+     assert job.status == JobStatus.DONE
+-    assert job.output_data["media_asset_id"] == str(asset_id)
++    assert job.output_data["media_asset_id"] == str(placeholder.id)
+ 
+     images.generate_for_entity.assert_awaited_once()
+     kwargs = images.generate_for_entity.await_args.kwargs
+     assert kwargs["project_id"] == project_id
+     assert kwargs["entity_type"] == "character"
+     assert kwargs["entity_id"] == char.id
+     assert kwargs["style"] == "realistic_portrait"
+     assert kwargs["model"] == "gemini/gemini-3.1-flash-image"
+     assert kwargs["job_id"] == job.id
++    assert kwargs["asset_id"] == placeholder.id
+ 
+ 
+ @pytest.mark.integration
+ async def test_image_job_is_running_when_generate_executes(db_session):
+     """Mutation guard for the pending->RUNNING commit ORDER: at the moment
+     generate_for_entity runs, the job row must already be RUNNING (committed
+     before the heavy work)."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+     captured = {}
+ 
+     async def _capturing_generate(db, **kwargs):
+         current = await db.get(GenerationJob, job.id)
+         captured["status_at_generate"] = current.status
+         return MediaAsset(
+-            id=uuid.uuid4(),
++            id=placeholder.id,
+             project_id=project_id,
+             entity_type="character",
+             entity_id=char.id,
+             status="ready",
+         )
+ 
+     images = AsyncMock(spec=ImageService)
+     images.generate_for_entity.side_effect = _capturing_generate
+@@ -150,17 +194,18 @@ async def test_image_job_is_running_when_generate_executes(db_session):
+ 
+ 
+ @pytest.mark.integration
+ async def test_image_job_failure_is_persisted_and_sanitized(db_session):
+     """A generate crash -> job FAILED with a bounded, single-line error_message,
+     and the exception is NOT re-raised (the call returns normally)."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+ 
+     images = AsyncMock(spec=ImageService)
+     raw = "boom\nSECRET\n" + ("x" * 5000)
+     images.generate_for_entity.side_effect = RuntimeError(raw)
+ 
+     # Returns normally (no re-raise).
+     await _run_image_job(
+         job.id, session_factory=_session_factory(db_session), images=images
+@@ -175,17 +220,18 @@ async def test_image_job_failure_is_persisted_and_sanitized(db_session):
+ 
+ 
+ @pytest.mark.integration
+ async def test_image_job_missing_required_input_fails(db_session):
+     """An input_data missing a required field (here ``style``) -> job FAILED with
+     a clear message, and generate_for_entity is never attempted."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    bad = _input(char.id)
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    bad = _input(char.id, placeholder.id)
+     del bad["style"]
+     job = await _make_image_job(db_session, project_id, bad)
+ 
+     images = AsyncMock(spec=ImageService)
+ 
+     await _run_image_job(
+         job.id, session_factory=_session_factory(db_session), images=images
+     )
+@@ -211,8 +257,246 @@ async def test_image_job_missing_job_is_noop(db_session):
+ def test_image_job_dotted_path_resolves():
+     """The dotted path the producer enqueues must resolve to the sync entrypoint
+     the worker runs — pins producer/consumer agreement (rename = test fails)."""
+     from app.services.job_queue import IMAGE_JOB_PATH
+ 
+     module_path, _, attr = IMAGE_JOB_PATH.rpartition(".")
+     mod = importlib.import_module(module_path)
+     assert getattr(mod, attr) is run_image_job
++
++
++# ── cover branch ─────────────────────────────────────────────────────────────
++
++
++@pytest.mark.integration
++async def test_image_job_cover_branch(db_session, monkeypatch):
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++
++    # Create placeholder asset (as the endpoint does).
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++
++    job = GenerationJob(
++        job_type=JobType.IMAGE,
++        project_id=project_id,
++        status=JobStatus.PENDING,
++        model_name="gemini/x",
++        input_data={
++            "entity_type": "cover",
++            "entity_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++            "title": "Fárosz",
++            "author": "Rácz D.",
++            "subtitle": None,
++            "model": "gemini/x",
++            "asset_id": str(placeholder.id),
++        },
++    )
++    db_session.add(job)
++    await db_session.commit()
++    await db_session.refresh(job)
++
++    calls = {}
++
++    async def fake_cover(db, **kw):
++        calls.update(kw)
++        return SimpleNamespace(id=placeholder.id)
++
++    images = ImageService()
++    monkeypatch.setattr(images, "generate_cover_for_book", fake_cover)
++
++    await _run_image_job(
++        job.id,
++        session_factory=_single_session_factory(db_session),
++        images=images,
++    )
++    refreshed = await db_session.get(GenerationJob, job.id)
++    assert refreshed.status == JobStatus.DONE
++    assert calls["art_style"] == "cover_fantasy" and calls["layout"] == "classic_centered"
++    # asset_id is now forwarded to the service call.
++    assert calls["asset_id"] == placeholder.id
++
++
++# ── ADVERSARIAL: placeholder is updated on success (no second row) ───────────
++
++
++@pytest.mark.integration
++async def test_image_job_codex_passes_asset_id_to_service(db_session):
++    """The job must pass the placeholder's asset_id to the service so it can
++    UPDATE that row rather than creating a new one.
++
++    Before the fix: asset_id was absent from input_data and not forwarded,
++    so the service created a second row.
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    # Pre-create the placeholder as the endpoint does.
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/gemini-3.1-flash-image",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++
++    job = await _make_image_job(
++        db_session,
++        project_id,
++        {
++            **_input(char.id),
++            "asset_id": str(placeholder.id),
++        },
++    )
++
++    captured: dict = {}
++    ready_asset = MediaAsset(
++        id=placeholder.id,
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        status="ready",
++    )
++
++    async def _capturing_generate(db, **kwargs):
++        captured.update(kwargs)
++        # Confirm the job is RUNNING at the moment the service is called.
++        current_job = await db.get(GenerationJob, job.id)
++        assert current_job.status == JobStatus.RUNNING
++        return ready_asset
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_for_entity.side_effect = _capturing_generate
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    # The job must forward the placeholder id to the service.
++    assert "asset_id" in captured, "asset_id was not forwarded to generate_for_entity"
++    assert captured["asset_id"] == placeholder.id
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.DONE
++    assert job.output_data["media_asset_id"] == str(placeholder.id)
++
++
++@pytest.mark.integration
++async def test_image_job_failure_flips_placeholder_to_failed(db_session):
++    """When the service raises, the job handler must flip the PLACEHOLDER's
++    status to 'failed' so the FE spinner stops.
++
++    Before the fix: the placeholder stayed 'generating' forever on failure.
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    job = await _make_image_job(
++        db_session,
++        project_id,
++        {
++            **_input(char.id),
++            "asset_id": str(placeholder_id),
++        },
++    )
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_for_entity.side_effect = RuntimeError("provider boom")
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.FAILED
++
++    # The PLACEHOLDER must now be 'failed', not stuck 'generating'.
++    reloaded = await db_session.get(MediaAsset, placeholder_id)
++    assert reloaded is not None
++    assert reloaded.status == "failed", (
++        f"Placeholder must be 'failed' after job failure, got '{reloaded.status}'"
++    )
++
++
++@pytest.mark.integration
++async def test_image_job_cover_failure_flips_placeholder_to_failed(db_session):
++    """Same placeholder-flip guarantee for the cover branch on failure."""
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    job = GenerationJob(
++        job_type=JobType.IMAGE,
++        project_id=project_id,
++        status=JobStatus.PENDING,
++        model_name="gemini/x",
++        input_data={
++            "entity_type": "cover",
++            "entity_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++            "title": "Fárosz",
++            "author": "Rácz D.",
++            "subtitle": None,
++            "model": "gemini/x",
++            "asset_id": str(placeholder_id),
++        },
++    )
++    db_session.add(job)
++    await db_session.commit()
++    await db_session.refresh(job)
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_cover_for_book.side_effect = RuntimeError("compositor boom")
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.FAILED
++
++    reloaded = await db_session.get(MediaAsset, placeholder_id)
++    assert reloaded is not None
++    assert reloaded.status == "failed", (
++        f"Cover placeholder must be 'failed' after job failure, got '{reloaded.status}'"
++    )
+diff --git a/apps/ai/tests/integration/test_image_service.py b/apps/ai/tests/integration/test_image_service.py
+index d65e827..221a29b 100644
+--- a/apps/ai/tests/integration/test_image_service.py
++++ b/apps/ai/tests/integration/test_image_service.py
+@@ -10,16 +10,17 @@ SQLite (``@pytest.mark.integration``).
+ import io
+ import os
+ import uuid
+ from datetime import UTC, datetime, timedelta
+ from unittest.mock import AsyncMock
+ 
+ import pytest
+ from alexandria_core.core.config import settings
++from alexandria_core.models.book import Book
+ from alexandria_core.models.codex_entry import CodexEntry
+ from alexandria_core.models.media_asset import MediaAsset
+ from alexandria_core.models.project import Project
+ from PIL import Image
+ from sqlalchemy import func, select
+ 
+ from app.services.image_service import ImageService
+ from app.services.model_router import ImageResult
+@@ -61,48 +62,85 @@ async def _make_character(db, project_id: uuid.UUID, name: str = "Aragorn") -> C
+         ai_visible=True,
+     )
+     db.add(entry)
+     await db.flush()
+     await db.commit()
+     return entry
+ 
+ 
++async def _make_book(
++    db,
++    project_id: uuid.UUID,
++    title: str = "A Fárosz árnyéka",
++    author: str = "Rácz Dániel",
++) -> uuid.UUID:
++    book = Book(project_id=project_id, title=title, author=author)
++    db.add(book)
++    await db.flush()
++    await db.commit()
++    return book.id
++
++
+ @pytest.fixture(autouse=True)
+ def _tmp_media_dir(tmp_path, monkeypatch):
+     media = tmp_path / "media"
+     monkeypatch.setattr(settings, "media_dir", str(media))
+     return media
+ 
+ 
+ async def _count_assets(db) -> int:
+     return (
+         await db.execute(select(func.count()).select_from(MediaAsset))
+     ).scalar_one()
+ 
+ 
++async def _make_placeholder(
++    db,
++    project_id: uuid.UUID,
++    entity_type: str,
++    entity_id: uuid.UUID,
++    style: str = "realistic_portrait",
++) -> MediaAsset:
++    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type=entity_type,
++        entity_id=entity_id,
++        style=style,
++        model_name="gemini/x",
++    )
++    db.add(placeholder)
++    await db.commit()
++    await db.refresh(placeholder)
++    return placeholder
++
++
+ # ── generate_for_entity happy path ──────────────────────────────────────────
+ 
+ 
+ @pytest.mark.integration
+ async def test_generate_for_character_writes_file_and_ready_asset(
+     db_session, _tmp_media_dir
+ ):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+ 
+     router = _stub_router()
+     svc = ImageService(router=router)
+     asset = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/gemini-3.1-flash-image",
++        asset_id=placeholder.id,
+     )
+ 
+     assert asset.status == "ready"
+     assert asset.width == 8
+     assert asset.height == 8
+     assert asset.model_name == "gemini-3.1-flash-image"
+     assert asset.style == "realistic_portrait"
+     assert asset.is_canonical is False
+@@ -121,60 +159,70 @@ async def test_generate_for_character_writes_file_and_ready_asset(
+     call_args = router.generate_image.await_args
+     sent_prompt = call_args.args[0] if call_args.args else call_args.kwargs["prompt"]
+     assert "vándor" in sent_prompt
+ 
+ 
+ @pytest.mark.integration
+ async def test_generate_for_missing_entity_raises(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
++    # Use a random entity_id so the CodexEntry lookup fails (entity doesn't exist).
++    missing_entity_id = uuid.uuid4()
++    placeholder = await _make_placeholder(
++        db_session, project_id, "character", missing_entity_id
++    )
+     svc = ImageService(router=_stub_router())
+     with pytest.raises(ValueError):
+         await svc.generate_for_entity(
+             db_session,
+             project_id=project_id,
+             entity_type="character",
+-            entity_id=uuid.uuid4(),
++            entity_id=missing_entity_id,
+             style="realistic_portrait",
+             model="gemini/x",
++            asset_id=placeholder.id,
+         )
+ 
+ 
+ # ── canonical reference is fed back into the next generation ─────────────────
+ 
+ 
+ @pytest.mark.integration
+ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+ 
+     router = _stub_router()
+     svc = ImageService(router=router)
+ 
++    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
+     first = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph1.id,
+     )
+     # No reference on the first call (no canonical yet).
+     first_kwargs = router.generate_image.await_args.kwargs
+     assert not first_kwargs.get("reference_images")
+ 
+     await svc.set_canonical(db_session, first.id)
+ 
++    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
+     await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph2.id,
+     )
+     # Second call now passes the canonical image bytes as a reference.
+     second_kwargs = router.generate_image.await_args.kwargs
+     refs = second_kwargs.get("reference_images")
+     assert refs
+     assert len(refs) == 1
+     assert isinstance(refs[0], bytes)
+     assert len(refs[0]) > 0
+@@ -184,31 +232,35 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
+ 
+ 
+ @pytest.mark.integration
+ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+     svc = ImageService(router=_stub_router())
+ 
++    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
+     a1 = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph1.id,
+     )
++    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
+     a2 = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph2.id,
+     )
+ 
+     await svc.set_canonical(db_session, a1.id)
+     await db_session.refresh(a1)
+     assert a1.is_canonical is True
+ 
+     await svc.set_canonical(db_session, a2.id)
+     await db_session.refresh(a1)
+@@ -243,40 +295,46 @@ async def test_set_canonical_missing_raises(db_session, _tmp_media_dir):
+ 
+ @pytest.mark.integration
+ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id, name="Hős A")
+     other = await _make_character(db_session, project_id, name="Hős B")
+     svc = ImageService(router=_stub_router())
+ 
++    ph_older = await _make_placeholder(db_session, project_id, "character", char.id)
+     older = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_older.id,
+     )
++    ph_newer = await _make_placeholder(db_session, project_id, "character", char.id)
+     newer = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_newer.id,
+     )
+     # A 2nd entity's asset must not leak in.
++    ph_other = await _make_placeholder(db_session, project_id, "character", other.id)
+     await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=other.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_other.id,
+     )
+ 
+     # Make created_at unambiguous on coarse-resolution SQLite clocks.
+     now = datetime.now(UTC)
+     older.created_at = now - timedelta(minutes=5)
+     newer.created_at = now
+     await db_session.commit()
+ 
+@@ -291,23 +349,25 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
+ 
+ 
+ @pytest.mark.integration
+ async def test_delete_removes_row_and_files(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+     svc = ImageService(router=_stub_router())
+ 
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+     asset = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=placeholder.id,
+     )
+     file_path = asset.file_path
+     thumb_path = asset.thumb_path
+     asset_id = asset.id
+     assert os.path.exists(file_path)
+ 
+     await svc.delete(db_session, asset_id)
+ 
+@@ -328,28 +388,249 @@ async def test_delete_missing_raises(db_session, _tmp_media_dir):
+ 
+ @pytest.mark.integration
+ async def test_generation_failure_raises_and_leaves_no_partial(
+     db_session, _tmp_media_dir
+ ):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+ 
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+     router = AsyncMock()
+     router.generate_image = AsyncMock(side_effect=RuntimeError("provider boom"))
+     svc = ImageService(router=router)
+ 
+     with pytest.raises(RuntimeError):
+         await svc.generate_for_entity(
+             db_session,
+             project_id=project_id,
+             entity_type="character",
+             entity_id=char.id,
+             style="realistic_portrait",
+             model="gemini/x",
++            asset_id=placeholder.id,
+         )
+ 
+-    # No READY asset persisted, and no orphaned files left under the media dir.
+-    assert await _count_assets(db_session) == 0
++    # The placeholder row still exists (service is LOUD — re-raises, never flips
++    # status itself; the job layer owns the 'failed' flip).  No NEW rows created.
++    assert await _count_assets(db_session) == 1
++    await db_session.refresh(placeholder)
++    assert placeholder.status == "generating"  # service never mutates on failure
++    # No partial files written to disk.
+     leftover = []
+     for root, _dirs, files in os.walk(str(_tmp_media_dir)):
+         leftover.extend(files)
+     assert leftover == []
++
++
++# ── generate_cover_for_book ───────────────────────────────────────────────────
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_persists_cover_asset(
++    db_session, monkeypatch, tmp_path
++):
++    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
++
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++    placeholder = await _make_placeholder(
++        db_session, project_id, "cover", book_id, style="cover_fantasy"
++    )
++
++    async def fake_generate_image(
++        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
++    ):
++        buf = io.BytesIO()
++        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
++        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
++
++    svc = ImageService()
++    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
++
++    asset = await svc.generate_cover_for_book(
++        db_session,
++        project_id=project_id,
++        book_id=book_id,
++        art_style="cover_fantasy",
++        layout="classic_centered",
++        title="Fárosz",
++        author="Rácz D.",
++        subtitle=None,
++        model="gemini/x",
++        asset_id=placeholder.id,
++    )
++    assert asset.entity_type == "cover"
++    assert asset.entity_id == book_id
++    assert asset.status == "ready"
++    assert asset.style == "cover_fantasy"
++    assert asset.width == 1600 and asset.height == 2560
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_missing_book_raises(db_session):
++    project_id = await _make_project(db_session)
++    missing_book_id = uuid.uuid4()
++    placeholder = await _make_placeholder(
++        db_session, project_id, "cover", missing_book_id, style="cover_fantasy"
++    )
++    svc = ImageService()
++    with pytest.raises(ValueError):
++        await svc.generate_cover_for_book(
++            db_session,
++            project_id=project_id,
++            book_id=missing_book_id,
++            art_style="cover_fantasy",
++            layout="classic_centered",
++            title="t",
++            author="a",
++            subtitle=None,
++            model="m",
++            asset_id=placeholder.id,
++        )
++
++
++# ── ADVERSARIAL: single-asset lifecycle (placeholder reuse) ──────────────────
++
++
++@pytest.mark.integration
++async def test_generate_for_entity_updates_placeholder_not_creates_new(
++    db_session, _tmp_media_dir
++):
++    """After a successful codex-image generation the DB must contain EXACTLY
++    ONE MediaAsset for the entity — the same row the endpoint created as the
++    'generating' placeholder — and its status must be 'ready'.
++
++    Before the fix: the service minted a brand-new uuid4 asset on success,
++    leaving two rows (placeholder stuck 'generating' + a new 'ready' one).
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    # Pre-create the placeholder exactly as the endpoint does.
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    svc = ImageService(router=_stub_router())
++    asset = await svc.generate_for_entity(
++        db_session,
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model="gemini/x",
++        asset_id=placeholder_id,
++    )
++
++    # Returned asset is the SAME row.
++    assert asset.id == placeholder_id
++    assert asset.status == "ready"
++
++    # Exactly ONE row in the DB for this entity.
++    total = (
++        await db_session.execute(
++            select(func.count())
++            .select_from(MediaAsset)
++            .where(
++                MediaAsset.entity_type == "character",
++                MediaAsset.entity_id == char.id,
++            )
++        )
++    ).scalar_one()
++    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_updates_placeholder_not_creates_new(
++    db_session, monkeypatch, tmp_path
++):
++    """Same single-asset lifecycle invariant for the cover branch.
++
++    Before the fix: service created a second row; placeholder stayed 'generating'.
++    """
++    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
++
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    async def fake_generate_image(
++        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
++    ):
++        buf = io.BytesIO()
++        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
++        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
++
++    svc = ImageService()
++    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
++
++    asset = await svc.generate_cover_for_book(
++        db_session,
++        project_id=project_id,
++        book_id=book_id,
++        art_style="cover_fantasy",
++        layout="classic_centered",
++        title="Fárosz",
++        author="Rácz D.",
++        subtitle=None,
++        model="gemini/x",
++        asset_id=placeholder_id,
++    )
++
++    # Returned asset is the SAME row.
++    assert asset.id == placeholder_id
++    assert asset.status == "ready"
++
++    # Exactly ONE row.
++    total = (
++        await db_session.execute(
++            select(func.count())
++            .select_from(MediaAsset)
++            .where(
++                MediaAsset.entity_type == "cover",
++                MediaAsset.entity_id == book_id,
++            )
++        )
++    ).scalar_one()
++    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
++
++
++@pytest.mark.integration
++async def test_generate_for_entity_missing_placeholder_raises(
++    db_session, _tmp_media_dir
++):
++    """Passing a non-existent asset_id raises ValueError (guard against lost jobs)."""
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++    svc = ImageService(router=_stub_router())
++
++    with pytest.raises(ValueError, match="asset"):
++        await svc.generate_for_entity(
++            db_session,
++            project_id=project_id,
++            entity_type="character",
++            entity_id=char.id,
++            style="realistic_portrait",
++            model="gemini/x",
++            asset_id=uuid.uuid4(),
++        )
+diff --git a/apps/ai/tests/unit/test_cover_compositor.py b/apps/ai/tests/unit/test_cover_compositor.py
+new file mode 100644
+index 0000000..789998e
+--- /dev/null
++++ b/apps/ai/tests/unit/test_cover_compositor.py
+@@ -0,0 +1,53 @@
++import io
++
++import pytest
++from PIL import Image
++
++from app.services import cover_compositor as cc
++
++
++def _png(w=1024, h=1536, color=(20, 30, 40)) -> bytes:
++    buf = io.BytesIO()
++    Image.new("RGB", (w, h), color).save(buf, "PNG")
++    return buf.getvalue()
++
++
++def test_available_layouts_nonempty():
++    slugs = {lay.slug for lay in cc.available_cover_layouts()}
++    assert {"classic_centered", "bottom_scrim", "top_minimal"} <= slugs
++
++
++def test_compose_outputs_exact_kdp_dimensions():
++    out = cc.compose_cover(_png(), layout="classic_centered", title="A Fárosz", author="Rácz D.")
++    with Image.open(io.BytesIO(out)) as img:
++        assert img.size == (cc.COVER_W, cc.COVER_H) == (1600, 2560)
++        assert img.format == "PNG"
++
++
++def test_compose_draws_text_over_background():
++    plain = _png()  # uniform colour
++    out = cc.compose_cover(plain, layout="classic_centered", title="CÍM", author="SZERZŐ")
++    # The composite must differ from a bare crop/resize of the same background.
++    bare = cc._cover_crop(Image.open(io.BytesIO(plain)).convert("RGB"), cc.COVER_W, cc.COVER_H)
++    bare_bytes = io.BytesIO()
++    bare.save(bare_bytes, "PNG")
++    assert out != bare_bytes.getvalue()
++
++
++def test_long_title_wraps_and_fits():
++    long_title = "Egy nagyon hosszú cím amely biztosan több sorba törik a borítón rendben"
++    out = cc.compose_cover(_png(), layout="bottom_scrim", title=long_title, author="X")
++    with Image.open(io.BytesIO(out)) as img:
++        assert img.size == (1600, 2560)  # did not crash; produced a valid cover
++
++
++def test_unknown_layout_raises():
++    with pytest.raises(ValueError):
++        cc.compose_cover(_png(), layout="does_not_exist", title="t", author="a")
++
++
++def test_missing_font_raises(tmp_path, monkeypatch):
++    # Spec: a missing font must fail LOUDLY (ValueError), never silently.
++    monkeypatch.setattr(cc, "_FONTS_DIR", tmp_path)
++    with pytest.raises(ValueError, match="cover font missing"):
++        cc.compose_cover(_png(), layout="classic_centered", title="t", author="a")
+diff --git a/apps/ai/tests/unit/test_image_prompt.py b/apps/ai/tests/unit/test_image_prompt.py
+index 78c8c50..c17916b 100644
+--- a/apps/ai/tests/unit/test_image_prompt.py
++++ b/apps/ai/tests/unit/test_image_prompt.py
+@@ -4,19 +4,22 @@ Style presets are detailed image-prompt templates with {placeholder} tokens that
+ get filled from a Codex entry (``CodexEntry`` with ``entry_type``, ``title``,
+ ``content``, ``role``). The builder must:
+ - fill every token (never leak a literal `{...}`),
+ - never inject the literal string "None",
+ - substitute graceful Hungarian fallbacks for missing/blank fields,
+ - validate that the style matches the entry's entry_type.
+ """
+ 
++from types import SimpleNamespace
++
+ import pytest
+ from alexandria_core.models.codex_entry import CodexEntry
+ 
++from app.services import image_prompt
+ from app.services.image_prompt import available_styles, build_codex_prompt
+ 
+ 
+ @pytest.mark.unit
+ def test_build_codex_prompt_character_full() -> None:
+     entry = CodexEntry(
+         entry_type="character",
+         title="Szelene",
+@@ -117,8 +120,46 @@ def test_available_styles_character() -> None:
+ @pytest.mark.unit
+ def test_available_styles_location() -> None:
+     styles = available_styles("location")
+     assert all(s.entity_type == "location" for s in styles)
+     slugs = {s.slug for s in styles}
+     assert "watercolor_location" in slugs
+     assert "epic_landscape" in slugs
+     assert "realistic_portrait" not in slugs
++
++
++# ---------------------------------------------------------------------------
++# Task 3: Cover art-style presets + build_cover_prompt
++# ---------------------------------------------------------------------------
++
++
++def _book(**kw):
++    base = {"title": "A Fárosz árnyéka", "genre": "fantasy", "synopsis": "Egy könyvtáros titka."}
++    base.update(kw)
++    return SimpleNamespace(**base)
++
++
++def test_available_cover_styles_nonempty():
++    slugs = {s.slug for s in image_prompt.available_cover_styles()}
++    assert {"cover_literary", "cover_fantasy", "cover_minimal"} <= slugs
++    assert all(s.entity_type == "cover" for s in image_prompt.available_cover_styles())
++
++
++def test_build_cover_prompt_fills_tokens_and_forbids_text():
++    prompt = image_prompt.build_cover_prompt(_book(), "cover_fantasy")
++    assert "A Fárosz árnyéka" in prompt          # {title}
++    assert "fantasy" in prompt                    # {genre}
++    assert "Egy könyvtáros titka." in prompt      # {synopsis}
++    # The STYLE block must forbid in-art text (we composite typography ourselves).
++    low = prompt.lower()
++    assert "no text" in low and ("negative space" in low or "space for" in low)
++
++
++def test_build_cover_prompt_blank_fields_fall_back():
++    prompt = image_prompt.build_cover_prompt(_book(genre=None, synopsis="  "), "cover_minimal")
++    assert "{" not in prompt and "None" not in prompt
++
++
++def test_build_cover_prompt_unknown_style_raises():
++    import pytest
++    with pytest.raises(ValueError):
++        image_prompt.build_cover_prompt(_book(), "realistic_portrait")  # a character style
+diff --git a/apps/api/alembic/versions/91516a452442_initial_schema.py b/apps/api/alembic/versions/91516a452442_initial_schema.py
+index 2a22c7a..58136d0 100644
+--- a/apps/api/alembic/versions/91516a452442_initial_schema.py
++++ b/apps/api/alembic/versions/91516a452442_initial_schema.py
+@@ -54,17 +54,17 @@ _TABLES_ADDED_LATER = {
+     "media_assets",
+ }
+ 
+ # Columns added by LATER revisions to base tables — dropped from the in-memory
+ # copy here so the owning ALTER migration adds them exactly once.
+ _COLUMNS_ADDED_LATER = {
+     # aliases/role -> a1c4d7e9f2b3 ; series_id -> c3a1b2c3d4e5
+     "codex_entries": {"aliases", "role", "series_id"},
+-    "books": {"series_id"},  # -> c3a1b2c3d4e5
++    "books": {"series_id", "author"},  # series_id -> c3a1b2c3d4e5; author -> a7b3c1d2e4f5
+     "generation_jobs": {"project_id"},  # -> e5a1b2c3d4f6 (async RAG index job)
+ }
+ 
+ 
+ def _drop_later_column(copied, col_name: str) -> None:
+     """Remove a later-added column (its FK and any index) from the copy.
+ 
+     Dropped first so ``create_all`` does not emit, for a column the owning later
+diff --git a/apps/api/alembic/versions/a7b3c1d2e4f5_add_book_author.py b/apps/api/alembic/versions/a7b3c1d2e4f5_add_book_author.py
+new file mode 100644
+index 0000000..00b8a89
+--- /dev/null
++++ b/apps/api/alembic/versions/a7b3c1d2e4f5_add_book_author.py
+@@ -0,0 +1,33 @@
++"""add books.author
++
++Revision ID: a7b3c1d2e4f5
++Revises: f6a1b2c3d4e5
++Create Date: 2026-06-23 10:00:00.000000
++
++Hand-written migration. Adds a nullable ``author`` VARCHAR(255) column to the
++``books`` table. Used for the cover-generator byline and (later) export
++headers. Optional — single-user app has no user-profile name to default from.
++
++Portability: plain ``op.add_column`` with a nullable String works identically
++on PostgreSQL and the SQLite test database (mirrors ``b2a1c0d1e2f3``
++embedding_model and ``f6a1b2c3d4e5`` image_model).
++
++Verified: ``alembic upgrade head`` + ``downgrade -1`` + ``upgrade head`` run
++clean on SQLite.
++"""
++import sqlalchemy as sa
++
++from alembic import op
++
++revision = "a7b3c1d2e4f5"
++down_revision = "f6a1b2c3d4e5"
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    op.add_column("books", sa.Column("author", sa.String(length=255), nullable=True))
++
++
++def downgrade() -> None:
++    op.drop_column("books", "author")
+diff --git a/apps/api/app/schemas/book.py b/apps/api/app/schemas/book.py
+index f00ccd1..2adaee8 100644
+--- a/apps/api/app/schemas/book.py
++++ b/apps/api/app/schemas/book.py
+@@ -1,29 +1,31 @@
+ import uuid
+ from datetime import datetime
+ 
+ from pydantic import BaseModel, ConfigDict, Field
+ 
+ 
+ class BookCreate(BaseModel):
+     title: str = Field(..., min_length=1, max_length=255)
++    author: str | None = Field(default=None, max_length=255)
+     description: str | None = None
+     synopsis: str | None = None
+     genre: str | None = Field(default=None, max_length=100)
+     language: str = Field(default="hu", max_length=10)
+     word_count_target: int | None = None
+     order_index: int = 0
+     # Optional sub-universe grouping (a Series under the same project). None =
+     # the book belongs to no series. Validated same-project at the service layer.
+     series_id: uuid.UUID | None = None
+ 
+ 
+ class BookUpdate(BaseModel):
+     title: str | None = Field(default=None, min_length=1, max_length=255)
++    author: str | None = Field(default=None, max_length=255)
+     description: str | None = None
+     synopsis: str | None = None
+     genre: str | None = Field(default=None, max_length=100)
+     language: str | None = Field(default=None, max_length=10)
+     word_count_target: int | None = None
+     order_index: int | None = None
+     # Assign/clear the book's series. Send null to clear (back to project-only).
+     # Set must reference a Series in the SAME project (else rejected).
+@@ -32,16 +34,17 @@ class BookUpdate(BaseModel):
+ 
+ class BookRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+     id: uuid.UUID
+     project_id: uuid.UUID
+     series_id: uuid.UUID | None = None
+     title: str
++    author: str | None
+     description: str | None
+     synopsis: str | None
+     genre: str | None
+     language: str
+     word_count_target: int | None
+     order_index: int
+     created_at: datetime
+     updated_at: datetime
+diff --git a/apps/api/tests/integration/test_books.py b/apps/api/tests/integration/test_books.py
+index 7be2392..6d06e37 100644
+--- a/apps/api/tests/integration/test_books.py
++++ b/apps/api/tests/integration/test_books.py
+@@ -1,10 +1,11 @@
+ import uuid
+ 
++import pytest
+ from httpx import AsyncClient
+ 
+ 
+ async def _create_project(client, auth_headers, title="Test Project"):
+     resp = await client.post("/api/v1/projects", json={"title": title}, headers=auth_headers)
+     assert resp.status_code == 201
+     return resp.json()["id"]
+ 
+@@ -162,16 +163,38 @@ async def test_delete_book(client: AsyncClient, auth_headers: dict):
+ 
+ 
+ async def test_delete_book_not_found(client: AsyncClient, auth_headers: dict):
+     project_id = await _create_project(client, auth_headers)
+     resp = await client.delete(f"/api/v1/projects/{project_id}/books/{uuid.uuid4()}", headers=auth_headers)
+     assert resp.status_code == 404
+ 
+ 
++
++@pytest.mark.integration
++async def test_book_author_round_trips(client: AsyncClient, auth_headers: dict):
++    project_id = await _create_project(client, auth_headers)
++    created = await client.post(
++        f"/api/v1/projects/{project_id}/books",
++        headers=auth_headers,
++        json={"title": "Fárosz", "author": "Rácz Dániel"},
++    )
++    assert created.status_code == 201
++    assert created.json()["author"] == "Rácz Dániel"
++
++    book_id = created.json()["id"]
++    patched = await client.patch(
++        f"/api/v1/projects/{project_id}/books/{book_id}",
++        headers=auth_headers,
++        json={"author": "R. Dániel"},
++    )
++    assert patched.status_code == 200
++    assert patched.json()["author"] == "R. Dániel"
++
++
+ async def test_book_requires_auth_all_endpoints(client: AsyncClient):
+     fake_id = str(uuid.uuid4())
+     endpoints = [
+         ("GET", f"/api/v1/projects/{fake_id}/books"),
+         ("POST", f"/api/v1/projects/{fake_id}/books"),
+         ("GET", f"/api/v1/projects/{fake_id}/books/{fake_id}"),
+         ("PATCH", f"/api/v1/projects/{fake_id}/books/{fake_id}"),
+         ("DELETE", f"/api/v1/projects/{fake_id}/books/{fake_id}"),
+diff --git a/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx b/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
+new file mode 100644
+index 0000000..04f30b6
+--- /dev/null
++++ b/apps/web/app/(app)/konyv/[bookId]/beallitasok/__tests__/page.test.tsx
+@@ -0,0 +1,92 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { render, screen, waitFor } from "@testing-library/react";
++import userEvent from "@testing-library/user-event";
++import { http, HttpResponse } from "msw";
++import { server } from "@/test/msw/server";
++import { API_BASE_URL } from "@/lib/api/client";
++import { Providers } from "@/test/test-utils";
++import { FAROSZ_BOOK } from "@/test/msw/fixtures";
++import { hu } from "@/lib/i18n/hu";
++import { resetBookStore } from "@/test/msw/handlers";
++import type { BookUpdate } from "@/lib/api/types";
++
++const base = `${API_BASE_URL}/api/v1`;
++
++vi.mock("next/navigation", () => ({
++  useRouter: () => ({ push: vi.fn() }),
++  usePathname: () => `/konyv/${FAROSZ_BOOK.id}/beallitasok`,
++  useParams: () => ({ bookId: FAROSZ_BOOK.id }),
++}));
++
++import BeallitasokPage from "../page";
++
++function renderSettings() {
++  return render(
++    <Providers>
++      <BeallitasokPage />
++    </Providers>,
++  );
++}
++
++describe("Book settings page", () => {
++  beforeEach(() => {
++    resetBookStore();
++  });
++  afterEach(() => vi.clearAllMocks());
++
++  it("renders the author field on the Könyv tab (default)", async () => {
++    renderSettings();
++    // The metadata "Szerző" is distinct from the cover panel's "Szerző a
++    // borítón", so the label is unambiguous.
++    expect(
++      await screen.findByLabelText(hu.books.authorLabel),
++    ).toBeInTheDocument();
++  });
++
++  it("edits the book author", async () => {
++    const user = userEvent.setup();
++    const patched: BookUpdate[] = [];
++    server.use(
++      http.patch(
++        `${base}/projects/:projectId/books/:bookId`,
++        async ({ request }) => {
++          const body = (await request.json()) as BookUpdate;
++          patched.push(body);
++          return HttpResponse.json({ ...FAROSZ_BOOK, ...body });
++        },
++      ),
++    );
++    renderSettings();
++    const metadataAuthorField = await screen.findByLabelText(
++      hu.books.authorLabel,
++    );
++    await user.clear(metadataAuthorField);
++    await user.type(metadataAuthorField, "Rácz Dániel");
++    await user.click(screen.getByRole("button", { name: hu.books.save }));
++    await waitFor(() =>
++      expect(patched.at(-1)).toMatchObject({ author: "Rácz Dániel" }),
++    );
++  });
++
++  it("shows the cover generator section on the Könyv tab (default)", async () => {
++    renderSettings();
++    expect(await screen.findByText(hu.covers.title)).toBeInTheDocument();
++    expect(await screen.findByLabelText(hu.covers.artStyleLabel)).toBeInTheDocument();
++  });
++
++  it("switching to AI / Szolgáltatók tab renders the provider hub", async () => {
++    const user = userEvent.setup();
++    renderSettings();
++
++    // The segmented control is a radiogroup; select the providers tab.
++    const providersTab = await screen.findByRole("radio", {
++      name: hu.books.tabProviders,
++    });
++    await user.click(providersTab);
++
++    // SettingsHub renders its h1 as hu.settings.title ("Beállítások").
++    expect(
++      await screen.findByRole("heading", { name: hu.settings.title }),
++    ).toBeInTheDocument();
++  });
++});
+diff --git a/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx b/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
+new file mode 100644
+index 0000000..93bdea5
+--- /dev/null
++++ b/apps/web/app/(app)/konyv/[bookId]/beallitasok/book-tab.tsx
+@@ -0,0 +1,138 @@
++"use client";
++
++/**
++ * "Könyv" tab content for the book settings page.
++ *
++ * Lets the writer edit the book's metadata: title, genre, and author (the
++ * byline shown on generated covers and later in exports). Uses the same
++ * `useResolvedBook` + `useUpdateBook` hooks as the Export screen so the
++ * resolved-book cache is shared. Saves via PATCH; never overwrites on mount.
++ */
++
++import { useEffect, useId, useState } from "react";
++import { useParams } from "next/navigation";
++import { useResolvedBook } from "@/lib/api/export-hooks";
++import { useUpdateBook } from "@/lib/api/hooks";
++import { Button, FieldLabel, FormInput, toast } from "@/components/kit";
++import { CoverPanel } from "@/components/book/cover-panel";
++import { hu } from "@/lib/i18n/hu";
++
++export function BookTab() {
++  const params = useParams<{ bookId: string }>();
++  const bookId = params?.bookId;
++
++  const bookQuery = useResolvedBook(bookId);
++  const updateBook = useUpdateBook();
++
++  // Controlled form state — seeded from the resolved book, never undefined.
++  const [title, setTitle] = useState("");
++  const [genre, setGenre] = useState("");
++  const [author, setAuthor] = useState("");
++
++  // Seed form once the book resolves (or after a successful save).
++  useEffect(() => {
++    if (bookQuery.data) {
++      setTitle(bookQuery.data.title ?? "");
++      setGenre(bookQuery.data.genre ?? "");
++      setAuthor(bookQuery.data.author ?? "");
++    }
++  }, [bookQuery.data]);
++
++  const titleId = useId();
++  const genreId = useId();
++  const authorId = useId();
++
++  function handleSave(e: React.SyntheticEvent<HTMLFormElement>) {
++    e.preventDefault();
++    if (!bookQuery.data) return;
++    updateBook.mutate(
++      {
++        projectId: bookQuery.data.project_id,
++        bookId: bookQuery.data.id,
++        patch: {
++          title: title || undefined,
++          genre: genre || null,
++          author: author || null,
++        },
++      },
++      {
++        onSuccess: () => {
++          toast.success(hu.books.saveSuccess);
++        },
++        onError: () => {
++          toast.error(hu.books.saveError);
++        },
++      },
++    );
++  }
++
++  if (bookQuery.isLoading) {
++    return <p className="text-[14px] text-text-muted">{hu.books.loading}</p>;
++  }
++
++  if (bookQuery.isError) {
++    return <p className="text-[14px] text-danger">{hu.books.loadError}</p>;
++  }
++
++  return (
++    <>
++      <h1 className="mb-1 text-[22px] font-semibold text-text">
++        {hu.books.settingsTitle}
++      </h1>
++      <p className="mb-8 text-[13px] text-text-muted">
++        {hu.books.settingsSubtitle}
++      </p>
++
++      <form onSubmit={handleSave} className="flex flex-col gap-5">
++        {/* Title */}
++        <div>
++          <FieldLabel htmlFor={titleId}>{hu.books.titleLabel}</FieldLabel>
++          <FormInput
++            id={titleId}
++            value={title}
++            onChange={(e) => setTitle(e.target.value)}
++            placeholder={hu.books.titlePlaceholder}
++          />
++        </div>
++
++        {/* Genre */}
++        <div>
++          <FieldLabel htmlFor={genreId}>{hu.books.genreLabel}</FieldLabel>
++          <FormInput
++            id={genreId}
++            value={genre}
++            onChange={(e) => setGenre(e.target.value)}
++            placeholder={hu.books.genrePlaceholder}
++          />
++        </div>
++
++        {/* Author */}
++        <div>
++          <FieldLabel htmlFor={authorId}>{hu.books.authorLabel}</FieldLabel>
++          <FormInput
++            id={authorId}
++            value={author}
++            onChange={(e) => setAuthor(e.target.value)}
++            placeholder={hu.books.authorPlaceholder}
++          />
++        </div>
++
++        <div className="pt-2">
++          <Button type="submit" disabled={updateBook.isPending}>
++            {updateBook.isPending ? hu.books.saving : hu.books.save}
++          </Button>
++        </div>
++      </form>
++
++      <hr className="my-8 border-border" />
++
++      {bookQuery.data ? (
++        <CoverPanel
++          bookId={bookQuery.data.id}
++          bookTitle={bookQuery.data.title}
++          bookAuthor={bookQuery.data.author ?? null}
++        />
++      ) : null}
++    </>
++  );
++}
+diff --git a/apps/web/app/(app)/konyv/[bookId]/beallitasok/page.tsx b/apps/web/app/(app)/konyv/[bookId]/beallitasok/page.tsx
+index 7368cfd..1b7838d 100644
+--- a/apps/web/app/(app)/konyv/[bookId]/beallitasok/page.tsx
++++ b/apps/web/app/(app)/konyv/[bookId]/beallitasok/page.tsx
+@@ -1,11 +1,56 @@
+-import { SettingsScreen } from "@/components/settings";
++"use client";
+ 
+ /**
+- * Beállítások route — provider hub + Local (Ollama, MVP) / Cloud (V1) / MCP
+- * (V2) subpages + the client-persisted Generálás params (Temperature / Max
+- * tokenek) read by the AI calls (M8). The whole screen is the client
+- * {@link SettingsScreen}.
++ * Book settings page (`/konyv/:bookId/beallitasok`).
++ *
++ * Two tabs:
++ * - "Könyv" (default) — book metadata form (title / genre / author).
++ * - "AI / Szolgáltatók" — the SettingsScreen provider hub
++ *   (Local/Ollama, Cloud/API-keys, MCP, generation params).
++ *
++ * The outer tab switch uses SegmentedControl (the app's established 2-way
++ * page-section switcher). SettingsScreen manages its own internal
++ * Local/Cloud/MCP sub-navigation.
+  */
++
++import { useState } from "react";
++import { SegmentedControl } from "@/components/kit/segmented-control";
++import { SettingsScreen } from "@/components/settings";
++import { hu } from "@/lib/i18n/hu";
++import { BookTab } from "./book-tab";
++
++type Tab = "book" | "providers";
++
+ export default function BeallitasokPage() {
+-  return <SettingsScreen />;
++  const [tab, setTab] = useState<Tab>("book");
++
++  return (
++    <div className="min-h-0 flex-1 overflow-y-auto">
++      {/* Switcher + book form share a padded, width-constrained shell. The
++          providers tab renders SettingsScreen as a SIBLING (outside this shell)
++          because it applies its OWN px-8/py-12/max-w container — nesting it here
++          would double the padding and constraint. */}
++      <div className="px-8 pt-12">
++        <div className="mx-auto max-w-[600px]">
++          <div className={tab === "book" ? "mb-8" : ""}>
++            <SegmentedControl<Tab>
++              aria-label="Beállítások szekció"
++              options={[
++                { value: "book", label: hu.books.tabBook },
++                { value: "providers", label: hu.books.tabProviders },
++              ]}
++              value={tab}
++              onValueChange={setTab}
++            />
++          </div>
++
++          {/* Könyv tab — book metadata form */}
++          {tab === "book" ? <BookTab /> : null}
++        </div>
++      </div>
++
++      {/* AI / Szolgáltatók tab — provider hub (self-padded) */}
++      {tab === "providers" ? <SettingsScreen /> : null}
++    </div>
++  );
+ }
+diff --git a/apps/web/components/book/__tests__/cover-panel.test.tsx b/apps/web/components/book/__tests__/cover-panel.test.tsx
+new file mode 100644
+index 0000000..7315013
+--- /dev/null
++++ b/apps/web/components/book/__tests__/cover-panel.test.tsx
+@@ -0,0 +1,50 @@
++import { describe, it, expect, beforeEach } from "vitest";
++import { screen, waitFor } from "@testing-library/react";
++import userEvent from "@testing-library/user-event";
++import { http, HttpResponse } from "msw";
++import { server } from "@/test/msw/server";
++import { AI_BASE_URL } from "@/lib/api/client";
++import { renderWithProviders } from "@/test/test-utils";
++import { resetImageStore } from "@/test/msw/handlers";
++import { CoverPanel } from "@/components/book/cover-panel";
++import { hu } from "@/lib/i18n/hu";
++
++const aiBase = `${AI_BASE_URL}/api/v1`;
++const BOOK = { id: "book-1", title: "Fárosz", author: "Rácz D." };
++
++describe("CoverPanel", () => {
++  beforeEach(() => resetImageStore());
++
++  it("renders style + layout pickers and posts a cover generation", async () => {
++    const user = userEvent.setup();
++    const posted: Record<string, unknown>[] = [];
++    server.use(
++      http.post(`${aiBase}/ai/covers`, async ({ request }) => {
++        posted.push((await request.json()) as Record<string, unknown>);
++        return HttpResponse.json(
++          { id: "c1", project_id: "p", entity_type: "cover", entity_id: "book-1",
++            status: "generating", mime: "image/png", width: null, height: null,
++            model_name: "x", style: "cover_fantasy", is_canonical: false,
++            created_at: "2026-06-22T00:00:00Z" }, { status: 202 });
++      }),
++    );
++    renderWithProviders(<CoverPanel bookId={BOOK.id} bookTitle={BOOK.title} bookAuthor={BOOK.author} />);
++    await screen.findByLabelText(hu.covers.artStyleLabel);
++    await screen.findByLabelText(hu.covers.layoutLabel);
++    await user.click(await screen.findByRole("button", { name: hu.covers.generate }));
++    await waitFor(() => expect(posted.length).toBe(1));
++    expect(posted[0]).toMatchObject({
++      book_id: "book-1",
++      art_style: expect.any(String),
++      layout: expect.any(String),
++      // title/author are prefilled from the book props and must be sent.
++      title: BOOK.title,
++      author: BOOK.author,
++    });
++  });
++
++  it("shows the empty state when no covers exist", async () => {
++    renderWithProviders(<CoverPanel bookId={BOOK.id} bookTitle={BOOK.title} bookAuthor={BOOK.author} />);
++    expect(await screen.findByText(hu.covers.empty)).toBeInTheDocument();
++  });
++});
+diff --git a/apps/web/components/book/cover-panel.tsx b/apps/web/components/book/cover-panel.tsx
+new file mode 100644
+index 0000000..f13e9ac
+--- /dev/null
++++ b/apps/web/components/book/cover-panel.tsx
+@@ -0,0 +1,493 @@
++"use client";
++
++/**
++ * Borító — the AI cover generator panel for a book (Phase 2).
++ *
++ * Modelled closely on `apps/web/components/codex/image-panel.tsx` — same
++ * MediaThumb subcomponent, same canonical ring + canonical-first ordering, same
++ * hover/focus overlay actions (IconButton + Tooltip), same Skeleton-shimmer
++ * generating tile with a caption, and the same Retry-on-failed action.
++ *
++ * Differences from the image panel:
++ * - TWO pickers: art style (useCoverStyles) + layout (useCoverLayouts).
++ * - Text inputs: title (prefilled bookTitle), author (prefilled bookAuthor),
++ *   optional subtitle.
++ * - Generate via useGenerateCover; error toast uses hu.covers.generateError.
++ * - Gallery via useEntityImages("cover", bookId); canonical cover rendered as a
++ *   larger "hero" preview above the thumbnail grid.
++ * - All copy from hu.covers.
++ */
++import { useCallback, useEffect, useState } from "react";
++import { ImageIcon, RotateCcw, Star, Trash2 } from "lucide-react";
++import { Button } from "@/components/kit/button";
++import { Spinner } from "@/components/kit/spinner";
++import { Skeleton } from "@/components/kit/skeleton";
++import { Icon } from "@/components/kit/icon";
++import { IconButton } from "@/components/kit/icon-button";
++import { DashedTile } from "@/components/kit/dashed-tile";
++import { Tooltip } from "@/components/kit/tooltip";
++import { ConfirmDialog } from "@/components/kit/alert-dialog";
++import { SectionEyebrow } from "@/components/kit/section-eyebrow";
++import { toast } from "@/components/kit/toast";
++import { FormInput, FieldLabel } from "@/components/kit/form-input";
++import {
++  useDeleteImage,
++  useEntityImages,
++  useMediaObjectUrl,
++  useSetCanonical,
++} from "@/lib/api/image-hooks";
++import { useCoverLayouts, useCoverStyles, useGenerateCover } from "@/lib/api/cover-hooks";
++import type { MediaAssetRead } from "@/lib/api/image-types";
++import { hu } from "@/lib/i18n/hu";
++import { cn } from "@/lib/utils";
++
++// ---------------------------------------------------------------------------
++// MediaThumb — mirrors image-panel.tsx exactly (JWT-authenticated blob URL)
++// ---------------------------------------------------------------------------
++
++function MediaThumb({ assetId, alt }: { assetId: string; alt: string }) {
++  const { url, isLoading, isError } = useMediaObjectUrl(assetId, { thumb: true });
++
++  if (isError) {
++    return (
++      <div className="flex h-full w-full items-center justify-center">
++        <span className="flex h-5 items-center rounded-full bg-danger-muted px-2 text-[11px] font-semibold text-danger-text">
++          {hu.covers.failedChip}
++        </span>
++      </div>
++    );
++  }
++  if (isLoading || !url) {
++    return (
++      <div className="flex h-full w-full items-center justify-center text-text-muted">
++        <Spinner size={20} />
++      </div>
++    );
++  }
++  return (
++    // eslint-disable-next-line @next/next/no-img-element
++    <img src={url} alt={alt} className="h-full w-full object-cover" />
++  );
++}
++
++// ---------------------------------------------------------------------------
++// HeroThumb — larger authenticated thumbnail for the canonical cover preview
++// ---------------------------------------------------------------------------
++
++function HeroThumb({ assetId, alt }: { assetId: string; alt: string }) {
++  // The ≤512px thumbnail is plenty sharp for the ~200×320 hero box and far
++  // lighter than refetching the full 1600×2560 cover.
++  const { url, isLoading, isError } = useMediaObjectUrl(assetId, { thumb: true });
++
++  if (isError) {
++    return (
++      <div className="flex h-full w-full items-center justify-center">
++        <span className="flex h-5 items-center rounded-full bg-danger-muted px-2 text-[11px] font-semibold text-danger-text">
++          {hu.covers.failedChip}
++        </span>
++      </div>
++    );
++  }
++  if (isLoading || !url) {
++    return (
++      <div className="flex h-full w-full items-center justify-center text-text-muted">
++        <Spinner size={24} />
++      </div>
++    );
++  }
++  return (
++    // eslint-disable-next-line @next/next/no-img-element
++    <img src={url} alt={alt} className="h-full w-full object-contain" />
++  );
++}
++
++// ---------------------------------------------------------------------------
++// CoverPanel props
++// ---------------------------------------------------------------------------
++
++export interface CoverPanelProps {
++  bookId: string;
++  bookTitle: string;
++  bookAuthor: string | null;
++}
++
++// ---------------------------------------------------------------------------
++// CoverPanel — main exported component
++// ---------------------------------------------------------------------------
++
++export function CoverPanel({ bookId, bookTitle, bookAuthor }: CoverPanelProps) {
++  const styles = useCoverStyles();
++  const layouts = useCoverLayouts();
++  const images = useEntityImages("cover", bookId);
++  const generate = useGenerateCover();
++
++  const [artStyle, setArtStyle] = useState("");
++  const [layout, setLayout] = useState("");
++  const [title, setTitle] = useState(bookTitle);
++  const [author, setAuthor] = useState(bookAuthor ?? "");
++  const [subtitle, setSubtitle] = useState("");
++
++  // Default art-style picker to the first option once loaded.
++  useEffect(() => {
++    const options = styles.data ?? [];
++    if (options.length === 0) return;
++    setArtStyle((current) =>
++      current && options.some((s) => s.slug === current) ? current : options[0].slug,
++    );
++  }, [styles.data]);
++
++  // Default layout picker to the first option once loaded.
++  useEffect(() => {
++    const options = layouts.data ?? [];
++    if (options.length === 0) return;
++    setLayout((current) =>
++      current && options.some((l) => l.slug === current) ? current : options[0].slug,
++    );
++  }, [layouts.data]);
++
++  // Keep text inputs in sync when props change (e.g. parent reloads the book).
++  useEffect(() => setTitle(bookTitle), [bookTitle]);
++  useEffect(() => setAuthor(bookAuthor ?? ""), [bookAuthor]);
++
++  const runGenerate = useCallback(
++    (styleSlug: string, layoutSlug: string) => {
++      if (!styleSlug || !layoutSlug) return;
++      generate.mutate(
++        { bookId, artStyle: styleSlug, layout: layoutSlug, title, author, subtitle: subtitle || null },
++        { onError: (e) => toast.error(`${hu.covers.generateError}: ${e.message}`) },
++      );
++    },
++    [generate, bookId, title, author, subtitle],
++  );
++
++  function handleGenerate() {
++    runGenerate(artStyle, layout);
++  }
++
++  /** Human label for an art-style slug (fallback to slug). */
++  function styleLabelFor(slug: string | null): string {
++    if (!slug) return "";
++    return (styles.data ?? []).find((s) => s.slug === slug)?.label ?? slug;
++  }
++
++  // Canonical cover first; within each group newest-first (backend order).
++  const assets = [...(images.data ?? [])].sort(
++    (a, b) => Number(b.is_canonical) - Number(a.is_canonical),
++  );
++
++  const canonicalAsset = assets.find((a) => a.is_canonical);
++
++  const artStylePickerId = `cover-art-style-${bookId}`;
++  const layoutPickerId = `cover-layout-${bookId}`;
++
++  return (
++    <section className="flex flex-col gap-4">
++      <SectionEyebrow as="h3">{hu.covers.title}</SectionEyebrow>
++
++      {/* Canonical cover hero preview */}
++      {canonicalAsset?.status === "ready" ? (
++        <div className="flex justify-center">
++          <div className="relative h-[320px] w-[200px] overflow-hidden rounded-[12px] border-2 border-accent ring-2 ring-accent ring-offset-1 ring-offset-surface">
++            <HeroThumb
++              assetId={canonicalAsset.id}
++              alt={hu.covers.heroAlt(title)}
++            />
++            <span className="absolute left-2 top-2 z-[2] flex h-5 items-center gap-1 rounded-full bg-accent-strong px-2 text-[10px] font-semibold text-accent-fg">
++              <Icon icon={Star} size={10} />
++              {hu.covers.canonicalBadge}
++            </span>
++          </div>
++        </div>
++      ) : null}
++
++      {/* Generate controls */}
++      <div className="flex flex-col gap-3">
++        {/* Pickers row */}
++        <div className="flex flex-wrap items-end gap-2">
++          <div className="flex flex-col gap-1">
++            <label
++              htmlFor={artStylePickerId}
++              className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
++            >
++              {hu.covers.artStyleLabel}
++            </label>
++            <select
++              id={artStylePickerId}
++              aria-label={hu.covers.artStyleLabel}
++              value={artStyle}
++              onChange={(e) => setArtStyle(e.target.value)}
++              disabled={(styles.data ?? []).length === 0}
++              className="box-border h-9 w-full min-w-[180px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
++            >
++              {(styles.data ?? []).map((s) => (
++                <option key={s.slug} value={s.slug}>
++                  {s.label}
++                </option>
++              ))}
++            </select>
++          </div>
++          <div className="flex flex-col gap-1">
++            <label
++              htmlFor={layoutPickerId}
++              className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
++            >
++              {hu.covers.layoutLabel}
++            </label>
++            <select
++              id={layoutPickerId}
++              aria-label={hu.covers.layoutLabel}
++              value={layout}
++              onChange={(e) => setLayout(e.target.value)}
++              disabled={(layouts.data ?? []).length === 0}
++              className="box-border h-9 w-full min-w-[180px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
++            >
++              {(layouts.data ?? []).map((l) => (
++                <option key={l.slug} value={l.slug}>
++                  {l.label}
++                </option>
++              ))}
++            </select>
++          </div>
++        </div>
++
++        {/* Text inputs */}
++        <div className="flex flex-col gap-2">
++          <TitleField
++            id={`cover-title-${bookId}`}
++            label={hu.covers.titleLabel}
++            value={title}
++            onChange={(v) => setTitle(v)}
++          />
++          <TitleField
++            id={`cover-author-${bookId}`}
++            label={hu.covers.authorLabel}
++            value={author}
++            onChange={(v) => setAuthor(v)}
++          />
++          <TitleField
++            id={`cover-subtitle-${bookId}`}
++            label={hu.covers.subtitleLabel}
++            value={subtitle}
++            onChange={(v) => setSubtitle(v)}
++          />
++        </div>
++
++        <Button
++          type="button"
++          variant="accent-outline"
++          size={34}
++          onClick={handleGenerate}
++          disabled={generate.isPending || !artStyle || !layout}
++          leadingIcon={
++            generate.isPending ? (
++              <Spinner size={14} />
++            ) : (
++              <Icon icon={ImageIcon} size={14} />
++            )
++          }
++        >
++          {generate.isPending ? hu.covers.generating : hu.covers.generate}
++        </Button>
++      </div>
++
++      {/* Gallery */}
++      {images.isError ? (
++        <p role="status" className="m-0 text-[13px] text-danger-text">
++          {hu.covers.loadError}
++        </p>
++      ) : images.isLoading ? (
++        <div className="flex items-center gap-2 text-[13px] text-text-muted">
++          <Spinner size={14} />
++          {hu.covers.loading}
++        </div>
++      ) : assets.length === 0 ? (
++        <DashedTile
++          size="image"
++          aria-label={hu.covers.generateFirst}
++          icon={<Icon icon={ImageIcon} size={22} />}
++          label={hu.covers.empty}
++          hint={hu.covers.emptyHint}
++          onClick={handleGenerate}
++          disabled={!artStyle || !layout || generate.isPending}
++        />
++      ) : (
++        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
++          {assets.map((asset) => (
++            <CoverTile
++              key={asset.id}
++              asset={asset}
++              bookTitle={bookTitle}
++              styleLabel={styleLabelFor(asset.style)}
++              onRetry={() => runGenerate(asset.style ?? artStyle, layout)}
++            />
++          ))}
++        </div>
++      )}
++    </section>
++  );
++}
++
++// ---------------------------------------------------------------------------
++// TitleField — a simple labelled text input helper (avoids duplicating label+input)
++// ---------------------------------------------------------------------------
++
++function TitleField({
++  id,
++  label,
++  value,
++  onChange,
++}: {
++  id: string;
++  label: string;
++  value: string;
++  onChange: (v: string) => void;
++}) {
++  return (
++    <div className="flex flex-col gap-1">
++      <FieldLabel htmlFor={id}>{label}</FieldLabel>
++      <FormInput
++        id={id}
++        value={value}
++        onChange={(e) => onChange(e.target.value)}
++      />
++    </div>
++  );
++}
++
++// ---------------------------------------------------------------------------
++// CoverTile — mirrors ImageTile from image-panel.tsx; uses aspect-[2/3] for
++// ebook cover proportions rather than square.
++// ---------------------------------------------------------------------------
++
++function CoverTile({
++  asset,
++  bookTitle,
++  styleLabel,
++  onRetry,
++}: {
++  asset: MediaAssetRead;
++  bookTitle: string;
++  styleLabel: string;
++  onRetry: () => void;
++}) {
++  const setCanonical = useSetCanonical();
++  const del = useDeleteImage();
++  const [confirmOpen, setConfirmOpen] = useState(false);
++
++  const isGenerating = asset.status === "generating";
++  const isFailed = asset.status === "failed";
++  const isReady = !isGenerating && !isFailed;
++
++  function handleSetCanonical() {
++    setCanonical.mutate(
++      { assetId: asset.id, entityType: asset.entity_type, entityId: asset.entity_id ?? "" },
++      {
++        onSuccess: () => toast.success(hu.covers.canonicalToast),
++        onError: (error) => toast.error(`${hu.covers.title}: ${error.message}`),
++      },
++    );
++  }
++
++  function handleDelete() {
++    del.mutate(
++      { assetId: asset.id, entityType: asset.entity_type, entityId: asset.entity_id ?? "" },
++      {
++        onSuccess: () => toast.success(hu.covers.deletedToast),
++        onError: (error) => toast.error(`${hu.covers.title}: ${error.message}`),
++      },
++    );
++  }
++
++  return (
++    <div className="group relative flex flex-col gap-1.5">
++      <div
++        className={cn(
++          "relative aspect-[2/3] overflow-hidden rounded-[12px] border bg-surface-muted",
++          asset.is_canonical
++            ? "border-accent ring-2 ring-accent ring-offset-1 ring-offset-surface"
++            : "border-border",
++        )}
++      >
++        {asset.is_canonical ? (
++          <span className="absolute left-1.5 top-1.5 z-[2] flex h-5 items-center gap-1 rounded-full bg-accent-strong px-2 text-[10px] font-semibold text-accent-fg">
++            <Icon icon={Star} size={10} />
++            {hu.covers.canonicalBadge}
++          </span>
++        ) : null}
++
++        {isGenerating ? (
++          <div className="relative h-full w-full">
++            <Skeleton className="h-full w-full rounded-none" />
++            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center text-text-muted">
++              <Spinner size={18} />
++              <span className="px-2 text-[10px] font-medium leading-tight">
++                {styleLabel
++                  ? `${hu.covers.generatingCaption} · ${styleLabel}`
++                  : hu.covers.generatingCaption}
++              </span>
++            </div>
++          </div>
++        ) : isFailed ? (
++          <div className="flex h-full w-full flex-col items-center justify-center gap-2">
++            <span className="flex h-5 items-center rounded-full bg-danger-muted px-2 text-[11px] font-semibold text-danger-text">
++              {hu.covers.failedChip}
++            </span>
++            <Button
++              type="button"
++              variant="ghost"
++              size={28}
++              onClick={onRetry}
++              leadingIcon={<Icon icon={RotateCcw} size={12} />}
++            >
++              {hu.covers.retry}
++            </Button>
++          </div>
++        ) : (
++          <MediaThumb
++            assetId={asset.id}
++            alt={hu.covers.heroAlt(bookTitle)}
++          />
++        )}
++
++        {/* Hover/focus overlay actions on a ready tile */}
++        {isReady ? (
++          <div className="absolute right-1.5 top-1.5 z-[2] flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
++            {!asset.is_canonical ? (
++              <Tooltip content={hu.covers.setCanonical}>
++                <IconButton
++                  variant="ai"
++                  size={26}
++                  onClick={handleSetCanonical}
++                  disabled={setCanonical.isPending}
++                  aria-label={hu.covers.setCanonical}
++                  className="bg-surface/85 backdrop-blur-sm hover:bg-accent-muted"
++                >
++                  <Icon icon={Star} size={13} />
++                </IconButton>
++              </Tooltip>
++            ) : null}
++            <Tooltip content={hu.covers.delete}>
++              <IconButton
++                variant="danger"
++                size={26}
++                onClick={() => setConfirmOpen(true)}
++                aria-label={hu.covers.delete}
++                className="bg-surface/85 backdrop-blur-sm hover:bg-danger-muted"
++              >
++                <Icon icon={Trash2} size={13} />
++              </IconButton>
++            </Tooltip>
++          </div>
++        ) : null}
++      </div>
++
++      <ConfirmDialog
++        open={confirmOpen}
++        onOpenChange={setConfirmOpen}
++        title={hu.covers.deleteTitle}
++        description={hu.covers.deleteDescription}
++        onConfirm={handleDelete}
++      />
++    </div>
++  );
++}
+diff --git a/apps/web/components/projects/__tests__/create-book-flow.integration.test.tsx b/apps/web/components/projects/__tests__/create-book-flow.integration.test.tsx
+index 149fa76..d882ef2 100644
+--- a/apps/web/components/projects/__tests__/create-book-flow.integration.test.tsx
++++ b/apps/web/components/projects/__tests__/create-book-flow.integration.test.tsx
+@@ -78,16 +78,17 @@ function installRecordingHandlers(): RecordedCall[] {
+           series_id: null,
+           title: body.title ?? "Névtelen könyv",
+           description: (body.description as string | null) ?? null,
+           synopsis: (body.synopsis as string | null) ?? null,
+           genre: (body.genre as string | null) ?? null,
+           language: (body.language as string) ?? "hu",
+           word_count_target: (body.word_count_target as number | null) ?? null,
+           order_index: (body.order_index as number) ?? 0,
++          author: (body.author as string | null) ?? null,
+           created_at: "2026-06-14T15:00:00Z",
+           updated_at: "2026-06-14T15:00:00Z",
+         },
+         { status: 201 },
+       );
+     }),
+   );
+ 
+diff --git a/apps/web/components/projects/__tests__/new-book-wizard.test.tsx b/apps/web/components/projects/__tests__/new-book-wizard.test.tsx
+index 8409b90..3d0554c 100644
+--- a/apps/web/components/projects/__tests__/new-book-wizard.test.tsx
++++ b/apps/web/components/projects/__tests__/new-book-wizard.test.tsx
+@@ -69,16 +69,17 @@ describe("NewBookWizard", () => {
+             series_id: null,
+             title: body.title,
+             description: null,
+             synopsis: null,
+             genre: "történelmi fantasy",
+             language: "hu",
+             word_count_target: 80000,
+             order_index: 0,
++            author: null,
+             created_at: "2026-06-14T15:00:00Z",
+             updated_at: "2026-06-14T15:00:00Z",
+           },
+           { status: 201 },
+         );
+       }),
+     );
+ 
+diff --git a/apps/web/lib/api/__tests__/covers.test.ts b/apps/web/lib/api/__tests__/covers.test.ts
+new file mode 100644
+index 0000000..f3bbca6
+--- /dev/null
++++ b/apps/web/lib/api/__tests__/covers.test.ts
+@@ -0,0 +1,48 @@
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { http, HttpResponse } from "msw";
++import { server } from "@/test/msw/server";
++import { AI_BASE_URL } from "@/lib/api/client";
++import { generateCover, listCoverLayouts, listCoverStyles } from "@/lib/api/covers";
++import { resetImageStore } from "@/test/msw/handlers";
++
++const aiBase = `${AI_BASE_URL}/api/v1`;
++
++describe("lib/api/covers", () => {
++  beforeEach(() => resetImageStore());
++  afterEach(() => server.resetHandlers());
++
++  it("generateCover POSTs the cover body and returns the generating asset", async () => {
++    let body: Record<string, unknown> = {};
++    server.use(
++      http.post(`${aiBase}/ai/covers`, async ({ request }) => {
++        body = (await request.json()) as Record<string, unknown>;
++        return HttpResponse.json(
++          { id: "cover-1", project_id: "p", entity_type: "cover", entity_id: "book-1",
++            status: "generating", mime: "image/png", width: null, height: null,
++            model_name: "gemini/x", style: "cover_fantasy", is_canonical: false,
++            created_at: "2026-06-22T00:00:00Z" },
++          { status: 202 },
++        );
++      }),
++    );
++    const asset = await generateCover({
++      bookId: "book-1", artStyle: "cover_fantasy", layout: "classic_centered",
++      title: "Fárosz", author: "Rácz D.",
++    });
++    expect(asset.entity_type).toBe("cover");
++    expect(body).toMatchObject({
++      book_id: "book-1", art_style: "cover_fantasy", layout: "classic_centered",
++      title: "Fárosz", author: "Rácz D.",
++      // omitted optionals must serialize as null (not undefined/absent),
++      // matching the backend contract + images.ts.
++      subtitle: null, model: null,
++    });
++  });
++
++  it("lists cover styles and layouts", async () => {
++    const styles = await listCoverStyles();
++    expect(styles.some((s) => s.slug === "cover_fantasy")).toBe(true);
++    const layouts = await listCoverLayouts();
++    expect(layouts.some((l) => l.slug === "classic_centered")).toBe(true);
++  });
++});
+diff --git a/apps/web/lib/api/cover-hooks.ts b/apps/web/lib/api/cover-hooks.ts
+new file mode 100644
+index 0000000..2854da9
+--- /dev/null
++++ b/apps/web/lib/api/cover-hooks.ts
+@@ -0,0 +1,23 @@
++"use client";
++import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
++import { generateCover, listCoverLayouts, listCoverStyles, type GenerateCoverInput } from "./covers";
++import { imageKeys } from "./image-hooks";
++import type { CoverLayoutInfo, ImageStyleInfo, MediaAssetRead } from "./image-types";
++
++export function useCoverStyles(): UseQueryResult<ImageStyleInfo[], Error> {
++  return useQuery({ queryKey: ["cover-styles"], queryFn: listCoverStyles, staleTime: 5 * 60_000 });
++}
++
++export function useCoverLayouts(): UseQueryResult<CoverLayoutInfo[], Error> {
++  return useQuery({ queryKey: ["cover-layouts"], queryFn: listCoverLayouts, staleTime: 5 * 60_000 });
++}
++
++export function useGenerateCover(): UseMutationResult<MediaAssetRead, Error, GenerateCoverInput> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (input: GenerateCoverInput) => generateCover(input),
++    onSuccess: (asset) => {
++      void qc.invalidateQueries({ queryKey: imageKeys.entity("cover", asset.entity_id ?? "") });
++    },
++  });
++}
+diff --git a/apps/web/lib/api/covers.ts b/apps/web/lib/api/covers.ts
+new file mode 100644
+index 0000000..de9a3a1
+--- /dev/null
++++ b/apps/web/lib/api/covers.ts
+@@ -0,0 +1,50 @@
++/** Typed endpoint functions for the cover-generation endpoints (Phase 2). On the
++ *  AI service base. A cover is a MediaAsset(entity_type="cover"); list/canonical/
++ *  delete/media reuse `images.ts`. */
++import { z } from "zod";
++import { AI_BASE_URL, apiFetch } from "./client";
++import {
++  coverLayoutInfoSchema,
++  imageStyleInfoSchema,
++  mediaAssetReadSchema,
++  type CoverLayoutInfo,
++  type ImageStyleInfo,
++  type MediaAssetRead,
++} from "./image-types";
++
++export interface GenerateCoverInput {
++  bookId: string;
++  artStyle: string;
++  layout: string;
++  title?: string | null;
++  author?: string | null;
++  subtitle?: string | null;
++  model?: string | null;
++}
++
++export async function generateCover(input: GenerateCoverInput): Promise<MediaAssetRead> {
++  const data = await apiFetch<unknown>("/ai/covers", {
++    method: "POST",
++    body: {
++      book_id: input.bookId,
++      art_style: input.artStyle,
++      layout: input.layout,
++      title: input.title ?? null,
++      author: input.author ?? null,
++      subtitle: input.subtitle ?? null,
++      model: input.model ?? null,
++    },
++    baseUrl: AI_BASE_URL,
++  });
++  return mediaAssetReadSchema.parse(data);
++}
++
++export async function listCoverStyles(): Promise<ImageStyleInfo[]> {
++  const data = await apiFetch<unknown>("/ai/covers/styles", { baseUrl: AI_BASE_URL });
++  return z.array(imageStyleInfoSchema).parse(data);
++}
++
++export async function listCoverLayouts(): Promise<CoverLayoutInfo[]> {
++  const data = await apiFetch<unknown>("/ai/covers/layouts", { baseUrl: AI_BASE_URL });
++  return z.array(coverLayoutInfoSchema).parse(data);
++}
+diff --git a/apps/web/lib/api/image-types.ts b/apps/web/lib/api/image-types.ts
+index 669fcba..aac2916 100644
+--- a/apps/web/lib/api/image-types.ts
++++ b/apps/web/lib/api/image-types.ts
+@@ -47,16 +47,25 @@ export type MediaAssetRead = z.infer<typeof mediaAssetReadSchema>;
+  * ------------------------------------------------------------------------- */
+ export const imageStyleInfoSchema = z.object({
+   slug: z.string(),
+   label: z.string(),
+   entity_type: z.string(),
+ });
+ export type ImageStyleInfo = z.infer<typeof imageStyleInfoSchema>;
+ 
++/* ---------------------------------------------------------------------------
++ * CoverLayoutInfo — mirrors cover.py (CoverLayoutInfo). A selectable typography
++ * layout for cover generation. No backend OpenAPI contract tie yet (Phase 2 AI
++ * OpenAPI is regenerated in Task 6/T10); the shape is pinned here and mirrored
++ * to the MSW fixtures.
++ * ------------------------------------------------------------------------- */
++export const coverLayoutInfoSchema = z.object({ slug: z.string(), label: z.string() });
++export type CoverLayoutInfo = z.infer<typeof coverLayoutInfoSchema>;
++
+ /* ---------------------------------------------------------------------------
+  * FE↔BE contract ties. Each schema's inferred shape is bound to the
+  * OpenAPI-generated backend type from `@alexandria/shared` (these come from the
+  * `apps/ai` OpenAPI). A field add/remove/rename — or an incompatible type drift
+  * — on either side fails `tsc`. Compile-time only; the Zod schemas above stay
+  * the runtime validators. (Mirrors the Expect block in `ai-types.ts`.)
+  * ------------------------------------------------------------------------- */
+ export type ImageContractTies = [
+diff --git a/apps/web/lib/api/types.ts b/apps/web/lib/api/types.ts
+index e1048e2..af97b74 100644
+--- a/apps/web/lib/api/types.ts
++++ b/apps/web/lib/api/types.ts
+@@ -107,16 +107,17 @@ export const bookReadSchema = z.object({
+   series_id: z.string().nullable(),
+   title: z.string(),
+   description: z.string().nullable(),
+   synopsis: z.string().nullable(),
+   genre: z.string().nullable(),
+   language: z.string(),
+   word_count_target: z.number().int().nullable(),
+   order_index: z.number().int(),
++  author: z.string().nullable(),
+   created_at: z.string(),
+   updated_at: z.string(),
+ });
+ export type BookRead = z.infer<typeof bookReadSchema>;
+ 
+ /**
+  * Request body for patching a book (`BookUpdate`). All fields optional. The
+  * frontend only sends what it changes; `series_id` assigns the book to a series
+@@ -127,28 +128,30 @@ export const bookUpdateSchema = z.object({
+   title: z.string().min(1).max(255).optional(),
+   description: z.string().nullable().optional(),
+   synopsis: z.string().nullable().optional(),
+   genre: z.string().max(100).nullable().optional(),
+   language: z.string().max(10).optional(),
+   word_count_target: z.number().int().nullable().optional(),
+   order_index: z.number().int().optional(),
+   series_id: z.string().nullable().optional(),
++  author: z.string().max(255).nullable().optional(),
+ });
+ export type BookUpdate = z.infer<typeof bookUpdateSchema>;
+ 
+ /** Request body for creating a book under a project (`BookCreate`). */
+ export const bookCreateSchema = z.object({
+   title: z.string().min(1).max(255),
+   description: z.string().nullable().optional(),
+   synopsis: z.string().nullable().optional(),
+   genre: z.string().max(100).nullable().optional(),
+   language: z.string().max(10).default("hu"),
+   word_count_target: z.number().int().nullable().optional(),
+   order_index: z.number().int().default(0),
++  author: z.string().max(255).nullable().optional(),
+ });
+ export type BookCreate = z.infer<typeof bookCreateSchema>;
+ 
+ /* ---------------------------------------------------------------------------
+  * Chapter — mirrors app/schemas/chapter.py
+  * ------------------------------------------------------------------------- */
+ 
+ /** A chapter as returned by the API (`ChapterRead`). Belongs to a book. */
+diff --git a/apps/web/lib/i18n/hu.ts b/apps/web/lib/i18n/hu.ts
+index 12a1805..a1ac09a 100644
+--- a/apps/web/lib/i18n/hu.ts
++++ b/apps/web/lib/i18n/hu.ts
+@@ -1572,16 +1572,75 @@ export const hu = {
+     summaryNotSavedTag: "(később menthető / V1)",
+     summaryNote: "A beállítások később bármikor módosíthatók a könyv beállításaiban.",
+     back: "← Vissza",
+     next: "Tovább →",
+     create: "Könyv létrehozása",
+     successToast: "A könyv létrejött",
+     errorTitle: "Nem sikerült létrehozni a könyvet",
+   },
++  /**
++   * Book settings page (`/konyv/:bookId/beallitasok`) — metadata edit form.
++   * Keys referenced by the form fields and the settings page test.
++   */
++  books: {
++    settingsTitle: "Könyv beállításai",
++    settingsSubtitle: "A könyv alapadatai és metaadatai.",
++    titleLabel: "Cím",
++    titlePlaceholder: "A könyv címe",
++    genreLabel: "Műfaj",
++    genrePlaceholder: "pl. fantasy, thriller, romantikus…",
++    authorLabel: "Szerző",
++    authorPlaceholder: "A könyv szerzője",
++    save: "Mentés",
++    saving: "Mentés…",
++    saveSuccess: "Könyv beállításai mentve",
++    saveError: "A mentés sikertelen",
++    /** Loading / error states. */
++    loading: "Beállítások betöltése…",
++    loadError: "Nem sikerült betölteni a könyv adatait",
++    /** Settings page tab labels. */
++    tabBook: "Könyv",
++    tabProviders: "AI / Szolgáltatók",
++  },
++  /**
++   * Borító — the AI cover generator panel inside the book settings page
++   * (Phase 2). Picks an art style + layout, enters title/author/subtitle, and
++   * generates a 1600×2560 ebook cover. All copy is Hungarian. Gallery behaviour
++   * mirrors the image panel (canonical hero, retry, delete, set-canonical).
++   */
++  covers: {
++    title: "Borító",
++    artStyleLabel: "Stílus",
++    layoutLabel: "Elrendezés",
++    // Cover-specific labels (distinct from the book metadata "Cím"/"Szerző" on
++    // the same tab) — these are the text rendered ONTO the cover image.
++    titleLabel: "Cím a borítón",
++    authorLabel: "Szerző a borítón",
++    subtitleLabel: "Alcím (opcionális)",
++    generate: "Borító generálása",
++    generating: "Generálás…",
++    empty: "Még nincs borító ehhez a könyvhöz.",
++    emptyHint: "Válassz stílust és elrendezést, majd generálj egyet.",
++    generateFirst: "Első borító generálása",
++    loadError: "A borítók betöltése nem sikerült.",
++    loading: "Borítók betöltése",
++    failedChip: "Sikertelen",
++    retry: "Újragenerálás",
++    generatingCaption: "Generálás folyamatban",
++    canonicalBadge: "Kiválasztott",
++    setCanonical: "Beállítás borítóként",
++    delete: "Törlés",
++    deleteTitle: "Borító törlése",
++    deleteDescription: "Biztosan törlöd ezt a borítót? A művelet nem vonható vissza.",
++    deletedToast: "A borító törölve.",
++    canonicalToast: "A borító beállítva.",
++    generateError: "A borító generálása nem sikerült.",
++    heroAlt: (title: string) => `${title} borítója`,
++  },
+   /** Genre options for the wizard Select (sourced from the prototype default). */
+   genres: [
+     "történelmi fantasy",
+     "fantasy",
+     "sci-fi",
+     "krimi",
+     "thriller",
+     "romantikus",
+diff --git a/apps/web/test/msw/fixtures.ts b/apps/web/test/msw/fixtures.ts
+index 4b54ed6..4d0cc9f 100644
+--- a/apps/web/test/msw/fixtures.ts
++++ b/apps/web/test/msw/fixtures.ts
+@@ -26,16 +26,17 @@ import type {
+   ContinuityWarning,
+   GenerationJobRead,
+   ModelsResponse,
+   ResearchResult,
+   RevisionRead,
+   SnippetRead,
+ } from "@/lib/api/ai-types";
+ import type {
++  CoverLayoutInfo,
+   ImageStyleInfo,
+   MediaAssetRead,
+ } from "@/lib/api/image-types";
+ import type { ProviderCreate, ProviderRead } from "@/lib/api/providers";
+ 
+ export const FAROSZ_PROJECT: ProjectRead = {
+   id: "11111111-1111-1111-1111-111111111111",
+   title: "A Fárosz őrzője",
+@@ -87,16 +88,17 @@ export const FAROSZ_BOOK: BookRead = {
+   series_id: FAROSZ_SERIES.id,
+   title: "A Fárosz őrzője",
+   description: null,
+   synopsis: null,
+   genre: "történelmi fantasy",
+   language: "hu",
+   word_count_target: 80000,
+   order_index: 0,
++  author: null,
+   created_at: "2026-06-14T14:32:00Z",
+   updated_at: "2026-06-14T14:32:00Z",
+ };
+ 
+ export const PROJECTS_FIXTURE: ProjectRead[] = [FAROSZ_PROJECT, HOMOK_PROJECT];
+ 
+ let seriesSeq = 0;
+ 
+@@ -841,16 +843,30 @@ export const IMAGE_STYLES_FIXTURE: ImageStyleInfo[] = [
+   },
+   {
+     slug: "painterly_portrait",
+     label: "Festői portré",
+     entity_type: "character",
+   },
+ ];
+ 
++/** Cover art-style presets (mirrors GET /ai/covers/styles). */
++export const COVER_STYLES_FIXTURE: ImageStyleInfo[] = [
++  { slug: "cover_literary", label: "Irodalmi", entity_type: "cover" },
++  { slug: "cover_fantasy", label: "Fantasy", entity_type: "cover" },
++  { slug: "cover_minimal", label: "Minimalista", entity_type: "cover" },
++];
++
++/** Cover typography layouts (mirrors GET /ai/covers/layouts). */
++export const COVER_LAYOUTS_FIXTURE: CoverLayoutInfo[] = [
++  { slug: "classic_centered", label: "Klasszikus" },
++  { slug: "bottom_scrim", label: "Alsó sáv" },
++  { slug: "top_minimal", label: "Felül" },
++];
++
+ /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */
+ export const SCENE_BEATS_FIXTURE: BeatRead[] = [
+   {
+     id: "beat-1",
+     scene_id: SCENE_ACTIVE.id,
+     description: "Szelene felfedezi a rejtett jeleket a tekercsen.",
+     beat_type: "alkalmazva",
+     order_index: 0,
+diff --git a/apps/web/test/msw/handlers.ts b/apps/web/test/msw/handlers.ts
+index 2a72b4a..d8bf57f 100644
+--- a/apps/web/test/msw/handlers.ts
++++ b/apps/web/test/msw/handlers.ts
+@@ -3,16 +3,18 @@
+  * that match the real schema shapes so tests exercise the same parse/validation
+  * path as production.
+  */
+ import { http, HttpResponse } from "msw";
+ import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
+ import {
+   AI_GENERATED_TEXT,
+   CHAPTERS_FIXTURE,
++  COVER_LAYOUTS_FIXTURE,
++  COVER_STYLES_FIXTURE,
+   FAROSZ_BOOK,
+   FAROSZ_CODEX,
+   FAROSZ_PROJECT,
+   FAROSZ_RELATIONS,
+   IMAGE_STYLES_FIXTURE,
+   JOBS_FIXTURE,
+   MODELS_FIXTURE,
+   PLOTLINES_FIXTURE,
+@@ -937,16 +939,17 @@ function makeBook(projectId: string, body: Partial<BookRead>): BookRead {
+     series_id: body.series_id ?? null,
+     title: body.title ?? "Névtelen könyv",
+     description: body.description ?? null,
+     synopsis: body.synopsis ?? null,
+     genre: body.genre ?? null,
+     language: body.language ?? "hu",
+     word_count_target: body.word_count_target ?? null,
+     order_index: body.order_index ?? 0,
++    author: body.author ?? null,
+     created_at: now,
+     updated_at: now,
+   };
+ }
+ 
+ export const handlers = [
+   http.get(`${base}/projects`, () => HttpResponse.json(PROJECTS_FIXTURE)),
+ 
+@@ -1786,16 +1789,32 @@ export const handlers = [
+   http.get(`${aiBase}/ai/media/:assetId`, () => {
+     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+     return new HttpResponse(png, {
+       status: 200,
+       headers: { "Content-Type": "image/png" },
+     });
+   }),
+ 
++  /* ---- Cover generation (Phase 2 — styles / layouts / POST). On the AI service
++   * base (`aiBase`). Stateful via the shared `imageStore` (entity_type="cover").
++   * ---- */
++  http.get(`${aiBase}/ai/covers/styles`, () => HttpResponse.json(COVER_STYLES_FIXTURE)),
++
++  http.get(`${aiBase}/ai/covers/layouts`, () => HttpResponse.json(COVER_LAYOUTS_FIXTURE)),
++
++  http.post(`${aiBase}/ai/covers`, async ({ request }) => {
++    const b = (await request.json()) as { art_style: string };
++    const asset = makeMediaAsset("generating", {
++      entity_type: "cover", entity_id: "book-1", style: b.art_style,
++    });
++    imageStore.add(asset);
++    return HttpResponse.json(asset, { status: 202 });
++  }),
++
+   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
+    * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional
+    * status filter, bounded limit, newest-first. ---- */
+   http.get(`${aiBase}/jobs`, ({ request }) => {
+     const url = new URL(request.url);
+     const bookId = url.searchParams.get("book_id");
+     const statusFilter = url.searchParams.get("status");
+     const limitParam = url.searchParams.get("limit");
+diff --git a/packages/db/alexandria_core/models/book.py b/packages/db/alexandria_core/models/book.py
+index 0e7896d..63fe1bd 100644
+--- a/packages/db/alexandria_core/models/book.py
++++ b/packages/db/alexandria_core/models/book.py
+@@ -16,16 +16,19 @@ class Book(UUIDPrimaryKey, Timestamps, Base):
+     # series must NOT delete its books — they fall back to project-only scope.
+     series_id: Mapped[uuid.UUID | None] = mapped_column(
+         Uuid(as_uuid=True),
+         ForeignKey("series.id", ondelete="SET NULL"),
+         nullable=True,
+         index=True,
+     )
+     title: Mapped[str] = mapped_column(String(255), nullable=False)
++    # Author/byline shown on generated covers (and, later, exports). Optional —
++    # single-user app has no user-profile name to default from.
++    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
+     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+     synopsis: Mapped[str | None] = mapped_column(Text, nullable=True)
+     genre: Mapped[str | None] = mapped_column(String(100), nullable=True)
+     language: Mapped[str] = mapped_column(String(10), nullable=False, default="hu")
+     word_count_target: Mapped[int | None] = mapped_column(Integer, nullable=True)
+     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+ 
+     project: Mapped["Project"] = relationship("Project", back_populates="books")
+diff --git a/packages/prompts/hu/cover_styles/cover_fantasy.md b/packages/prompts/hu/cover_styles/cover_fantasy.md
+new file mode 100644
+index 0000000..5f76a18
+--- /dev/null
++++ b/packages/prompts/hu/cover_styles/cover_fantasy.md
+@@ -0,0 +1,3 @@
++Epic fantasy book-cover illustration, dramatic cinematic composition, rich atmospheric lighting, painterly detail, evocative mood, strong focal subject with depth, vertical book-cover framing. IMPORTANT: contain NO text, letters, words, title, logo, signature, or watermark anywhere; leave clean uncluttered negative space in the upper third suitable for an overlaid title.
++---
++Cover art for a {genre} novel titled "{title}". Theme and mood drawn from: {synopsis}. Symbolic, genre-appropriate imagery; no readable text in the image.
+diff --git a/packages/prompts/hu/cover_styles/cover_literary.md b/packages/prompts/hu/cover_styles/cover_literary.md
+new file mode 100644
+index 0000000..388b12c
+--- /dev/null
++++ b/packages/prompts/hu/cover_styles/cover_literary.md
+@@ -0,0 +1,3 @@
++Restrained literary book-cover art, photographic or fine-art quality, muted desaturated palette, subtle natural light, understated elegance, single evocative detail or object as focal point, clean vertical composition. IMPORTANT: contain NO text, letters, words, title, logo, signature, or watermark anywhere; leave clean uncluttered negative space in the upper third with space for an overlaid title.
++---
++Cover art for a {genre} novel titled "{title}". Visual mood and symbolic detail drawn from: {synopsis}. Quiet, contemplative imagery; no readable text in the image.
+diff --git a/packages/prompts/hu/cover_styles/cover_minimal.md b/packages/prompts/hu/cover_styles/cover_minimal.md
+new file mode 100644
+index 0000000..8b5964e
+--- /dev/null
++++ b/packages/prompts/hu/cover_styles/cover_minimal.md
+@@ -0,0 +1,3 @@
++Bold minimalist book-cover graphic, flat geometric shapes, limited two- or three-colour palette, clean stark composition, strong negative space, modern graphic-design sensibility, vertical cover framing. IMPORTANT: contain NO text, letters, words, title, logo, signature, or watermark anywhere; leave a large clean area of negative space in the upper third with space for an overlaid title.
++---
++Cover art for a {genre} novel titled "{title}". Abstract symbolic concept drawn from: {synopsis}. Bold, minimal graphic imagery; no readable text in the image.
+diff --git a/packages/prompts/hu/cover_styles/cover_romance.md b/packages/prompts/hu/cover_styles/cover_romance.md
+new file mode 100644
+index 0000000..0baadda
+--- /dev/null
++++ b/packages/prompts/hu/cover_styles/cover_romance.md
+@@ -0,0 +1,3 @@
++Warm romantic book-cover illustration, soft diffused light, golden hour or candlelit tones, painterly detail, tender emotional atmosphere, vertical book-cover framing, lush and intimate composition. IMPORTANT: contain NO text, letters, words, title, logo, signature, or watermark anywhere; leave clean uncluttered negative space in the upper third with space for an overlaid title.
++---
++Cover art for a {genre} novel titled "{title}". Emotional atmosphere and romantic themes drawn from: {synopsis}. Warm, evocative imagery; no readable text in the image.
+diff --git a/packages/prompts/hu/cover_styles/cover_thriller.md b/packages/prompts/hu/cover_styles/cover_thriller.md
+new file mode 100644
+index 0000000..771dc75
+--- /dev/null
++++ b/packages/prompts/hu/cover_styles/cover_thriller.md
+@@ -0,0 +1,3 @@
++High-contrast thriller book-cover illustration, sharp dramatic shadows, cool desaturated tones with selective accent, tense cinematic atmosphere, strong vertical composition, foreboding mood, noir-influenced lighting. IMPORTANT: contain NO text, letters, words, title, logo, signature, or watermark anywhere; leave clean uncluttered negative space in the upper third with space for an overlaid title.
++---
++Cover art for a {genre} novel titled "{title}". Tension and atmosphere drawn from: {synopsis}. Suspenseful, ominous imagery; no readable text in the image.

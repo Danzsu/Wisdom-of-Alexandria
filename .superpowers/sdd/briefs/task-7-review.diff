@@ -1,0 +1,222 @@
+### git status
+ M apps/web/lib/api/image-types.ts
+ M apps/web/test/msw/fixtures.ts
+ M apps/web/test/msw/handlers.ts
+?? .superpowers/sdd/
+?? apps/web/lib/api/__tests__/covers.test.ts
+?? apps/web/lib/api/cover-hooks.ts
+?? apps/web/lib/api/covers.ts
+
+### tracked diff (vs 8349b1b = T6)
+diff --git a/apps/web/lib/api/image-types.ts b/apps/web/lib/api/image-types.ts
+index 669fcba..aac2916 100644
+--- a/apps/web/lib/api/image-types.ts
++++ b/apps/web/lib/api/image-types.ts
+@@ -52,6 +52,15 @@ export const imageStyleInfoSchema = z.object({
+ });
+ export type ImageStyleInfo = z.infer<typeof imageStyleInfoSchema>;
+ 
++/* ---------------------------------------------------------------------------
++ * CoverLayoutInfo — mirrors cover.py (CoverLayoutInfo). A selectable typography
++ * layout for cover generation. No backend OpenAPI contract tie yet (Phase 2 AI
++ * OpenAPI is regenerated in Task 6/T10); the shape is pinned here and mirrored
++ * to the MSW fixtures.
++ * ------------------------------------------------------------------------- */
++export const coverLayoutInfoSchema = z.object({ slug: z.string(), label: z.string() });
++export type CoverLayoutInfo = z.infer<typeof coverLayoutInfoSchema>;
++
+ /* ---------------------------------------------------------------------------
+  * FE↔BE contract ties. Each schema's inferred shape is bound to the
+  * OpenAPI-generated backend type from `@alexandria/shared` (these come from the
+diff --git a/apps/web/test/msw/fixtures.ts b/apps/web/test/msw/fixtures.ts
+index 9b215e5..4d0cc9f 100644
+--- a/apps/web/test/msw/fixtures.ts
++++ b/apps/web/test/msw/fixtures.ts
+@@ -31,6 +31,7 @@ import type {
+   SnippetRead,
+ } from "@/lib/api/ai-types";
+ import type {
++  CoverLayoutInfo,
+   ImageStyleInfo,
+   MediaAssetRead,
+ } from "@/lib/api/image-types";
+@@ -847,6 +848,20 @@ export const IMAGE_STYLES_FIXTURE: ImageStyleInfo[] = [
+   },
+ ];
+ 
++/** Cover art-style presets (mirrors GET /ai/covers/styles). */
++export const COVER_STYLES_FIXTURE: ImageStyleInfo[] = [
++  { slug: "cover_literary", label: "Irodalmi", entity_type: "cover" },
++  { slug: "cover_fantasy", label: "Fantasy", entity_type: "cover" },
++  { slug: "cover_minimal", label: "Minimalista", entity_type: "cover" },
++];
++
++/** Cover typography layouts (mirrors GET /ai/covers/layouts). */
++export const COVER_LAYOUTS_FIXTURE: CoverLayoutInfo[] = [
++  { slug: "classic_centered", label: "Klasszikus" },
++  { slug: "bottom_scrim", label: "Alsó sáv" },
++  { slug: "top_minimal", label: "Felül" },
++];
++
+ /** Scene beats fixture (mirrors GET /scenes/{id}/beats). */
+ export const SCENE_BEATS_FIXTURE: BeatRead[] = [
+   {
+diff --git a/apps/web/test/msw/handlers.ts b/apps/web/test/msw/handlers.ts
+index 52a9ef3..d8bf57f 100644
+--- a/apps/web/test/msw/handlers.ts
++++ b/apps/web/test/msw/handlers.ts
+@@ -8,6 +8,8 @@ import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
+ import {
+   AI_GENERATED_TEXT,
+   CHAPTERS_FIXTURE,
++  COVER_LAYOUTS_FIXTURE,
++  COVER_STYLES_FIXTURE,
+   FAROSZ_BOOK,
+   FAROSZ_CODEX,
+   FAROSZ_PROJECT,
+@@ -1792,6 +1794,22 @@ export const handlers = [
+     });
+   }),
+ 
++  /* ---- Cover generation (Phase 2 — styles / layouts / POST). On the AI service
++   * base (`aiBase`). Stateful via the shared `imageStore` (entity_type="cover").
++   * ---- */
++  http.get(`${aiBase}/ai/covers/styles`, () => HttpResponse.json(COVER_STYLES_FIXTURE)),
++
++  http.get(`${aiBase}/ai/covers/layouts`, () => HttpResponse.json(COVER_LAYOUTS_FIXTURE)),
++
++  http.post(`${aiBase}/ai/covers`, async ({ request }) => {
++    const b = (await request.json()) as { art_style: string };
++    const asset = makeMediaAsset("generating", {
++      entity_type: "cover", entity_id: "book-1", style: b.art_style,
++    });
++    imageStore.add(asset);
++    return HttpResponse.json(asset, { status: 202 });
++  }),
++
+   /* ---- Generation jobs (B1 — live AI-feladatok screen + nav badge). On the
+    * AI service base (`aiBase`). Mirrors the real backend: book-scoped, optional
+    * status filter, bounded limit, newest-first. ---- */
+
+### untracked new files (excl scratch)
+===== apps/web/lib/api/__tests__/covers.test.ts =====
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
+import { server } from "@/test/msw/server";
+import { AI_BASE_URL } from "@/lib/api/client";
+import { generateCover, listCoverLayouts, listCoverStyles } from "@/lib/api/covers";
+import { resetImageStore } from "@/test/msw/handlers";
+
+const aiBase = `${AI_BASE_URL}/api/v1`;
+
+describe("lib/api/covers", () => {
+  beforeEach(() => resetImageStore());
+  afterEach(() => server.resetHandlers());
+
+  it("generateCover POSTs the cover body and returns the generating asset", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${aiBase}/ai/covers`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { id: "cover-1", project_id: "p", entity_type: "cover", entity_id: "book-1",
+            status: "generating", mime: "image/png", width: null, height: null,
+            model_name: "gemini/x", style: "cover_fantasy", is_canonical: false,
+            created_at: "2026-06-22T00:00:00Z" },
+          { status: 202 },
+        );
+      }),
+    );
+    const asset = await generateCover({
+      bookId: "book-1", artStyle: "cover_fantasy", layout: "classic_centered",
+      title: "Fárosz", author: "Rácz D.",
+    });
+    expect(asset.entity_type).toBe("cover");
+    expect(body).toMatchObject({
+      book_id: "book-1", art_style: "cover_fantasy", layout: "classic_centered",
+      title: "Fárosz", author: "Rácz D.",
+    });
+  });
+
+  it("lists cover styles and layouts", async () => {
+    const styles = await listCoverStyles();
+    expect(styles.some((s) => s.slug === "cover_fantasy")).toBe(true);
+    const layouts = await listCoverLayouts();
+    expect(layouts.some((l) => l.slug === "classic_centered")).toBe(true);
+  });
+});
+===== apps/web/lib/api/cover-hooks.ts =====
+"use client";
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
+import { generateCover, listCoverLayouts, listCoverStyles, type GenerateCoverInput } from "./covers";
+import { imageKeys } from "./image-hooks";
+import type { CoverLayoutInfo, ImageStyleInfo, MediaAssetRead } from "./image-types";
+
+export function useCoverStyles(): UseQueryResult<ImageStyleInfo[], Error> {
+  return useQuery({ queryKey: ["cover-styles"], queryFn: listCoverStyles, staleTime: 5 * 60_000 });
+}
+
+export function useCoverLayouts(): UseQueryResult<CoverLayoutInfo[], Error> {
+  return useQuery({ queryKey: ["cover-layouts"], queryFn: listCoverLayouts, staleTime: 5 * 60_000 });
+}
+
+export function useGenerateCover(): UseMutationResult<MediaAssetRead, Error, GenerateCoverInput> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GenerateCoverInput) => generateCover(input),
+    onSuccess: (asset) => {
+      void qc.invalidateQueries({ queryKey: imageKeys.entity("cover", asset.entity_id ?? "") });
+    },
+  });
+}
+===== apps/web/lib/api/covers.ts =====
+/** Typed endpoint functions for the cover-generation endpoints (Phase 2). On the
+ *  AI service base. A cover is a MediaAsset(entity_type="cover"); list/canonical/
+ *  delete/media reuse `images.ts`. */
+import { z } from "zod";
+import { AI_BASE_URL, apiFetch } from "./client";
+import {
+  coverLayoutInfoSchema,
+  imageStyleInfoSchema,
+  mediaAssetReadSchema,
+  type CoverLayoutInfo,
+  type ImageStyleInfo,
+  type MediaAssetRead,
+} from "./image-types";
+
+export interface GenerateCoverInput {
+  bookId: string;
+  artStyle: string;
+  layout: string;
+  title?: string | null;
+  author?: string | null;
+  subtitle?: string | null;
+  model?: string | null;
+}
+
+export async function generateCover(input: GenerateCoverInput): Promise<MediaAssetRead> {
+  const data = await apiFetch<unknown>("/ai/covers", {
+    method: "POST",
+    body: {
+      book_id: input.bookId,
+      art_style: input.artStyle,
+      layout: input.layout,
+      title: input.title ?? null,
+      author: input.author ?? null,
+      subtitle: input.subtitle ?? null,
+      model: input.model ?? null,
+    },
+    baseUrl: AI_BASE_URL,
+  });
+  return mediaAssetReadSchema.parse(data);
+}
+
+export async function listCoverStyles(): Promise<ImageStyleInfo[]> {
+  const data = await apiFetch<unknown>("/ai/covers/styles", { baseUrl: AI_BASE_URL });
+  return z.array(imageStyleInfoSchema).parse(data);
+}
+
+export async function listCoverLayouts(): Promise<CoverLayoutInfo[]> {
+  const data = await apiFetch<unknown>("/ai/covers/layouts", { baseUrl: AI_BASE_URL });
+  return z.array(coverLayoutInfoSchema).parse(data);
+}

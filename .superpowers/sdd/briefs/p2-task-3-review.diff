@@ -1,0 +1,539 @@
+### git status
+ M apps/web/components/codex/__tests__/codex-detail.test.tsx
+ M apps/web/components/codex/__tests__/codex-sidebar.test.tsx
+ M apps/web/components/codex/codex-detail.tsx
+ M apps/web/components/plan/__tests__/plan-board.test.tsx
+ M apps/web/components/plan/__tests__/plan-grid-dnd.test.tsx
+ M apps/web/components/plan/plan-board.tsx
+ M apps/web/components/plan/use-plan-board.ts
+ M apps/web/components/research/__tests__/research-screen.test.tsx
+ M apps/web/components/research/research-screen.tsx
+ M apps/web/components/shell/codex-sidebar.tsx
+?? .superpowers/sdd/
+
+### diff (vs 5b44442 = P2-T2)
+diff --git a/apps/web/components/codex/__tests__/codex-detail.test.tsx b/apps/web/components/codex/__tests__/codex-detail.test.tsx
+index 4a7e94f..5be0eda 100644
+--- a/apps/web/components/codex/__tests__/codex-detail.test.tsx
++++ b/apps/web/components/codex/__tests__/codex-detail.test.tsx
+@@ -9,6 +9,7 @@ import { resetCodexStore } from "@/test/msw/handlers";
+ import { FAROSZ_BOOK, FAROSZ_PROJECT } from "@/test/msw/fixtures";
+ import { CodexDetail } from "@/components/codex/codex-detail";
+ import type { CodexEntryRead } from "@/lib/api/types";
++import { hu } from "@/lib/i18n/hu";
+ 
+ const base = `${API_BASE_URL}/api/v1`;
+ 
+@@ -133,6 +134,51 @@ describe("CodexDetail", () => {
+     expect(bodies.at(-1)).toMatchObject({ ai_visible: false });
+   });
+ 
++  it("MentionsTab resolves SkeletonList and shows matched mention entries", async () => {
++    const user = userEvent.setup();
++    renderDetail();
++
++    await user.click(screen.getByRole("tab", { name: hu.codex.tabMentions }));
++
++    // SkeletonList renders while the book tree loads; wait for it to settle.
++    await waitFor(() =>
++      expect(screen.queryByTestId("skeleton-list")).not.toBeInTheDocument(),
++    );
++    // SCENE_ACTIVE content contains "Szelene" — one mention row expected.
++    expect(
++      await screen.findByText(/Szelene a tekercsek közé hajolt/),
++    ).toBeInTheDocument();
++  });
++
++  it("MentionsTab ErrorState retry refetches chapters and clears the error", async () => {
++    server.use(
++      http.get(`${API_BASE_URL}/api/v1/books/:bookId/chapters`, () =>
++        HttpResponse.json({ detail: "tree-boom" }, { status: 500 }),
++      ),
++    );
++    const user = userEvent.setup();
++    renderDetail();
++
++    // Switch to the Megemlítések tab.
++    await user.click(screen.getByRole("tab", { name: hu.codex.tabMentions }));
++
++    // ErrorState appears (role="alert").
++    await screen.findByRole("alert");
++
++    // Restore the success handler before clicking retry.
++    server.resetHandlers();
++
++    await user.click(screen.getByRole("button", { name: hu.common.retry }));
++
++    // Error disappears; the mention row from SCENE_ACTIVE appears.
++    await waitFor(() =>
++      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
++    );
++    expect(
++      await screen.findByText(/Szelene a tekercsek közé hajolt/),
++    ).toBeInTheDocument();
++  });
++
+   it("delete asks for confirmation then DELETEs", async () => {
+     const user = userEvent.setup();
+     const onDeleted = vi.fn();
+diff --git a/apps/web/components/codex/__tests__/codex-sidebar.test.tsx b/apps/web/components/codex/__tests__/codex-sidebar.test.tsx
+index 13d671f..1ad1168 100644
+--- a/apps/web/components/codex/__tests__/codex-sidebar.test.tsx
++++ b/apps/web/components/codex/__tests__/codex-sidebar.test.tsx
+@@ -47,7 +47,7 @@ describe("CodexSidebar", () => {
+     expect(screen.getByText("Nagykönyvtár")).toBeInTheDocument();
+   });
+ 
+-  it("shows the empty state when the project has no codex entries", async () => {
++  it("shows the empty state (EmptyState kit) when the project has no codex entries", async () => {
+     server.use(
+       http.get(`${base}/projects/:projectId/codex`, () =>
+         HttpResponse.json([]),
+@@ -55,16 +55,43 @@ describe("CodexSidebar", () => {
+     );
+     renderSidebar();
+     expect(await screen.findByText("Még üres a Codex")).toBeInTheDocument();
++    // EmptyState renders title as an h2
++    expect(screen.getByRole("heading", { name: "Még üres a Codex" })).toBeInTheDocument();
+   });
+ 
+-  it("surfaces a list error (never swallowed)", async () => {
++  it("surfaces a list error via ErrorState (never swallowed)", async () => {
+     server.use(
+       http.get(`${base}/projects/:projectId/codex`, () =>
+         HttpResponse.json({ detail: "boom" }, { status: 500 }),
+       ),
+     );
+     renderSidebar();
+-    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
++    const alert = await screen.findByRole("alert");
++    // ErrorState renders the message prominently; detail rendered as muted text
++    expect(alert).toBeInTheDocument();
++  });
++
++  it("retry button on codex list ErrorState refetches and shows entries", async () => {
++    server.use(
++      http.get(`${base}/projects/:projectId/codex`, () =>
++        HttpResponse.json({ detail: "boom" }, { status: 500 }),
++      ),
++    );
++    const user = userEvent.setup();
++    renderSidebar();
++
++    // Wait for error state.
++    await screen.findByRole("alert");
++
++    // Restore success handler before retry.
++    server.resetHandlers();
++
++    // Click the retry button rendered by ErrorState.
++    await user.click(screen.getByRole("button", { name: "Újrapróbálkozás" }));
++
++    // Entries should now appear.
++    expect(await screen.findByText("Szelene")).toBeInTheDocument();
++    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+   });
+ 
+   it("selecting an entry writes the ?entry param", async () => {
+diff --git a/apps/web/components/codex/codex-detail.tsx b/apps/web/components/codex/codex-detail.tsx
+index b471570..c0d80ec 100644
+--- a/apps/web/components/codex/codex-detail.tsx
++++ b/apps/web/components/codex/codex-detail.tsx
+@@ -34,6 +34,7 @@ import { RadioGroup, RadioRow } from "@/components/kit/radio-group";
+ import { Icon } from "@/components/kit/icon";
+ import { BrandStar } from "@/components/kit/brand-star";
+ import { Spinner } from "@/components/kit/spinner";
++import { EmptyState, ErrorState, SkeletonList } from "@/components/kit";
+ import { toast } from "@/components/kit/toast";
+ import {
+   contentMentions,
+@@ -621,22 +622,19 @@ function MentionsTab({
+ 
+   if (tree.isError) {
+     return (
+-      <p role="alert" className="m-0 text-[13px] text-danger-text">
+-        {tree.error?.message ?? hu.codex.listError}
+-      </p>
++      <ErrorState
++        message={hu.codex.listError}
++        detail={tree.error?.message ?? undefined}
++        onRetry={tree.refetch}
++      />
+     );
+   }
+   if (tree.isLoading) {
+-    return (
+-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
+-        <Spinner size={14} />
+-        {hu.codex.mentionsLoading}
+-      </div>
+-    );
++    return <SkeletonList rows={4} />;
+   }
+   if (matches.length === 0) {
+     return (
+-      <p className="m-0 text-[13px] text-text-muted">{hu.codex.mentionsEmpty}</p>
++      <EmptyState title={hu.codex.mentionsEmpty} />
+     );
+   }
+ 
+diff --git a/apps/web/components/plan/__tests__/plan-board.test.tsx b/apps/web/components/plan/__tests__/plan-board.test.tsx
+index 9deaef3..ebb9f33 100644
+--- a/apps/web/components/plan/__tests__/plan-board.test.tsx
++++ b/apps/web/components/plan/__tests__/plan-board.test.tsx
+@@ -54,7 +54,7 @@ describe("PlanBoard", () => {
+     expect(await screen.findByText(SCENE_FIRST.title)).toBeInTheDocument();
+   });
+ 
+-  it("surfaces a load error (not swallowed)", async () => {
++  it("surfaces a load error via ErrorState (not swallowed)", async () => {
+     server.use(
+       http.get(`${base}/books/:bookId/chapters`, () =>
+         HttpResponse.json({ detail: "kaboom" }, { status: 500 }),
+@@ -65,6 +65,52 @@ describe("PlanBoard", () => {
+       await screen.findByText("Nem sikerült betölteni a tervet"),
+     ).toBeInTheDocument();
+     expect(await screen.findByText("kaboom")).toBeInTheDocument();
++    // ErrorState renders role="alert"
++    expect(screen.getByRole("alert")).toBeInTheDocument();
++  });
++
++  it("retry button on ErrorState refetches and clears the error", async () => {
++    // Start with a failing endpoint.
++    server.use(
++      http.get(`${base}/books/:bookId/chapters`, () =>
++        HttpResponse.json({ detail: "kaboom" }, { status: 500 }),
++      ),
++    );
++    const user = userEvent.setup();
++    renderBoard();
++
++    // Wait for the error state to appear.
++    await screen.findByRole("alert");
++    expect(
++      screen.getByText("Nem sikerült betölteni a tervet"),
++    ).toBeInTheDocument();
++
++    // Restore the successful handler before clicking retry.
++    server.resetHandlers();
++
++    // Click the retry button.
++    await user.click(screen.getByRole("button", { name: "Újrapróbálkozás" }));
++
++    // The board should now render the chapter list (error gone).
++    expect(
++      await screen.findByText(CHAPTER_ONE.title),
++    ).toBeInTheDocument();
++    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
++  });
++
++  it("loading state renders SkeletonCard placeholders", async () => {
++    // Delay the response so we can observe the loading state.
++    server.use(
++      http.get(`${base}/books/:bookId/chapters`, async () => {
++        await new Promise((r) => setTimeout(r, 200));
++        return HttpResponse.json([]);
++      }),
++    );
++    renderBoard();
++    // SkeletonCard uses data-testid="skeleton-card"
++    expect(
++      (await screen.findAllByTestId("skeleton-card")).length,
++    ).toBeGreaterThan(0);
+   });
+ 
+   it("switches to the Matrix view", async () => {
+diff --git a/apps/web/components/plan/__tests__/plan-grid-dnd.test.tsx b/apps/web/components/plan/__tests__/plan-grid-dnd.test.tsx
+index 1d5686c..9eabbb7 100644
+--- a/apps/web/components/plan/__tests__/plan-grid-dnd.test.tsx
++++ b/apps/web/components/plan/__tests__/plan-grid-dnd.test.tsx
+@@ -111,6 +111,7 @@ function makeController(): PlanBoardController {
+     isLoading: false,
+     isError: false,
+     error: null,
++    refetch: vi.fn(),
+     isCreating: false,
+     openScene: vi.fn(),
+     createChapter: vi.fn(),
+diff --git a/apps/web/components/plan/plan-board.tsx b/apps/web/components/plan/plan-board.tsx
+index 7f13b8e..3e52dd5 100644
+--- a/apps/web/components/plan/plan-board.tsx
++++ b/apps/web/components/plan/plan-board.tsx
+@@ -2,11 +2,13 @@
+ 
+ import { useState } from "react";
+ import { useParams } from "next/navigation";
+-import { Plus } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+-import { Spinner } from "@/components/kit/spinner";
+-import { Icon } from "@/components/kit/icon";
+ import { ErrorBoundary } from "@/components/kit/error-boundary";
++import {
++  EmptyState,
++  ErrorState,
++  SkeletonCard,
++} from "@/components/kit";
+ import { hu } from "@/lib/i18n/hu";
+ import { usePlanBoard } from "./use-plan-board";
+ import { PlanHeader } from "./plan-header";
+@@ -84,23 +86,24 @@ function PlanBody({
+ 
+   if (controller.isLoading) {
+     return (
+-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
+-        <Spinner size={14} />
+-        {hu.plan.loading}
++      <div
++        aria-label={hu.plan.loading}
++        className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3"
++      >
++        {Array.from({ length: 6 }, (_, i) => (
++          <SkeletonCard key={i} />
++        ))}
+       </div>
+     );
+   }
+ 
+   if (controller.isError) {
+     return (
+-      <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+-        <p className="m-0 text-[14px] font-semibold text-danger-text">
+-          {hu.plan.error}
+-        </p>
+-        <p className="m-0 max-w-md text-[13px] text-text-muted">
+-          {controller.error?.message}
+-        </p>
+-      </div>
++      <ErrorState
++        message={hu.plan.error}
++        detail={controller.error?.message}
++        onRetry={controller.refetch}
++      />
+     );
+   }
+ 
+@@ -135,25 +138,14 @@ function EmptyBook({
+   controller: ReturnType<typeof usePlanBoard>;
+ }) {
+   return (
+-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-        <BrandStar size={26} />
+-      </span>
+-      <p className="m-0 text-[15px] font-semibold text-text">
+-        {hu.plan.emptyTitle}
+-      </p>
+-      <p className="m-0 max-w-[360px] text-[13px] leading-[1.5] text-text-muted">
+-        {hu.plan.emptyHint}
+-      </p>
+-      <button
+-        type="button"
+-        onClick={controller.createFirstChapter}
+-        disabled={controller.isCreating}
+-        className="mt-1 flex h-9 items-center gap-1.5 rounded-lg bg-accent-strong px-3.5 text-[13px] font-semibold text-accent-fg hover:opacity-90 disabled:opacity-50"
+-      >
+-        <Icon icon={Plus} size={14} />
+-        {hu.plan.emptyCta}
+-      </button>
+-    </div>
++    <EmptyState
++      icon={<BrandStar size={26} />}
++      title={hu.plan.emptyTitle}
++      description={hu.plan.emptyHint}
++      action={{
++        label: hu.plan.emptyCta,
++        onClick: controller.createFirstChapter,
++      }}
++    />
+   );
+ }
+diff --git a/apps/web/components/plan/use-plan-board.ts b/apps/web/components/plan/use-plan-board.ts
+index 28c43fc..e9ced15 100644
+--- a/apps/web/components/plan/use-plan-board.ts
++++ b/apps/web/components/plan/use-plan-board.ts
+@@ -93,6 +93,8 @@ export interface PlanBoardController {
+   isLoading: boolean;
+   isError: boolean;
+   error: Error | null;
++  /** Refetch the full book tree (chapters + all per-chapter scene queries). */
++  refetch: () => void;
+   /** True while a create mutation is in flight (disables the relevant CTA). */
+   isCreating: boolean;
+   /** Open a scene in the editor — the create→write loop's exit. */
+@@ -436,6 +438,7 @@ export function usePlanBoard({
+     isLoading: tree.isLoading,
+     isError: tree.isError,
+     error: tree.error,
++    refetch: tree.refetch,
+     isCreating,
+     openScene,
+     createChapter,
+diff --git a/apps/web/components/research/__tests__/research-screen.test.tsx b/apps/web/components/research/__tests__/research-screen.test.tsx
+index 35b4d0f..7197131 100644
+--- a/apps/web/components/research/__tests__/research-screen.test.tsx
++++ b/apps/web/components/research/__tests__/research-screen.test.tsx
+@@ -48,7 +48,7 @@ describe("ResearchScreen", () => {
+     );
+   });
+ 
+-  it("surfaces an error without crashing", async () => {
++  it("surfaces an error via ErrorState (role=alert, not swallowed)", async () => {
+     server.use(
+       http.post(`${aiBase}/ai/research`, () =>
+         HttpResponse.json({ detail: "boom" }, { status: 502 }),
+@@ -58,7 +58,36 @@ describe("ResearchScreen", () => {
+     await ask("Kérdés");
+ 
+     await waitFor(() =>
+-      expect(screen.getByText(hu.research.errorRetry)).toBeInTheDocument(),
++      expect(screen.getByRole("alert")).toBeInTheDocument(),
+     );
++    expect(screen.getByText(hu.research.errorRetry)).toBeInTheDocument();
++  });
++
++  it("retry button on ErrorState resets the error so a new question can be asked", async () => {
++    server.use(
++      http.post(`${aiBase}/ai/research`, () =>
++        HttpResponse.json({ detail: "boom" }, { status: 502 }),
++      ),
++    );
++    const user = userEvent.setup();
++    renderWithProviders(<ResearchScreen bookId={FAROSZ_BOOK.id} />);
++    await ask("Kérdés");
++
++    // Error state must appear.
++    await screen.findByRole("alert");
++
++    // Restore success handler before retry.
++    server.resetHandlers();
++
++    // Click retry — the mutation resets, error disappears, form is usable again.
++    await user.click(screen.getByRole("button", { name: hu.common.retry }));
++
++    await waitFor(() =>
++      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
++    );
++    // The input is still accessible so the user can re-ask.
++    expect(
++      screen.getByRole("textbox", { name: hu.research.questionAria }),
++    ).toBeInTheDocument();
+   });
+ });
+diff --git a/apps/web/components/research/research-screen.tsx b/apps/web/components/research/research-screen.tsx
+index 6431046..e89ddcf 100644
+--- a/apps/web/components/research/research-screen.tsx
++++ b/apps/web/components/research/research-screen.tsx
+@@ -12,7 +12,7 @@
+ import { useState } from "react";
+ import { Search } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+-import { Button } from "@/components/kit";
++import { Button, EmptyState, ErrorState } from "@/components/kit";
+ import { Spinner } from "@/components/kit/spinner";
+ import { ContextChips } from "@/components/kit/context-chips";
+ import { useBookProjectId, useResearch } from "@/lib/api/ai-hooks";
+@@ -85,9 +85,10 @@ export function ResearchScreen({ bookId }: ResearchScreenProps) {
+ 
+         <div className="mt-6">
+           {researchMutation.isError ? (
+-            <p className="text-[13px] text-danger" role="status">
+-              {hu.research.errorRetry}
+-            </p>
++            <ErrorState
++              message={hu.research.errorRetry}
++              onRetry={() => researchMutation.reset()}
++            />
+           ) : result !== undefined ? (
+             <article className="rounded-[14px] border border-border bg-surface p-5 shadow-card">
+               <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+@@ -111,14 +112,11 @@ export function ResearchScreen({ bookId }: ResearchScreenProps) {
+               )}
+             </article>
+           ) : (
+-            <div className="rounded-[14px] border border-dashed border-border-strong bg-surface-muted/40 p-8 text-center">
+-              <p className="text-[15px] font-semibold text-text">
+-                {hu.research.emptyTitle}
+-              </p>
+-              <p className="mx-auto mt-1 max-w-[460px] text-[13px] text-text-muted">
+-                {hu.research.emptyHint}
+-              </p>
+-            </div>
++            <EmptyState
++              icon={<BrandStar size={22} />}
++              title={hu.research.emptyTitle}
++              description={hu.research.emptyHint}
++            />
+           )}
+         </div>
+       </div>
+diff --git a/apps/web/components/shell/codex-sidebar.tsx b/apps/web/components/shell/codex-sidebar.tsx
+index 40bc7fd..e23f26e 100644
+--- a/apps/web/components/shell/codex-sidebar.tsx
++++ b/apps/web/components/shell/codex-sidebar.tsx
+@@ -28,7 +28,7 @@ import { Filter, Plus, Search } from "lucide-react";
+ import { BrandStar } from "@/components/kit/brand-star";
+ import { BookSpineCard } from "@/components/kit/book-spine-card";
+ import { Icon } from "@/components/kit/icon";
+-import { Spinner } from "@/components/kit/spinner";
++import { EmptyState, ErrorState, SkeletonList } from "@/components/kit";
+ import { bookIdFromPathname } from "@/lib/use-shell-chrome";
+ import { usePathname } from "next/navigation";
+ import { useBookProjectId } from "@/lib/api/ai-hooks";
+@@ -268,38 +268,27 @@ export function CodexSidebar() {
+               : hu.codex.chatsEmpty}
+           </p>
+         ) : isError ? (
+-          <p
+-            role="alert"
+-            className="m-auto px-4 py-8 text-center text-[12px] text-danger-text"
+-          >
+-            {(codex.error ?? projectIdQuery.error)?.message ??
+-              hu.codex.listError}
+-          </p>
++          <ErrorState
++            message={hu.codex.listError}
++            detail={
++              (codex.error ?? projectIdQuery.error)?.message ?? undefined
++            }
++            onRetry={() => { codex.refetch(); }}
++            className="m-2"
++          />
+         ) : isLoading ? (
+-          <div className="m-auto flex items-center gap-2 py-8 text-[12px] text-text-muted">
+-            <Spinner size={14} />
+-            {hu.codex.listLoading}
+-          </div>
++          <SkeletonList rows={5} className="p-2" />
+         ) : entries.length === 0 ? (
+-          <div className="m-auto flex max-w-[220px] flex-col items-center gap-2.5 px-4 py-8 text-center">
+-            <span className="flex h-[54px] w-[54px] items-center justify-center rounded-2xl bg-accent-muted text-accent-text">
+-              <BrandStar size={24} />
+-            </span>
+-            <p className="m-0 text-[14px] font-semibold text-text">
+-              {hu.codex.listEmptyTitle}
+-            </p>
+-            <p className="m-0 text-[12px] leading-[1.5] text-text-muted">
+-              {hu.codex.listEmptyHint}
+-            </p>
+-            <button
+-              type="button"
+-              onClick={() => setModalOpen(true)}
+-              className="mt-0.5 flex h-8 items-center gap-1.5 rounded-lg bg-accent-strong px-3 text-[13px] font-semibold text-accent-fg hover:bg-accent-hover"
+-            >
+-              <Icon icon={Plus} size={13} />
+-              {hu.codex.listEmptyCta}
+-            </button>
+-          </div>
++          <EmptyState
++            icon={<BrandStar size={22} />}
++            title={hu.codex.listEmptyTitle}
++            description={hu.codex.listEmptyHint}
++            action={{
++              label: hu.codex.listEmptyCta,
++              onClick: () => setModalOpen(true),
++            }}
++            className="px-2 py-8"
++          />
+         ) : groups.length === 0 ? (
+           <p className="m-auto px-4 py-8 text-center text-[12px] text-text-muted">
+             {hu.codex.listEmptyHint}

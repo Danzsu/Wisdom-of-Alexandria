@@ -1,0 +1,1179 @@
+### git status
+ M apps/ai/app/api/v1/covers.py
+ M apps/ai/app/api/v1/images.py
+ M apps/ai/app/jobs/image_job.py
+ M apps/ai/app/services/image_service.py
+ M apps/ai/tests/integration/test_image_job.py
+ M apps/ai/tests/integration/test_image_service.py
+?? .superpowers/sdd/
+?? apps/ai/tests/integration/test_cover_flow.py
+
+### tracked diff (vs 7729d7a = T9)
+diff --git a/apps/ai/app/api/v1/covers.py b/apps/ai/app/api/v1/covers.py
+index 8439780..34c79e5 100644
+--- a/apps/ai/app/api/v1/covers.py
++++ b/apps/ai/app/api/v1/covers.py
+@@ -85,6 +85,7 @@ async def generate_cover(
+             "author": author,
+             "subtitle": data.subtitle,
+             "model": model,
++            "asset_id": str(asset.id),
+         },
+     )
+     db.add(job)
+diff --git a/apps/ai/app/api/v1/images.py b/apps/ai/app/api/v1/images.py
+index b1c2bdb..e4969b8 100644
+--- a/apps/ai/app/api/v1/images.py
++++ b/apps/ai/app/api/v1/images.py
+@@ -128,6 +128,7 @@ async def create_image(
+             "entity_id": str(data.entity_id),
+             "style": data.style,
+             "model": model,
++            "asset_id": str(asset.id),
+         },
+     )
+     db.add(job)
+diff --git a/apps/ai/app/jobs/image_job.py b/apps/ai/app/jobs/image_job.py
+index 15c77ba..b858d54 100644
+--- a/apps/ai/app/jobs/image_job.py
++++ b/apps/ai/app/jobs/image_job.py
+@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
+ 
+ # Required keys in ``GenerationJob.input_data`` for an image job.
+ # Covers need art_style + layout instead of style.
+-_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model")
++# ``asset_id`` is the placeholder MediaAsset the endpoint created; the service
++# UPDATES that row rather than creating a new one (single-asset lifecycle).
++_REQUIRED_COMMON: tuple[str, ...] = ("entity_type", "entity_id", "model", "asset_id")
+ _REQUIRED_COVER: tuple[str, ...] = ("art_style", "layout")
+ _REQUIRED_CODEX: tuple[str, ...] = ("style",)
+ 
+@@ -81,6 +83,7 @@ async def _run_image_job(
+         job.status = JobStatus.RUNNING
+         await db.commit()
+ 
++        asset_id = uuid.UUID(str(params["asset_id"]))
+         try:
+             if is_cover:
+                 asset = await images.generate_cover_for_book(
+@@ -93,6 +96,7 @@ async def _run_image_job(
+                     author=params.get("author") or "",
+                     subtitle=params.get("subtitle"),
+                     model=params["model"],
++                    asset_id=asset_id,
+                     job_id=job.id,
+                 )
+             else:
+@@ -103,6 +107,7 @@ async def _run_image_job(
+                     entity_id=uuid.UUID(str(params["entity_id"])),
+                     style=params["style"],
+                     model=params["model"],
++                    asset_id=asset_id,
+                     job_id=job.id,
+                 )
+             job.output_data = {"media_asset_id": str(asset.id)}
+@@ -117,7 +122,14 @@ async def _run_image_job(
+             if failed is not None:
+                 failed.status = JobStatus.FAILED
+                 failed.error_message = safe_error(exc)
+-                await db.commit()
++            # Flip the placeholder to 'failed' so the FE spinner stops; guard
++            # against a missing asset (deleted between enqueue and execution).
++            from alexandria_core.models.media_asset import MediaAsset
++
++            placeholder = await db.get(MediaAsset, asset_id)
++            if placeholder is not None:
++                placeholder.status = "failed"
++            await db.commit()
+             # Log a SANITIZED message only — never logger.exception(), whose raw
+             # traceback could embed a provider secret.
+             logger.error("Image job %s failed: %s", job_id, safe_error(exc))
+diff --git a/apps/ai/app/services/image_service.py b/apps/ai/app/services/image_service.py
+index 6e62e30..43ca313 100644
+--- a/apps/ai/app/services/image_service.py
++++ b/apps/ai/app/services/image_service.py
+@@ -53,18 +53,25 @@ class ImageService:
+         entity_id: uuid.UUID,
+         style: str,
+         model: str,
++        asset_id: uuid.UUID,
+         job_id: uuid.UUID | None = None,
+     ) -> MediaAsset:
+-        """Generate an image for a Codex entry and persist a READY asset.
++        """Generate an image for a Codex entry and update the EXISTING placeholder.
+ 
+         ``entity_id`` is a ``CodexEntry`` id; ``entity_type`` is its expected
+         ``entry_type`` ("character" | "location"). Reuses the entity's current
+         canonical image (if any, and readable) as a reference image so successive
+         generations stay visually consistent. Raises ``ValueError`` if the entry
+-        is missing OR its ``entry_type`` does not match ``entity_type``. On ANY
+-        failure during the provider call or save step, removes any partial file
+-        and re-raises (loud).
++        is missing OR its ``entry_type`` does not match ``entity_type``, or if the
++        placeholder asset ``asset_id`` does not exist. On ANY failure during the
++        provider call or save step, removes any partial file and re-raises (loud).
+         """
++        asset = await db.get(MediaAsset, asset_id)
++        if asset is None:
++            raise ValueError(
++                f"placeholder asset {asset_id} not found for image generation"
++            )
++
+         entry = await db.get(CodexEntry, entity_id)
+         if entry is None or entry.entry_type != entity_type:
+             raise ValueError(
+@@ -75,7 +82,6 @@ class ImageService:
+         prompt = image_prompt.build_codex_prompt(entry, style)
+         reference = await self._canonical_reference_bytes(db, entity_type, entity_id)
+ 
+-        asset_id = uuid.uuid4()
+         saved: SavedImage | None = None
+         try:
+             result = await self.router.generate_image(
+@@ -97,24 +103,17 @@ class ImageService:
+                 delete_image_files(saved.file_path, saved.thumb_path)
+             raise
+ 
+-        asset = MediaAsset(
+-            id=asset_id,
+-            project_id=project_id,
+-            entity_type=entity_type,
+-            entity_id=entity_id,
+-            status="ready",
+-            file_path=saved.file_path,
+-            thumb_path=saved.thumb_path,
+-            mime=result.mime,
+-            width=saved.width,
+-            height=saved.height,
+-            model_name=result.model,
+-            style=style,
+-            prompt=prompt,
+-            job_id=job_id,
+-            is_canonical=False,
+-        )
+-        db.add(asset)
++        # Update the existing placeholder in-place — never create a second row.
++        asset.file_path = saved.file_path
++        asset.thumb_path = saved.thumb_path
++        asset.mime = result.mime
++        asset.width = saved.width
++        asset.height = saved.height
++        asset.model_name = result.model
++        asset.prompt = prompt
++        asset.status = "ready"
++        if job_id is not None:
++            asset.job_id = job_id
+         await db.commit()
+         await db.refresh(asset)
+         return asset
+@@ -131,18 +130,25 @@ class ImageService:
+         author: str,
+         subtitle: str | None,
+         model: str,
++        asset_id: uuid.UUID,
+         job_id: uuid.UUID | None = None,
+     ) -> MediaAsset:
+         """Generate a book cover: art (text-free) → composite typography → READY
+-        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Loud on failure
+-        (cleans up a partial file, re-raises). Raises ``ValueError`` if the book
+-        is missing."""
++        ``MediaAsset(entity_type="cover", entity_id=book_id)``. Updates the
++        EXISTING placeholder identified by ``asset_id`` in-place rather than
++        creating a new row. Loud on failure (cleans up a partial file, re-raises).
++        Raises ``ValueError`` if the book or the placeholder asset is missing."""
++        asset = await db.get(MediaAsset, asset_id)
++        if asset is None:
++            raise ValueError(
++                f"placeholder asset {asset_id} not found for cover generation"
++            )
++
+         book = await db.get(Book, book_id)
+         if book is None or book.project_id != project_id:
+             raise ValueError(f"book {book_id} not found for cover generation")
+ 
+         prompt = image_prompt.build_cover_prompt(book, art_style)
+-        asset_id = uuid.uuid4()
+         saved: SavedImage | None = None
+         try:
+             result = await self.router.generate_image(
+@@ -161,24 +167,17 @@ class ImageService:
+                 delete_image_files(saved.file_path, saved.thumb_path)
+             raise
+ 
+-        asset = MediaAsset(
+-            id=asset_id,
+-            project_id=project_id,
+-            entity_type="cover",
+-            entity_id=book_id,
+-            status="ready",
+-            file_path=saved.file_path,
+-            thumb_path=saved.thumb_path,
+-            mime="image/png",
+-            width=saved.width,
+-            height=saved.height,
+-            model_name=result.model,
+-            style=art_style,
+-            prompt=prompt,
+-            job_id=job_id,
+-            is_canonical=False,
+-        )
+-        db.add(asset)
++        # Update the existing placeholder in-place — never create a second row.
++        asset.file_path = saved.file_path
++        asset.thumb_path = saved.thumb_path
++        asset.mime = "image/png"
++        asset.width = saved.width
++        asset.height = saved.height
++        asset.model_name = result.model
++        asset.prompt = prompt
++        asset.status = "ready"
++        if job_id is not None:
++            asset.job_id = job_id
+         await db.commit()
+         await db.refresh(asset)
+         return asset
+diff --git a/apps/ai/tests/integration/test_image_job.py b/apps/ai/tests/integration/test_image_job.py
+index f51ad41..45b77cd 100644
+--- a/apps/ai/tests/integration/test_image_job.py
++++ b/apps/ai/tests/integration/test_image_job.py
+@@ -93,27 +93,50 @@ async def _make_image_job(
+     return job
+ 
+ 
+-def _input(char_id: uuid.UUID, **overrides) -> dict:
++def _input(char_id: uuid.UUID, asset_id: uuid.UUID | None = None, **overrides) -> dict:
+     data = {
+         "entity_type": "character",
+         "entity_id": str(char_id),
+         "style": "realistic_portrait",
+         "model": "gemini/gemini-3.1-flash-image",
++        "asset_id": str(asset_id) if asset_id is not None else str(uuid.uuid4()),
+     }
+     data.update(overrides)
+     return data
+ 
+ 
++async def _make_placeholder(
++    db: AsyncSession,
++    project_id: uuid.UUID,
++    entity_type: str,
++    entity_id: uuid.UUID,
++    style: str = "realistic_portrait",
++) -> MediaAsset:
++    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
++    ph = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type=entity_type,
++        entity_id=entity_id,
++        style=style,
++        model_name="gemini/x",
++    )
++    db.add(ph)
++    await db.commit()
++    await db.refresh(ph)
++    return ph
++
++
+ @pytest.mark.integration
+ async def test_image_job_runs_and_records_media_asset(db_session):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+ 
+-    asset_id = uuid.uuid4()
+     images = AsyncMock(spec=ImageService)
+     images.generate_for_entity.return_value = MediaAsset(
+-        id=asset_id,
++        id=placeholder.id,
+         project_id=project_id,
+         entity_type="character",
+         entity_id=char.id,
+@@ -126,7 +149,7 @@ async def test_image_job_runs_and_records_media_asset(db_session):
+ 
+     await db_session.refresh(job)
+     assert job.status == JobStatus.DONE
+-    assert job.output_data["media_asset_id"] == str(asset_id)
++    assert job.output_data["media_asset_id"] == str(placeholder.id)
+ 
+     images.generate_for_entity.assert_awaited_once()
+     kwargs = images.generate_for_entity.await_args.kwargs
+@@ -136,6 +159,7 @@ async def test_image_job_runs_and_records_media_asset(db_session):
+     assert kwargs["style"] == "realistic_portrait"
+     assert kwargs["model"] == "gemini/gemini-3.1-flash-image"
+     assert kwargs["job_id"] == job.id
++    assert kwargs["asset_id"] == placeholder.id
+ 
+ 
+ @pytest.mark.integration
+@@ -145,14 +169,15 @@ async def test_image_job_is_running_when_generate_executes(db_session):
+     before the heavy work)."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+     captured = {}
+ 
+     async def _capturing_generate(db, **kwargs):
+         current = await db.get(GenerationJob, job.id)
+         captured["status_at_generate"] = current.status
+         return MediaAsset(
+-            id=uuid.uuid4(),
++            id=placeholder.id,
+             project_id=project_id,
+             entity_type="character",
+             entity_id=char.id,
+@@ -174,7 +199,8 @@ async def test_image_job_failure_is_persisted_and_sanitized(db_session):
+     and the exception is NOT re-raised (the call returns normally)."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    job = await _make_image_job(db_session, project_id, _input(char.id))
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    job = await _make_image_job(db_session, project_id, _input(char.id, placeholder.id))
+ 
+     images = AsyncMock(spec=ImageService)
+     raw = "boom\nSECRET\n" + ("x" * 5000)
+@@ -199,7 +225,8 @@ async def test_image_job_missing_required_input_fails(db_session):
+     a clear message, and generate_for_entity is never attempted."""
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+-    bad = _input(char.id)
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
++    bad = _input(char.id, placeholder.id)
+     del bad["style"]
+     job = await _make_image_job(db_session, project_id, bad)
+ 
+@@ -245,6 +272,19 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
+     project_id = await _make_project(db_session)
+     book_id = await _make_book(db_session, project_id)
+ 
++    # Create placeholder asset (as the endpoint does).
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++
+     job = GenerationJob(
+         job_type=JobType.IMAGE,
+         project_id=project_id,
+@@ -259,6 +299,7 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
+             "author": "Rácz D.",
+             "subtitle": None,
+             "model": "gemini/x",
++            "asset_id": str(placeholder.id),
+         },
+     )
+     db_session.add(job)
+@@ -269,7 +310,7 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
+ 
+     async def fake_cover(db, **kw):
+         calls.update(kw)
+-        return SimpleNamespace(id=uuid.uuid4())
++        return SimpleNamespace(id=placeholder.id)
+ 
+     images = ImageService()
+     monkeypatch.setattr(images, "generate_cover_for_book", fake_cover)
+@@ -282,3 +323,180 @@ async def test_image_job_cover_branch(db_session, monkeypatch):
+     refreshed = await db_session.get(GenerationJob, job.id)
+     assert refreshed.status == JobStatus.DONE
+     assert calls["art_style"] == "cover_fantasy" and calls["layout"] == "classic_centered"
++    # asset_id is now forwarded to the service call.
++    assert calls["asset_id"] == placeholder.id
++
++
++# ── ADVERSARIAL: placeholder is updated on success (no second row) ───────────
++
++
++@pytest.mark.integration
++async def test_image_job_codex_passes_asset_id_to_service(db_session):
++    """The job must pass the placeholder's asset_id to the service so it can
++    UPDATE that row rather than creating a new one.
++
++    Before the fix: asset_id was absent from input_data and not forwarded,
++    so the service created a second row.
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    # Pre-create the placeholder as the endpoint does.
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/gemini-3.1-flash-image",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++
++    job = await _make_image_job(
++        db_session,
++        project_id,
++        {
++            **_input(char.id),
++            "asset_id": str(placeholder.id),
++        },
++    )
++
++    captured: dict = {}
++    ready_asset = MediaAsset(
++        id=placeholder.id,
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        status="ready",
++    )
++
++    async def _capturing_generate(db, **kwargs):
++        captured.update(kwargs)
++        # Confirm the job is RUNNING at the moment the service is called.
++        current_job = await db.get(GenerationJob, job.id)
++        assert current_job.status == JobStatus.RUNNING
++        return ready_asset
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_for_entity.side_effect = _capturing_generate
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    # The job must forward the placeholder id to the service.
++    assert "asset_id" in captured, "asset_id was not forwarded to generate_for_entity"
++    assert captured["asset_id"] == placeholder.id
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.DONE
++    assert job.output_data["media_asset_id"] == str(placeholder.id)
++
++
++@pytest.mark.integration
++async def test_image_job_failure_flips_placeholder_to_failed(db_session):
++    """When the service raises, the job handler must flip the PLACEHOLDER's
++    status to 'failed' so the FE spinner stops.
++
++    Before the fix: the placeholder stayed 'generating' forever on failure.
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    job = await _make_image_job(
++        db_session,
++        project_id,
++        {
++            **_input(char.id),
++            "asset_id": str(placeholder_id),
++        },
++    )
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_for_entity.side_effect = RuntimeError("provider boom")
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.FAILED
++
++    # The PLACEHOLDER must now be 'failed', not stuck 'generating'.
++    reloaded = await db_session.get(MediaAsset, placeholder_id)
++    assert reloaded is not None
++    assert reloaded.status == "failed", (
++        f"Placeholder must be 'failed' after job failure, got '{reloaded.status}'"
++    )
++
++
++@pytest.mark.integration
++async def test_image_job_cover_failure_flips_placeholder_to_failed(db_session):
++    """Same placeholder-flip guarantee for the cover branch on failure."""
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id)
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    job = GenerationJob(
++        job_type=JobType.IMAGE,
++        project_id=project_id,
++        status=JobStatus.PENDING,
++        model_name="gemini/x",
++        input_data={
++            "entity_type": "cover",
++            "entity_id": str(book_id),
++            "art_style": "cover_fantasy",
++            "layout": "classic_centered",
++            "title": "Fárosz",
++            "author": "Rácz D.",
++            "subtitle": None,
++            "model": "gemini/x",
++            "asset_id": str(placeholder_id),
++        },
++    )
++    db_session.add(job)
++    await db_session.commit()
++    await db_session.refresh(job)
++
++    images = AsyncMock(spec=ImageService)
++    images.generate_cover_for_book.side_effect = RuntimeError("compositor boom")
++
++    await _run_image_job(
++        job.id, session_factory=_session_factory(db_session), images=images
++    )
++
++    await db_session.refresh(job)
++    assert job.status == JobStatus.FAILED
++
++    reloaded = await db_session.get(MediaAsset, placeholder_id)
++    assert reloaded is not None
++    assert reloaded.status == "failed", (
++        f"Cover placeholder must be 'failed' after job failure, got '{reloaded.status}'"
++    )
+diff --git a/apps/ai/tests/integration/test_image_service.py b/apps/ai/tests/integration/test_image_service.py
+index 2c1ecda..221a29b 100644
+--- a/apps/ai/tests/integration/test_image_service.py
++++ b/apps/ai/tests/integration/test_image_service.py
+@@ -93,6 +93,28 @@ async def _count_assets(db) -> int:
+     ).scalar_one()
+ 
+ 
++async def _make_placeholder(
++    db,
++    project_id: uuid.UUID,
++    entity_type: str,
++    entity_id: uuid.UUID,
++    style: str = "realistic_portrait",
++) -> MediaAsset:
++    """Create a 'generating' placeholder as the endpoint does before enqueueing."""
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type=entity_type,
++        entity_id=entity_id,
++        style=style,
++        model_name="gemini/x",
++    )
++    db.add(placeholder)
++    await db.commit()
++    await db.refresh(placeholder)
++    return placeholder
++
++
+ # ── generate_for_entity happy path ──────────────────────────────────────────
+ 
+ 
+@@ -102,6 +124,7 @@ async def test_generate_for_character_writes_file_and_ready_asset(
+ ):
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+ 
+     router = _stub_router()
+     svc = ImageService(router=router)
+@@ -112,6 +135,7 @@ async def test_generate_for_character_writes_file_and_ready_asset(
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/gemini-3.1-flash-image",
++        asset_id=placeholder.id,
+     )
+ 
+     assert asset.status == "ready"
+@@ -140,15 +164,21 @@ async def test_generate_for_character_writes_file_and_ready_asset(
+ @pytest.mark.integration
+ async def test_generate_for_missing_entity_raises(db_session, _tmp_media_dir):
+     project_id = await _make_project(db_session)
++    # Use a random entity_id so the CodexEntry lookup fails (entity doesn't exist).
++    missing_entity_id = uuid.uuid4()
++    placeholder = await _make_placeholder(
++        db_session, project_id, "character", missing_entity_id
++    )
+     svc = ImageService(router=_stub_router())
+     with pytest.raises(ValueError):
+         await svc.generate_for_entity(
+             db_session,
+             project_id=project_id,
+             entity_type="character",
+-            entity_id=uuid.uuid4(),
++            entity_id=missing_entity_id,
+             style="realistic_portrait",
+             model="gemini/x",
++            asset_id=placeholder.id,
+         )
+ 
+ 
+@@ -163,6 +193,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
+     router = _stub_router()
+     svc = ImageService(router=router)
+ 
++    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
+     first = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -170,6 +201,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph1.id,
+     )
+     # No reference on the first call (no canonical yet).
+     first_kwargs = router.generate_image.await_args.kwargs
+@@ -177,6 +209,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
+ 
+     await svc.set_canonical(db_session, first.id)
+ 
++    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
+     await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -184,6 +217,7 @@ async def test_existing_canonical_passed_as_reference(db_session, _tmp_media_dir
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph2.id,
+     )
+     # Second call now passes the canonical image bytes as a reference.
+     second_kwargs = router.generate_image.await_args.kwargs
+@@ -203,6 +237,7 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
+     char = await _make_character(db_session, project_id)
+     svc = ImageService(router=_stub_router())
+ 
++    ph1 = await _make_placeholder(db_session, project_id, "character", char.id)
+     a1 = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -210,7 +245,9 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph1.id,
+     )
++    ph2 = await _make_placeholder(db_session, project_id, "character", char.id)
+     a2 = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -218,6 +255,7 @@ async def test_set_canonical_clears_previous(db_session, _tmp_media_dir):
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph2.id,
+     )
+ 
+     await svc.set_canonical(db_session, a1.id)
+@@ -262,6 +300,7 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
+     other = await _make_character(db_session, project_id, name="Hős B")
+     svc = ImageService(router=_stub_router())
+ 
++    ph_older = await _make_placeholder(db_session, project_id, "character", char.id)
+     older = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -269,7 +308,9 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_older.id,
+     )
++    ph_newer = await _make_placeholder(db_session, project_id, "character", char.id)
+     newer = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -277,8 +318,10 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_newer.id,
+     )
+     # A 2nd entity's asset must not leak in.
++    ph_other = await _make_placeholder(db_session, project_id, "character", other.id)
+     await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -286,6 +329,7 @@ async def test_list_for_entity_newest_first_and_isolated(db_session, _tmp_media_
+         entity_id=other.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=ph_other.id,
+     )
+ 
+     # Make created_at unambiguous on coarse-resolution SQLite clocks.
+@@ -310,6 +354,7 @@ async def test_delete_removes_row_and_files(db_session, _tmp_media_dir):
+     char = await _make_character(db_session, project_id)
+     svc = ImageService(router=_stub_router())
+ 
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+     asset = await svc.generate_for_entity(
+         db_session,
+         project_id=project_id,
+@@ -317,6 +362,7 @@ async def test_delete_removes_row_and_files(db_session, _tmp_media_dir):
+         entity_id=char.id,
+         style="realistic_portrait",
+         model="gemini/x",
++        asset_id=placeholder.id,
+     )
+     file_path = asset.file_path
+     thumb_path = asset.thumb_path
+@@ -347,6 +393,7 @@ async def test_generation_failure_raises_and_leaves_no_partial(
+     project_id = await _make_project(db_session)
+     char = await _make_character(db_session, project_id)
+ 
++    placeholder = await _make_placeholder(db_session, project_id, "character", char.id)
+     router = AsyncMock()
+     router.generate_image = AsyncMock(side_effect=RuntimeError("provider boom"))
+     svc = ImageService(router=router)
+@@ -359,10 +406,15 @@ async def test_generation_failure_raises_and_leaves_no_partial(
+             entity_id=char.id,
+             style="realistic_portrait",
+             model="gemini/x",
++            asset_id=placeholder.id,
+         )
+ 
+-    # No READY asset persisted, and no orphaned files left under the media dir.
+-    assert await _count_assets(db_session) == 0
++    # The placeholder row still exists (service is LOUD — re-raises, never flips
++    # status itself; the job layer owns the 'failed' flip).  No NEW rows created.
++    assert await _count_assets(db_session) == 1
++    await db_session.refresh(placeholder)
++    assert placeholder.status == "generating"  # service never mutates on failure
++    # No partial files written to disk.
+     leftover = []
+     for root, _dirs, files in os.walk(str(_tmp_media_dir)):
+         leftover.extend(files)
+@@ -380,6 +432,9 @@ async def test_generate_cover_for_book_persists_cover_asset(
+ 
+     project_id = await _make_project(db_session)
+     book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++    placeholder = await _make_placeholder(
++        db_session, project_id, "cover", book_id, style="cover_fantasy"
++    )
+ 
+     async def fake_generate_image(
+         prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
+@@ -401,6 +456,7 @@ async def test_generate_cover_for_book_persists_cover_asset(
+         author="Rácz D.",
+         subtitle=None,
+         model="gemini/x",
++        asset_id=placeholder.id,
+     )
+     assert asset.entity_type == "cover"
+     assert asset.entity_id == book_id
+@@ -411,16 +467,170 @@ async def test_generate_cover_for_book_persists_cover_asset(
+ 
+ @pytest.mark.integration
+ async def test_generate_cover_for_book_missing_book_raises(db_session):
++    project_id = await _make_project(db_session)
++    missing_book_id = uuid.uuid4()
++    placeholder = await _make_placeholder(
++        db_session, project_id, "cover", missing_book_id, style="cover_fantasy"
++    )
+     svc = ImageService()
+     with pytest.raises(ValueError):
+         await svc.generate_cover_for_book(
+             db_session,
+-            project_id=uuid.uuid4(),
+-            book_id=uuid.uuid4(),
++            project_id=project_id,
++            book_id=missing_book_id,
+             art_style="cover_fantasy",
+             layout="classic_centered",
+             title="t",
+             author="a",
+             subtitle=None,
+             model="m",
++            asset_id=placeholder.id,
++        )
++
++
++# ── ADVERSARIAL: single-asset lifecycle (placeholder reuse) ──────────────────
++
++
++@pytest.mark.integration
++async def test_generate_for_entity_updates_placeholder_not_creates_new(
++    db_session, _tmp_media_dir
++):
++    """After a successful codex-image generation the DB must contain EXACTLY
++    ONE MediaAsset for the entity — the same row the endpoint created as the
++    'generating' placeholder — and its status must be 'ready'.
++
++    Before the fix: the service minted a brand-new uuid4 asset on success,
++    leaving two rows (placeholder stuck 'generating' + a new 'ready' one).
++    """
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++
++    # Pre-create the placeholder exactly as the endpoint does.
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    svc = ImageService(router=_stub_router())
++    asset = await svc.generate_for_entity(
++        db_session,
++        project_id=project_id,
++        entity_type="character",
++        entity_id=char.id,
++        style="realistic_portrait",
++        model="gemini/x",
++        asset_id=placeholder_id,
++    )
++
++    # Returned asset is the SAME row.
++    assert asset.id == placeholder_id
++    assert asset.status == "ready"
++
++    # Exactly ONE row in the DB for this entity.
++    total = (
++        await db_session.execute(
++            select(func.count())
++            .select_from(MediaAsset)
++            .where(
++                MediaAsset.entity_type == "character",
++                MediaAsset.entity_id == char.id,
++            )
++        )
++    ).scalar_one()
++    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
++
++
++@pytest.mark.integration
++async def test_generate_cover_for_book_updates_placeholder_not_creates_new(
++    db_session, monkeypatch, tmp_path
++):
++    """Same single-asset lifecycle invariant for the cover branch.
++
++    Before the fix: service created a second row; placeholder stayed 'generating'.
++    """
++    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
++
++    project_id = await _make_project(db_session)
++    book_id = await _make_book(db_session, project_id, title="Fárosz", author="Rácz D.")
++
++    placeholder = MediaAsset(
++        status="generating",
++        project_id=project_id,
++        entity_type="cover",
++        entity_id=book_id,
++        style="cover_fantasy",
++        model_name="gemini/x",
++    )
++    db_session.add(placeholder)
++    await db_session.commit()
++    await db_session.refresh(placeholder)
++    placeholder_id = placeholder.id
++
++    async def fake_generate_image(
++        prompt, *, model, db, reference_images=None, aspect_ratio="2:3", **kw
++    ):
++        buf = io.BytesIO()
++        Image.new("RGB", (1024, 1536), (10, 20, 30)).save(buf, "PNG")
++        return ImageResult(data=buf.getvalue(), mime="image/png", model=model)
++
++    svc = ImageService()
++    monkeypatch.setattr(svc.router, "generate_image", fake_generate_image)
++
++    asset = await svc.generate_cover_for_book(
++        db_session,
++        project_id=project_id,
++        book_id=book_id,
++        art_style="cover_fantasy",
++        layout="classic_centered",
++        title="Fárosz",
++        author="Rácz D.",
++        subtitle=None,
++        model="gemini/x",
++        asset_id=placeholder_id,
++    )
++
++    # Returned asset is the SAME row.
++    assert asset.id == placeholder_id
++    assert asset.status == "ready"
++
++    # Exactly ONE row.
++    total = (
++        await db_session.execute(
++            select(func.count())
++            .select_from(MediaAsset)
++            .where(
++                MediaAsset.entity_type == "cover",
++                MediaAsset.entity_id == book_id,
++            )
++        )
++    ).scalar_one()
++    assert total == 1, f"Expected 1 MediaAsset, found {total} (double-row bug)"
++
++
++@pytest.mark.integration
++async def test_generate_for_entity_missing_placeholder_raises(
++    db_session, _tmp_media_dir
++):
++    """Passing a non-existent asset_id raises ValueError (guard against lost jobs)."""
++    project_id = await _make_project(db_session)
++    char = await _make_character(db_session, project_id)
++    svc = ImageService(router=_stub_router())
++
++    with pytest.raises(ValueError, match="asset"):
++        await svc.generate_for_entity(
++            db_session,
++            project_id=project_id,
++            entity_type="character",
++            entity_id=char.id,
++            style="realistic_portrait",
++            model="gemini/x",
++            asset_id=uuid.uuid4(),
+         )
+
+### untracked new files (excl scratch)
+===== apps/ai/tests/integration/test_cover_flow.py =====
+"""Cross-resource cover flow integration test (Task 10).
+
+Exercises the full end-to-end cover pipeline with NO Redis and NO real
+provider call:
+
+  POST /ai/covers
+    → job captured via monkeypatched enqueue_image_job
+  → _run_image_job inline against the test DB session
+    (ImageService with a fake router that returns a small real PNG;
+     CoverCompositor runs for real — fonts are bundled)
+  → GET /ai/images?entity_type=cover&entity_id=<book_id>
+    → exactly 1 "ready" cover, entity_type == "cover"
+  → POST /ai/images/<id>/canonical
+    → is_canonical == True
+  → GET /ai/media/<id>
+    → 200, content-type image/*
+"""
+
+from __future__ import annotations
+
+import io
+import uuid
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
+
+import pytest
+from alexandria_core.core.config import settings
+from alexandria_core.models.book import Book
+from alexandria_core.models.project import Project
+from alexandria_core.models.provider import Provider
+from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.jobs.image_job import _run_image_job
+from app.services.image_service import ImageService
+from app.services.model_router import ImageResult
+
+pytestmark = pytest.mark.asyncio
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _session_factory(db_session: AsyncSession):
+    """Inject the test's transactional session as the worker's session factory.
+
+    Mirrors the shim in test_image_job.py: the context manager yields the
+    session without closing it (the fixture owns its lifecycle).
+    """
+
+    @asynccontextmanager
+    async def _factory():
+        yield db_session
+
+    return _factory
+
+
+async def _make_project(db: AsyncSession) -> uuid.UUID:
+    project = Project(title="Borító flow projekt")
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return project.id
+
+
+async def _make_book(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    title: str = "A Fárosz árnyéka",
+    author: str = "Rácz Dániel",
+) -> uuid.UUID:
+    book = Book(project_id=project_id, title=title, author=author)
+    db.add(book)
+    await db.commit()
+    await db.refresh(book)
+    return book.id
+
+
+async def _make_provider_with_image_model(
+    db: AsyncSession,
+    image_model: str = "gemini/imagen-3",
+) -> Provider:
+    provider = Provider(
+        type="gemini",
+        label="Borító képgeneráló",
+        image_model=image_model,
+        enabled=True,
+    )
+    db.add(provider)
+    await db.commit()
+    await db.refresh(provider)
+    return provider
+
+
+def _fake_router(color: tuple[int, int, int] = (12, 34, 56)) -> AsyncMock:
+    """Build a stub ModelRouter whose generate_image returns a real small PNG.
+
+    The PNG is intentionally the right aspect-ratio for a 2:3 cover so the
+    compositor's crop step is trivial (no scale-up needed).
+    """
+    buf = io.BytesIO()
+    Image.new("RGB", (1024, 1536), color).save(buf, "PNG")
+    png_bytes = buf.getvalue()
+
+    router = AsyncMock()
+    router.generate_image = AsyncMock(
+        return_value=ImageResult(data=png_bytes, mime="image/png", model="gemini/x")
+    )
+    return router
+
+
+# ── flow test ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+async def test_cover_end_to_end(
+    client,
+    auth_headers,
+    db_session: AsyncSession,
+    monkeypatch,
+    tmp_path,
+):
+    """POST /ai/covers → run the job inline (mocked provider) → the cover
+    appears in GET /ai/images?entity_type=cover as 'ready' → can be made
+    canonical → GET /ai/media streams image bytes."""
+
+    # ── 1. redirect media_dir to a writable tmp location ──────────────────────
+    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
+
+    # ── 2. capture the enqueued job id (skip Redis) ────────────────────────────
+    captured_job_id: list[uuid.UUID] = []
+    import app.api.v1.covers as covers_mod
+
+    monkeypatch.setattr(
+        covers_mod,
+        "enqueue_image_job",
+        lambda jid: captured_job_id.append(jid),
+    )
+
+    # ── 3. seed DB fixtures ────────────────────────────────────────────────────
+    await _make_provider_with_image_model(db_session, "gemini/x")
+    project_id = await _make_project(db_session)
+    book_id = await _make_book(
+        db_session, project_id, title="Fárosz", author="Rácz D."
+    )
+
+    # ── 4. POST /ai/covers → 202 ───────────────────────────────────────────────
+    post_resp = await client.post(
+        "/api/v1/ai/covers",
+        headers=auth_headers,
+        json={
+            "book_id": str(book_id),
+            "art_style": "cover_fantasy",
+            "layout": "classic_centered",
+        },
+    )
+    assert post_resp.status_code == 202, post_resp.text
+    post_body = post_resp.json()
+    assert post_body["entity_type"] == "cover"
+    assert post_body["status"] == "generating"
+    assert len(captured_job_id) == 1
+
+    # ── 5. run the job inline (real compositor, fake provider) ─────────────────
+    fake_images = ImageService(router=_fake_router())
+    await _run_image_job(
+        captured_job_id[0],
+        session_factory=_session_factory(db_session),
+        images=fake_images,
+    )
+
+    # ── 6. GET /ai/images?entity_type=cover&entity_id=<book_id> ───────────────
+    # The POST creates a "generating" placeholder; the job UPDATES that same row
+    # to "ready". Exactly ONE cover total, and it must be "ready".
+    list_resp = await client.get(
+        f"/api/v1/ai/images?entity_type=cover&entity_id={book_id}",
+        headers=auth_headers,
+    )
+    assert list_resp.status_code == 200, list_resp.text
+    all_covers = list_resp.json()
+    assert all(c["entity_type"] == "cover" for c in all_covers)
+    assert len(all_covers) == 1, (
+        f"expected exactly 1 cover asset total (single-asset lifecycle), "
+        f"got {len(all_covers)} (statuses: {[c['status'] for c in all_covers]})"
+    )
+    cover = all_covers[0]
+    assert cover["status"] == "ready", f"cover status was '{cover['status']}', expected 'ready'"
+    assert cover["entity_id"] == str(book_id)
+    cover_id = cover["id"]
+    # The cover_id must be the placeholder id returned in the POST response.
+    assert cover_id == post_body["id"], "job must update the placeholder, not create a new row"
+
+    # ── 7. POST /ai/images/<id>/canonical → is_canonical flipped ──────────────
+    canon_resp = await client.post(
+        f"/api/v1/ai/images/{cover_id}/canonical",
+        headers=auth_headers,
+    )
+    assert canon_resp.status_code == 200, canon_resp.text
+    assert canon_resp.json()["is_canonical"] is True
+
+    # ── 8. GET /ai/media/<id> → real PNG bytes ─────────────────────────────────
+    media_resp = await client.get(
+        f"/api/v1/ai/media/{cover_id}",
+        headers=auth_headers,
+    )
+    assert media_resp.status_code == 200, media_resp.text
+    assert media_resp.headers["content-type"].startswith("image/")
+    # The compositor produces a 1600×2560 PNG; confirm we got a real PNG back.
+    with Image.open(io.BytesIO(media_resp.content)) as img:
+        assert img.format == "PNG"
+        assert img.size == (1600, 2560)
