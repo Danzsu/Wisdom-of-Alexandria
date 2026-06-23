@@ -51,3 +51,15 @@ def test_missing_font_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(cc, "_FONTS_DIR", tmp_path)
     with pytest.raises(ValueError, match="cover font missing"):
         cc.compose_cover(_png(), layout="classic_centered", title="t", author="a")
+
+
+def test_compose_draws_subtitle_when_given():
+    # A subtitle must actually render — passing one changes the output vs. none.
+    base = _png()
+    without = cc.compose_cover(base, layout="classic_centered", title="CÍM", author="SZ")
+    with_sub = cc.compose_cover(
+        base, layout="classic_centered", title="CÍM", author="SZ", subtitle="Egy alcím"
+    )
+    assert without != with_sub
+    with Image.open(io.BytesIO(with_sub)) as img:
+        assert img.size == (cc.COVER_W, cc.COVER_H)

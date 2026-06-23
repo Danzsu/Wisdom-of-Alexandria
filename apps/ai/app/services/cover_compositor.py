@@ -125,7 +125,11 @@ def compose_cover(
     author: str,
     subtitle: str | None = None,
 ) -> bytes:
-    """Composite typography onto the background; return a 1600x2560 PNG."""
+    """Composite typography onto the background; return a 1600x2560 PNG.
+
+    Draws the title (wrapped + autofit), the author below it, and an optional
+    subtitle (wrapped, smaller) below the author — all centered in the layout's
+    anchor band."""
     spec = _require_layout(layout)
     with Image.open(io.BytesIO(background_png)) as bg:
         bg.load()
@@ -138,12 +142,24 @@ def compose_cover(
     max_w = COVER_W - 2 * _MARGIN
     title_font, title_lines = _fit(draw, title, spec.title_font, max_w, max_size=150)
     author_font = _font(spec.author_font, 64)
-
-    title_h = sum(
-        (draw.textbbox((0, 0), ln, font=title_font)[3]) + 12 for ln in title_lines
+    subtitle = (subtitle or "").strip()
+    subtitle_font, subtitle_lines = (
+        _fit(draw, subtitle, spec.author_font, max_w, max_size=56, min_size=28)
+        if subtitle
+        else (None, [])
     )
+
+    def _lines_h(lines, font, gap: int) -> int:
+        return sum(draw.textbbox((0, 0), ln, font=font)[3] + gap for ln in lines)
+
+    title_h = _lines_h(title_lines, title_font, 12)
     author_h = draw.textbbox((0, 0), author, font=author_font)[3] if author else 0
-    block_h = title_h + (author_h + 40 if author else 0)
+    subtitle_h = _lines_h(subtitle_lines, subtitle_font, 8) if subtitle else 0
+    block_h = (
+        title_h
+        + (author_h + 40 if author else 0)
+        + (subtitle_h + 24 if subtitle else 0)
+    )
 
     if spec.anchor == "top":
         y = _MARGIN + 40
@@ -161,6 +177,16 @@ def compose_cover(
         y += 28
         w = draw.textlength(author, font=author_font)
         draw.text(((COVER_W - w) / 2, y), author, font=author_font, fill=spec.title_color)
+        y += author_h
+
+    if subtitle:
+        y += 24
+        for ln in subtitle_lines:
+            w = draw.textlength(ln, font=subtitle_font)
+            draw.text(
+                ((COVER_W - w) / 2, y), ln, font=subtitle_font, fill=spec.title_color
+            )
+            y += draw.textbbox((0, 0), ln, font=subtitle_font)[3] + 8
 
     out = io.BytesIO()
     canvas.save(out, "PNG")
