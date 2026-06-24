@@ -147,7 +147,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
   return (
     <nav
       aria-label={hu.shell.railAria}
-      className="flex w-rail flex-none flex-col items-center gap-1 overflow-y-auto border-r border-border bg-bg-subtle py-2.5"
+      className="flex w-rail flex-none flex-col items-center gap-1 overflow-y-auto border-r border-border bg-bg-subtle py-3"
     >
       {RAIL_ITEMS.map((item) => {
         const active = item.segment === activeSegment;
@@ -160,7 +160,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
               aria-current={active ? "page" : undefined}
               onClick={() => navTo(href)}
               className={cn(
-                "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+                "flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors",
                 active
                   ? "bg-accent-muted text-accent-text"
                   : "text-text-muted hover:bg-surface-muted hover:text-text",
@@ -182,7 +182,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           type="button"
           aria-label={hu.nav.cleanWrite}
           onClick={goCleanWrite}
-          className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          className="flex h-10 w-10 items-center justify-center rounded-[11px] text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
         >
           <Icon icon={Sparkle} size={18} />
         </button>
@@ -202,7 +202,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
               aria-label={hu.nav.tools}
               aria-current={toolsActive ? "page" : undefined}
               className={cn(
-                "relative flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+                "relative flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors",
                 toolsOpen || toolsActive
                   ? "bg-accent-muted text-accent-text"
                   : "text-text-muted hover:bg-surface-muted hover:text-text",
@@ -289,7 +289,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           aria-current={activeSegment === "export" ? "page" : undefined}
           onClick={() => navTo(routes.book(bookId, "export"))}
           className={cn(
-            "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+            "flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors",
             activeSegment === "export"
               ? "bg-accent-muted text-accent-text"
               : "text-text-muted hover:bg-surface-muted hover:text-text",
@@ -306,7 +306,7 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           aria-current={activeSegment === "beallitasok" ? "page" : undefined}
           onClick={() => navTo(routes.book(bookId, "beallitasok"))}
           className={cn(
-            "flex h-[38px] w-[38px] items-center justify-center rounded-[10px] transition-colors",
+            "flex h-10 w-10 items-center justify-center rounded-[11px] transition-colors",
             activeSegment === "beallitasok"
               ? "bg-accent-muted text-accent-text"
               : "text-text-muted hover:bg-surface-muted hover:text-text",

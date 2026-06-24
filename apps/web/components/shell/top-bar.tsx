@@ -1,7 +1,6 @@
 "use client";
 
 import { CircleHelp, Search, Users, SlidersHorizontal, PanelLeft, PanelRight } from "lucide-react";
-import { BrandStar } from "@/components/kit/brand-star";
 import { Icon } from "@/components/kit/icon";
 import { ThemeToggle } from "@/components/kit/theme-toggle";
 import { toast } from "@/components/kit/toast";
@@ -14,6 +13,31 @@ import { hu } from "@/lib/i18n/hu";
 import { UserMenu } from "./user-menu";
 import { ProjectSwitcher } from "./project-switcher";
 import { AiJobIndicator } from "./ai-job-indicator";
+
+/**
+ * Gold-gradient square tile with a 5-point star, matching the design's brand
+ * mark tile (28x28, rounded-lg, linear-gradient gold, white star).
+ * Decorative — hidden from assistive tech (the parent button supplies the label).
+ */
+function GoldStarTile() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-[linear-gradient(145deg,var(--gold),var(--gold-deep))] text-white"
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      >
+        <path d="M12 3l2.4 5.2L20 9l-4.2 3.9L17 19l-5-3-5 3 1.2-6.1L4 9l5.6-.8z" />
+      </svg>
+    </span>
+  );
+}
 
 export interface TopBarProps {
   /** Whether the current route is inside a book (shows switcher + share). */
@@ -74,16 +98,20 @@ export function TopBar({
         </button>
       ) : null}
 
-      {/* Brand → projects */}
+      {/* Brand → projects. Identity: "Wisdom of Alexandria" wordmark in Caveat
+          (handwritten gold) paired with a 5-point gold-gradient star tile. */}
       <button
         type="button"
         aria-label={hu.topbar.projectsAria}
         onClick={() => navTo(routes.projects())}
         className="flex items-center gap-[9px] rounded-lg px-1.5 py-1 transition-colors hover:bg-surface-muted"
       >
-        <BrandStar size={19} />
-        <span className="font-serif text-[17px] font-semibold tracking-[0.01em] text-text">
-          {hu.brand}
+        <GoldStarTile />
+        <span
+          className="font-hand text-[25px] font-bold leading-none text-gold-text"
+          style={{ paddingTop: "2px" }}
+        >
+          {hu.topbar.brand}
         </span>
       </button>
 

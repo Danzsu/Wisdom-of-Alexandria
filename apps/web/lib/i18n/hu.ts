@@ -22,6 +22,8 @@ export const hu = {
     logout: "Kijelentkezés",
   },
   topbar: {
+    /** Handwritten gold wordmark rendered in Caveat next to the gold-star tile. */
+    brand: "Wisdom of Alexandria",
     projectsAria: "Projektek",
     searchAria: "Keresés",
     themeAria: "Téma váltása",

@@ -68,7 +68,8 @@ describe("TopBar", () => {
   it("renders the brand, search, theme toggle and user menu", () => {
     renderTopBar();
     expect(screen.getByRole("button", { name: "Projektek" })).toBeInTheDocument();
-    expect(screen.getByText("Alexandria")).toBeInTheDocument();
+    // Brand identity change: "Alexandria" → "Wisdom of Alexandria" (Caveat wordmark)
+    expect(screen.getByText("Wisdom of Alexandria")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Keresés" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Téma váltása" })).toBeInTheDocument();
     expect(
