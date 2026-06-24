@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { User, LogOut } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import {
@@ -8,17 +9,19 @@ import {
   PopoverMenuContent,
   MenuRow,
 } from "@/components/kit/popover-menu";
-import { toast } from "@/components/kit/toast";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { routes } from "@/lib/routes";
 import { hu } from "@/lib/i18n/hu";
 
 /**
  * 28px user avatar that opens a dropdown with the signed-in identity, a Profil
- * row and a destructive Kijelentkezés row. Both rows are stubs for M2 and
- * surface a "Hamarosan" toast — auth flows arrive later. Open state is owned by
- * the shared UI store so it obeys the single-open-menu rule.
+ * row and a destructive Kijelentkezés row. "Profil" navigates to the author
+ * profile screen; "Kijelentkezés" returns to the public landing (auth is a V1+
+ * concern — for now logout simply leaves the app). Open state is owned by the
+ * shared UI store so it obeys the single-open-menu rule.
  */
 export function UserMenu() {
+  const router = useRouter();
   const openMenu = useUIStore((s) => s.openMenu);
   const setMenu = useUIStore((s) => s.setMenu);
   const open = openMenu === "user";
@@ -45,14 +48,20 @@ export function UserMenu() {
         </div>
         <MenuRow
           leadingIcon={<Icon icon={User} size={14} />}
-          onSelect={() => toast(hu.toast.comingSoon)}
+          onSelect={() => {
+            setMenu(null);
+            router.push(routes.profile());
+          }}
         >
           {hu.user.profile}
         </MenuRow>
         <MenuRow
           variant="danger"
           leadingIcon={<Icon icon={LogOut} size={14} />}
-          onSelect={() => toast(hu.toast.comingSoon)}
+          onSelect={() => {
+            setMenu(null);
+            router.push("/");
+          }}
         >
           {hu.user.logout}
         </MenuRow>

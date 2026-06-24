@@ -1770,6 +1770,40 @@ export const hu = {
     /** Retry button label used by ErrorState and other inline error panels. */
     retry: "Újrapróbálkozás",
   },
+  /**
+   * Profil screen (DESIGN-C). The author profile — identity, real aggregates
+   * (books / words / projects) and display-only writer settings. Editing is a
+   * V1+ stub (the "Szerkesztés" button toasts `editSoon`).
+   */
+  profil: {
+    /** Gold eyebrow above the screen title. */
+    eyebrow: "A szerző",
+    /** Display-font screen title. */
+    title: "Profil",
+    /** Muted identity meta line under the author name (handle · workspace · role). */
+    handle: "@lilla",
+    workspace: "Alexandria műhely",
+    role: "Szépirodalmi szerző",
+    /** Stat-card labels (numbers bind from real `useProjects()` aggregates). */
+    statBooks: "könyv a polcon",
+    statWords: "megírt szó",
+    statProjects: "projekt",
+    /** Section label above the writer-settings card. */
+    settingsLabel: "Írói beállítások",
+    /** Settings rows (display-only this pass — sourced from the design). */
+    addressingLabel: "Megszólítás alapértelmezés",
+    addressingSub: "Az AI tegező vagy magázó formát használjon",
+    addressingValue: "Magázás",
+    modelLabel: "Alapértelmezett modell",
+    modelSub: "Új generáláshoz",
+    modelValue: "Llama 3.1 · lokális",
+    goalLabel: "Napi íráscél",
+    goalSub: "Emlékeztető és haladásmérő",
+    goalValue: "1 000 szó",
+    /** Secondary "edit profile" button + its honest stub toast. */
+    edit: "Szerkesztés",
+    editSoon: "Hamarosan — a profilszerkesztés később érkezik",
+  },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
     "történelmi fantasy",

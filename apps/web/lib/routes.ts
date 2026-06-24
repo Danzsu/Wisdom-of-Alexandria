@@ -37,6 +37,8 @@ export const DEMO_SCENE_ID = "demo";
 export const routes = {
   /** Project picker (outside any book). */
   projects: () => "/projekt",
+  /** Author profile (user-level, outside any book). */
+  profile: () => "/profil",
   /** Book-scoped destination by segment. */
   book: (bookId: string, segment: BookSegment) => `/konyv/${bookId}/${segment}`,
   /** Write view for a specific scene. */
