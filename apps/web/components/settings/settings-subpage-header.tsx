@@ -26,7 +26,9 @@ export function SettingsSubpageHeader({
         <ChevronLeft size={15} aria-hidden="true" />
         {hu.settings.back}
       </button>
-      <h1 className="mb-1 text-[22px] font-semibold text-text">{title}</h1>
+      <h1 className="mb-1 font-display text-[26px] font-semibold text-text">
+        {title}
+      </h1>
       <p className="mb-[22px] text-[13px] text-text-muted">{subtitle}</p>
     </div>
   );

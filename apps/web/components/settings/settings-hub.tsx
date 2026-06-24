@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight, Cpu, Cloud, Workflow, Archive, Download } from "lucide-react";
+import { PageHero } from "@/components/kit/page-hero";
 import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
 import { hu } from "@/lib/i18n/hu";
@@ -34,10 +35,11 @@ export function SettingsHub({ onNavigate }: SettingsHubProps) {
 
   return (
     <div>
-      <h1 className="mb-1 text-[22px] font-semibold text-text">
-        {hu.settings.title}
-      </h1>
-      <p className="mb-6 text-[13px] text-text-muted">{hu.settings.subtitle}</p>
+      <PageHero
+        eyebrow={hu.settings.eyebrow}
+        title={hu.settings.title}
+        subtitle={hu.settings.subtitle}
+      />
 
       <SectionEyebrow as="h3" className="mb-2.5">
         {hu.settings.providersLabel}

@@ -76,7 +76,7 @@ export function BookTab() {
 
   return (
     <>
-      <h1 className="mb-1 text-[22px] font-semibold text-text">
+      <h1 className="mb-1 font-display text-[26px] font-semibold text-text">
         {hu.books.settingsTitle}
       </h1>
       <p className="mb-8 text-[13px] text-text-muted">

@@ -21,6 +21,7 @@ export {
   SectionEyebrow,
   type SectionEyebrowProps,
 } from "./section-eyebrow";
+export { PageHero, type PageHeroProps } from "./page-hero";
 export { Badge, StatusPill, type BadgeProps } from "./badge";
 export {
   StatusDot,

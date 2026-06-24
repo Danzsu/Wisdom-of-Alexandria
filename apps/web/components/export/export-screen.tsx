@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Spinner } from "@/components/kit/spinner";
+import { PageHero } from "@/components/kit/page-hero";
 import { Tab, TabBar } from "@/components/kit/tab";
 import { hu } from "@/lib/i18n/hu";
 import { useResolvedBook } from "@/lib/api/export-hooks";
@@ -27,9 +28,11 @@ export function ExportScreen() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-8 py-12">
       <div className="mx-auto max-w-[560px]">
-        <h1 className="mb-3 text-[22px] font-semibold text-text">
-          {hu.exportScreen.title}
-        </h1>
+        <PageHero
+          eyebrow={hu.exportScreen.eyebrow}
+          title={hu.exportScreen.title}
+          subtitle={hu.exportScreen.heroSubtitle}
+        />
 
         <TabBar aria-label={hu.exportScreen.title} className="mb-[22px]">
           <Tab active={tab === "export"} onClick={() => setTab("export")}>

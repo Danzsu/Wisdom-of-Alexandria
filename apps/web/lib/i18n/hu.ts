@@ -949,6 +949,9 @@ export const hu = {
    * Copy is verbatim from the prototype.
    */
   exportScreen: {
+    /** Screen hero. */
+    eyebrow: "Megosztás · Kézirat",
+    heroSubtitle: "Vidd magaddal a történeted — bármilyen formátumban.",
     /** Screen heading + tabs. */
     title: "Import / Export",
     tabExport: "Exportálás",
@@ -1038,6 +1041,7 @@ export const hu = {
    */
   settings: {
     /** Hub heading. */
+    eyebrow: "A műhely",
     title: "Beállítások",
     subtitle: "Modell-providerek, MCP-eszközök és generálási paraméterek.",
     /** Providers section. */

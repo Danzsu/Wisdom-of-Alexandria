@@ -226,7 +226,7 @@ export function TimelineScreen({ bookId }: TimelineScreenProps) {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Toolbar. */}
       <header className="flex items-center gap-3 border-b border-border px-5 py-3">
-        <h1 className="m-0 font-serif text-[17px] font-semibold text-text">
+        <h1 className="m-0 font-display text-[18px] font-semibold text-text">
           {hu.timeline.title}
         </h1>
         <span className="text-[12px] text-text-muted">

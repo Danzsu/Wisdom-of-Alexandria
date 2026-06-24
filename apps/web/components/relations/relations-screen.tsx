@@ -116,7 +116,7 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Toolbar. */}
         <header className="flex items-center gap-3 border-b border-border px-5 py-3">
-          <h1 className="m-0 font-serif text-[17px] font-semibold text-text">
+          <h1 className="m-0 font-display text-[18px] font-semibold text-text">
             {hu.relations.title}
           </h1>
           <span className="text-[12px] text-text-muted">
@@ -134,13 +134,22 @@ export function RelationsScreen({ bookId }: RelationsScreenProps) {
           </Button>
         </header>
 
-        {/* The graph canvas. */}
-        <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
-          <RelationshipGraph
-            graph={graph}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+        {/* The graph canvas — a calm surface card with a soft radial glow,
+            mirroring the prototype's framed relation web. */}
+        <div className="flex flex-1 items-center justify-center overflow-hidden p-6">
+          <div
+            className="relative h-full w-full overflow-hidden rounded-[18px] border border-border bg-surface shadow-card"
+            style={{
+              backgroundImage:
+                "radial-gradient(60% 60% at 50% 48%, var(--surface-soft) 0%, transparent 70%)",
+            }}
+          >
+            <RelationshipGraph
+              graph={graph}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          </div>
         </div>
       </div>
 
