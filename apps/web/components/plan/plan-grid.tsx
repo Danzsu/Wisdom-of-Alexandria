@@ -83,7 +83,7 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
           type="button"
           onClick={controller.createChapter}
           disabled={controller.isCreating}
-          className="flex h-[26px] items-center gap-[5px] rounded-lg border border-dashed border-border-strong bg-transparent px-2.5 text-[12px] text-text-muted hover:border-accent hover:bg-accent-muted hover:text-accent-text disabled:opacity-50"
+          className="flex h-[26px] items-center gap-[5px] rounded-lg border border-dashed border-border-strong bg-transparent px-2.5 text-[12px] text-text-muted hover:border-gold hover:bg-gold-soft hover:text-gold-text disabled:opacity-50"
         >
           <Icon icon={Plus} size={12} />
           {hu.plan.newChapter}

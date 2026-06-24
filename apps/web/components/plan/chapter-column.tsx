@@ -80,7 +80,7 @@ export function ChapterColumn({
         <span className="flex-1 truncate text-[14px] font-semibold text-text">
           {chapter.title}
         </span>
-        <span className="text-[11px] tabular-nums text-text-muted">
+        <span className="flex h-[18px] items-center rounded-full bg-surface-muted px-2 text-[11px] tabular-nums text-text-muted">
           {chapter.scenes.length}
         </span>
       </div>

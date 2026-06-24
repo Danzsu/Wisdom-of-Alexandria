@@ -167,7 +167,7 @@ export function CodexDetail({
               className={cn(
                 "h-9 flex-none whitespace-nowrap border-b-2 px-3 text-[13px]",
                 tab === value
-                  ? "border-accent font-semibold text-text"
+                  ? "border-gold font-semibold text-text"
                   : "border-transparent text-text-muted hover:text-text",
               )}
             >
@@ -261,7 +261,7 @@ function DetailHeader({
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
-          className="my-1.5 mb-1.5 w-full border-none bg-transparent text-[26px] font-bold text-text outline-none"
+          className="my-1.5 mb-1.5 w-full border-none bg-transparent font-display text-[30px] font-semibold text-text outline-none"
         />
 
         <div className="flex items-center gap-1.5">
