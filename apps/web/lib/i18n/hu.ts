@@ -1648,6 +1648,120 @@ export const hu = {
     heroAlt: (title: string) => `${title} borítója`,
   },
   /**
+   * Public marketing Landing page (DESIGN-C). All strings copied verbatim from
+   * the design canvas (Alexandria.dc.html — LANDING block). The page lives at
+   * `/` outside the app shell; CTAs enter the app at `/projekt`.
+   */
+  landing: {
+    /** Caveat wordmark in the sticky nav + footer. */
+    wordmark: "Wisdom of Alexandria",
+    /** Accessible name for the page-level <nav> landmark (distinct from the anchor labels). */
+    navAria: "Oldal navigáció",
+    /** Sticky-nav anchor links (label + target section id). */
+    navFeatures: "Funkciók",
+    navWorkshop: "A műhely",
+    navPhilosophy: "Filozófia",
+    /** Aria-label on the theme-toggle button. */
+    themeToggleAria: "Téma váltása",
+    /** Aria-label on the brand star tile. */
+    brandAria: "Wisdom of Alexandria",
+    /** Primary nav + footer-CTA button → enters the app at /projekt. */
+    enterApp: "Belépés a műhelybe",
+    /** Hero eyebrow pill (uses a non-breaking hyphen in "MAGYAR-ELSŐ"). */
+    heroEyebrow: "MAGYAR‑ELSŐ ÍRÓI MŰHELY",
+    /** Hero headline, split into three styled spans. */
+    heroTitleLine1: "A regényed",
+    heroTitleEmph: "megőrzött",
+    heroTitleRest: "műhelye.",
+    heroLead:
+      "Strukturált írói cockpit hosszú prózához. A Codex őrzi a világod, az AI a kézirat mellől segít — sosem helyetted. Minden a te gépeden marad.",
+    /** Hero CTAs. */
+    heroCtaPrimary: "Kezdj el írni",
+    heroCtaSecondary: "Nézd meg élőben",
+    /** Hero 3-stat row (value + label). */
+    statLocalValue: "100%",
+    statLocalLabel: "lokális & privát",
+    statCodexValue: "∞",
+    statCodexLabel: "Codex bejegyzés",
+    statRewriteValue: "0",
+    statRewriteLabel: "önkényes átírás",
+    /** Floating editor mock (the manuscript card + AI popover). */
+    mockAiTitle: "AI javaslat",
+    mockModel: "Llama 3.1 · lokális",
+    mockAiSuggestion:
+      "…a lámpás fénye megremegett a tekercsek között, és Mira tudta: a város még emlékszik.",
+    mockAccept: "Elfogad",
+    mockReject: "Elvet",
+    mockTabLabel: "A Hamuból Írott Város — II. fejezet",
+    mockChapterEyebrow: "II. FEJEZET",
+    mockChapterTitle: "A kapu, amely emlékezett",
+    mockPara1:
+      "A könyvtár alsó szintjén a levegő sűrű volt a portól és az elfeledett nevektől. Mira ujjai végigsiklottak a tekercsek gerincén, mintha mindegyik egy-egy halk lélegzet lett volna.",
+    mockPara2Lead: "— Itt vagy valahol — suttogta. A lámpás fénye ",
+    mockPara2Emph: "megremegett",
+    /** Trust strip: eyebrow + four check-marked items. */
+    trustEyebrow: "A komoly prózaíró eszköze — nem chatbot",
+    trustHumanLoop: "Ember a hurokban",
+    trustVersioning: "Verziókövetés",
+    trustOllama: "Ollama lokális modell",
+    trustExport: "Markdown / DOCX export",
+    /** Features section. */
+    featuresEyebrow: "A MŰHELY NÉGY PILLÉRE",
+    featuresTitleLine1: "Szerkezet, amely megtartja",
+    featuresTitleLine2: "a történeted súlyát.",
+    /** The four feature pillars (icon assigned in the component). */
+    pillars: [
+      {
+        title: "Codex-vezérelt világ",
+        body: "Szereplők, helyszínek, lore egy kereshető adatbázisban, amely megfogja az AI hallucinációit.",
+      },
+      {
+        title: "Strukturált terv",
+        body: "Felvonás, fejezet, jelenet és beat — húzd a helyükre, lásd a teljes ívet egy pillantással.",
+      },
+      {
+        title: "AI a kézirat mellett",
+        body: "Átírás, leírás, folytatás közvetlenül a szövegnél — diff-fel és jóváhagyással, sosem magától.",
+      },
+      {
+        title: "Lokális & magyar",
+        body: "Ollama a gépeden, magyar nyelvtanra hangolva. A kézirat el sem hagyja az otthonod.",
+      },
+    ],
+    /** Philosophy band. */
+    philosophyEyebrow: "KÉT IBOLYA, EGY ELV",
+    philosophyQuoteOpen: "„Az AI ",
+    philosophyQuoteEmph1: "javasol",
+    philosophyQuoteMid: ", az író ",
+    philosophyQuoteEmph2: "dönt",
+    philosophyQuoteClose:
+      ". Egyetlen mondat sem kerül a kéziratba a jóváhagyásod nélkül.”",
+    philosophyBody:
+      "Minden generált szövegnél látod a modellt, a verziót és a forrást. A Codex megfogja az AI hallucinációit, a verziótár pedig minden mondatodat megőrzi. Privacy by default — a kézirat el sem hagyja a géped.",
+    /** Showcase (3-panel cockpit). */
+    showcaseEyebrow: "A COCKPIT",
+    showcaseTitle: "Három panel. Egy nyugodt fókusz.",
+    showcaseSubtitle:
+      "Fejezetfa, kézirat és AI-segéd — egymás mellett, sosem egymás útjában.",
+    showcaseChaptersLabel: "Fejezetek",
+    showcaseChapter1: "I. A kapu",
+    showcaseChapter2: "II. A hamu városa",
+    showcaseScene: "3. jelenet — A tekercsek",
+    showcaseChapter3: "III. Az alsó könyvtár",
+    showcaseManuscriptTitle: "A tekercsek éneke",
+    showcaseManuscriptP1:
+      "Hamuváros nem haldoklott — emlékezett. Minden ledőlt oszlop egy elhallgatott mondat volt, minden repedés egy félbehagyott vallomás.",
+    showcaseManuscriptP2:
+      "Mira leült a küszöbre, és hallgatta, ahogy a szél a romok közt lapozgat.",
+    showcaseAiLabel: "AI segéd",
+    showcaseAiStatus: "Generálás folyamatban…",
+    /** Footer CTA band. */
+    footerCtaTitle: "A következő fejezet a tiéd.",
+    footerCtaBody: "Nyisd meg a könyvespolcod, és folytasd, ahol abbahagytad.",
+    /** Footer. */
+    footerTagline: "A te történeted. A te géped. A te döntésed.",
+  },
+  /**
    * Cross-cutting microcopy shared by multiple components and screens.
    * Keep entries minimal — prefer domain-specific sections when a string
    * belongs exclusively to one feature.
