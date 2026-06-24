@@ -243,7 +243,7 @@ npx husky init
 #!/bin/sh
 set -e
 
-echo "🔍 ForgeWriter pre-push checks..."
+echo "🔍 Wisdom of Alexandria pre-push checks..."
 
 # Frontend checks
 echo "→ Frontend: type-check..."

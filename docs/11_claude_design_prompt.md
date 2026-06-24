@@ -1,13 +1,17 @@
 # 11 — Claude Design Prompt
 
-Ez a dokumentum egy kész promptot tartalmaz, amit Claude Design-nak (vagy bármely design AI-nak) oda lehet adni a ForgeWriter AI UI megtervezéséhez.
+Ez a dokumentum egy kész promptot tartalmaz, amit Claude Design-nak (vagy bármely design AI-nak) oda lehet adni a **Wisdom of Alexandria** UI megtervezéséhez.
+
+> **Megjegyzés:** A termék mostani neve **Wisdom of Alexandria** (a korábbi „ForgeWriter AI" munkanév elavult). Az aktuális UI-akcentus **lila `#6d5dfc`** — az arany csak másodlagos kiemelő szín. A fontkészlet: **Inter** (UI), **Literata** (kézirat), **Cormorant Garamond** (display/címsorok), **Caveat** (kézírás / wordmark).
+>
+> **Phase-1 kész:** a design-rendszer alapjai már leszállítva — Skeleton / Empty / Error state minták, Radix Select, Accordion, és WCAG-AA megfelelés. A Codex képgenerálás és a könyvborító-generálás szintén él. Az alábbi prompt friss, használható design-promptként megmaradt.
 
 ---
 
 ## Teljes design prompt
 
 ```
-Design a professional AI-assisted novel writing workspace called "ForgeWriter AI".
+Design a professional AI-assisted novel writing workspace called "Wisdom of Alexandria".
 
 PRODUCT TYPE: A structured writing cockpit — not a chatbot, not a Notion clone.
 Think: manuscript editor + story planning board + Codex database + AI assistant panel.
@@ -21,14 +25,17 @@ VISUAL IDENTITY:
 - Border: #ded8ce
 - Text: #2f2a24 (dark warm brown)
 - Text muted: #6f675f
-- Accent: #6d5dfc (muted purple)
+- Accent (PRIMARY): #6d5dfc (muted purple) — this is the main accent direction
 - Accent muted: #ebe9ff
+- Secondary accent: warm gold (used sparingly for highlights/wordmark flourishes only — NOT the primary accent)
 - AI highlight: #7c3aed
 - Success: #2f7d55
 - Warning: #b7791f
 - Danger: #c2410c
-- Font UI: Inter or Geist
-- Font manuscript: Literata or Lora (serif)
+- Font UI: Inter
+- Font manuscript: Literata (serif)
+- Font display / headings: Cormorant Garamond (serif)
+- Font hand / wordmark: Caveat (handwriting)
 - Font scale: 12–28px
 - Border radius: 6–18px
 - Shadows: very subtle (1–2px, low opacity)

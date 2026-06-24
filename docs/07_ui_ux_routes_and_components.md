@@ -1,634 +1,130 @@
-# 07 — UI/UX Routes and Components
+# 07 — UI/UX: képernyők, route-ok és komponens-leltár
 
-## Purpose
+## Cél
 
-This document defines the UI/UX structure for a NovelCrafter-inspired but original AI novel-writing platform.
+Ez a dokumentum a **Wisdom of Alexandria** webfelület (`apps/web`, Next.js 15 App Router) **jelenlegi, megvalósult** UI-szerkezetét írja le: az app-shell, a route → képernyő → komponens leképezés, a megosztott komponens-kit és a minden adatnézetre kötelező state-minták.
 
-The interface should feel like a professional writing cockpit:
+> **Forrásdokumentumok.** A vizuális design-forrás (DESIGN-A / DESIGN-B / DESIGN-C tervek + a re-skin specifikációja) a **design-doc (doc 18)**. A token- és tipográfia-rendszer (színek, térköz, sugár, fontok, kontraszt-szabályok) a **`docs/09` design system**. Ez a fájl a *struktúrát és az inventárt* írja le, nem a tokeneket.
 
-- planning on the left
-- writing in the center
-- Codex and AI assistance on the right
-- calm visual hierarchy
-- fast navigation between book, chapter, scene, and Codex
+A felület továbbra is NovelCrafter-szerű munkafolyamatokból inspirálódik, de **nem másol** márkajelet, színpalettát, logót, proprietary ikont vagy pixelpontos elrendezést. A termék-mintát használjuk, nem a termék-identitást.
 
-## Important legal/design note
+---
 
-The UI may be inspired by NovelCrafter-like workflows and layout patterns, but it must not copy:
+## App-shell
 
-- exact branding
-- exact color palette
-- logo
-- proprietary icons
-- exact screen arrangement pixel-for-pixel
-- exact text labels if they are distinctive product copy
-
-Use the product pattern, not the product identity.
-
-## Design goals
-
-The UI should be:
-
-- calm
-- dense but readable
-- writer-first
-- structured
-- fast
-- keyboard-friendly
-- card-based for planning
-- editor-focused for writing
-- Codex-aware
-- AI-assisted but not AI-dominated
-
-## Primary app shell
-
-### Desktop layout
+A shell-t egyszer rendereli az `(app)` layout (`apps/web/components/shell/app-shell.tsx`). Az aktuális chrome **tisztán a pathnameből** vezetődik le (`useShellChrome`): a rail könyvön belül látszik, a fejezet-fa a Írás nézeten, a Codex-oldalsáv a Codexen; a projektválasztón a rail és az oldalsávok rejtve vannak. A StatusBar + AI-inspektor csak az Írás route-on jelenik meg.
 
 ```txt
-┌────────────────────────────────────────────────────────────────────────────┐
-│ TopBar: Project switcher | Book switcher | Search | AI model status | User │
-├────────────────┬──────────────────────────────────────┬────────────────────┤
-│ LeftSidebar    │ MainWorkspace                        │ RightInspector     │
-│                │                                      │                    │
-│ Project        │ Route-specific view                  │ Codex              │
-│ Book           │                                      │ AI Assistant       │
-│ Plan           │                                      │ Notes              │
-│ Write          │                                      │ Warnings           │
-│ Codex          │                                      │ Metadata           │
-│ Timeline       │                                      │                    │
-│ Exports        │                                      │                    │
-└────────────────┴──────────────────────────────────────┴────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ TopBar (52px): ✦ "Wisdom of Alexandria" wordmark · / · könyv-kontextus ·  │
+│        [Írás: jelenet-breadcrumb] · AI-job-pulzus · modell-pill · Megosztás│
+│        · keresés (⌘K) · "Hogyan működik?" · téma-kapcsoló · beállítás · user│
+├──────┬───────────────────────────────────────────────────┬────────────────┤
+│ Icon │ Bal struktúra-pane                                │ Jobb inspektor  │
+│ rail │ (Írás: fejezet-fa · Codex: Codex-oldalsáv)        │ (Írás, 360px):  │
+│ 56px │                                                   │ Codex / AI /    │
+│      │ MainWorkspace (route-gyerek a <main>-ben)         │ Beat / Revíziók │
+│      │                                                   │ / Warnings      │
+├──────┴───────────────────────────────────────────────────┴────────────────┤
+│ StatusBar (32px, csak Írás): szószám · fej./jelenet · autosave · modell    │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Behavior
-
-- Left sidebar collapsible.
-- Right inspector collapsible.
-- Main workspace remains stable.
-- Scene context remains visible during writing.
-- AI panel never covers the manuscript permanently.
-- AI suggestions appear in review panel before insertion.
-
-## Navigation routes
-
-```txt
-/projects
-/projects/:projectId
-/projects/:projectId/books/:bookId/overview
-/projects/:projectId/books/:bookId/plan
-/projects/:projectId/books/:bookId/write
-/projects/:projectId/books/:bookId/chapters/:chapterId
-/projects/:projectId/books/:bookId/scenes/:sceneId
-/projects/:projectId/codex
-/projects/:projectId/codex/characters
-/projects/:projectId/codex/characters/:characterId
-/projects/:projectId/codex/locations
-/projects/:projectId/codex/locations/:locationId
-/projects/:projectId/codex/worldbuilding
-/projects/:projectId/timeline
-/projects/:projectId/relationships
-/projects/:projectId/ai-jobs
-/projects/:projectId/export
-/settings/models
-/settings/prompts
-```
+### Shell-elemek
 
-## Screen 1 — Projects dashboard
-
-### Purpose
-
-List all writing projects.
-
-### Components
-
-- ProjectCard
-- CreateProjectDialog
-- RecentActivityList
-- LocalModelStatusCard
-- QuickStartTemplateCard
-
-### Project card fields
-
-- project title
-- genre
-- language
-- book count
-- word count
-- last edited
-- status
-- progress bar
-
-### Visual direction
-
-Use large clean cards with subtle metadata. Avoid a file-manager look.
-
-## Screen 2 — Project overview
-
-### Purpose
-
-Show high-level project state.
-
-### Components
-
-- ProjectHeader
-- BookList
-- CodexSummary
-- RecentScenes
-- OpenAIJobs
-- ProjectProgressStats
-
-### Main actions
-
-- New book
-- Open plan
-- Open writing view
-- Add character
-- Add location
-- Run project consistency check later
-
-## Screen 3 — Book overview
-
-### Purpose
-
-Show book-level summary and progress.
-
-### Components
-
-- BookHeader
-- SynopsisCard
-- ChapterProgressList
-- PlotlineOverview
-- WordCountChart
-- StyleGuideCard
-
-### Fields
-
-- title
-- subtitle
-- logline
-- synopsis
-- target word count
-- current word count
-- status
-
-## Screen 4 — Plan board
-
-### Purpose
-
-NovelCrafter-like planning space for chapters and scenes.
-
-### Layout
-
-```txt
-┌─────────────────────────────┬─────────────────────────────────────────────┐
-│ Chapter column/list         │ Scene cards for selected chapter             │
-│                             │                                             │
-│ Chapter 1                   │ [Scene card] [Scene card] [Scene card]       │
-│ Chapter 2                   │                                             │
-│ Chapter 3                   │                                             │
-└─────────────────────────────┴─────────────────────────────────────────────┘
-```
-
-### Components
-
-- ChapterList
-- ChapterCard
-- SceneCard
-- BeatPreview
-- StatusBadge
-- AddSceneButton
-- DragHandle
-- SceneMetadataPopover
-
-### Scene card fields
-
-- title
-- POV character
-- location
-- summary
-- status
-- word count
-- beat count
-- warnings count
-
-### Interactions
-
-- drag scenes
-- reorder chapters
-- add scene
-- open scene editor
-- duplicate scene
-- generate beats
-- change status
-
-### Design style
-
-- card grid
-- subtle colored status chips
-- compact metadata
-- calm background
-- selected chapter highlighted
-- avoid overusing color
-
-## Screen 5 — Write view
-
-### Purpose
-
-Focused manuscript writing.
-
-### Layout
-
-```txt
-┌──────────────┬──────────────────────────────────┬─────────────────────────┐
-│ Scene tree   │ Manuscript editor                │ Inspector               │
-│              │                                  │                         │
-│ Chapter 1    │ Scene title                      │ Tabs:                   │
-│  Scene 1     │ [Tiptap editor]                  │ - Codex                 │
-│  Scene 2     │                                  │ - AI                    │
-│ Chapter 2    │                                  │ - Beats                 │
-│              │                                  │ - Review                │
-└──────────────┴──────────────────────────────────┴─────────────────────────┘
-```
-
-### Components
-
-- SceneTree
-- ManuscriptEditor
-- EditorToolbar
-- AIBubbleMenu
-- WordCountFooter
-- AutosaveStatus
-- RightInspectorTabs
-- SceneMetadataPanel
-- RelatedCodexPanel
-- AIActionPanel
-- ReviewDiffPanel
-- ContinuityWarningsPanel
-
-### AI bubble actions
-
-When text is selected:
-
-- Rewrite
-- Expand
-- Compress
-- Improve dialogue
-- Make more literary
-- Improve Hungarian
-- Show, don't tell
-- Explain issue
-
-### Required behavior
+- **TopBar** (`top-bar.tsx`, 52px) — bal oldalon a **márkajel**: a „Wisdom of Alexandria" wordmark **Caveat** (kézírásos, arany `--gold-text`) fontban, mellette egy **arany-gradiens (`--gold` → `--gold-deep`) lekerekített csempe fehér 5-ágú csillaggal**; a márkajel a projektválasztóra navigál. Könyvön belül `/` elválasztó + **ProjectSwitcher** (könyv-kontextus). Az Írás route-on középen a **jelenet-breadcrumd** (fejezet › jelenet). Jobb klaszter: persistent **AI-job-indikátor** (futó pulzus / hibaszám / üresjáratban rejtve), config-vezérelt **modell-pill**, **Megosztás** pill (stub → toast), **keresés** (parancspalettát nyit), **„Hogyan működik?"** súgógomb (scroll-narratíva modal), **téma-kapcsoló**, **beállítás** gomb, **UserMenu**. `<lg` alatt itt jelennek meg a fa-/inspektor-drawer kapcsolók.
+- **IconRail** (`icon-rail.tsx`, 56px) — elsődleges célok rail-sorrendben: **Terv · Írás · Codex · Chat · Tiszta írás** [térköz] **Tools-flyout · Export · Beállítások**. Az Írás cél a betöltött könyv-fából feloldja az *első valódi jelenetet* (ha nincs, a Terv nézetre esik vissza). A **Tiszta írás** AI-mentes írásmódot kapcsol be, majd megnyitja a kéziratot. A **Tools-flyout** (`PopoverMenu`) tartja a V1-elemzőképernyőket (Áttekintés, Idősor, Kapcsolatok, Cselekményszálak), az AI-feladatokat (valódi „elbukott job" attention-dot + badge), és a prompt-/hang-tárakat. Az aktív elemnek `aria-current="page"` + accent-muted highlight + `woaRailPop` ikon-pop.
+- **ChapterTree** (`chapter-tree.tsx`) — bal struktúra-pane az Írás nézeten (fejezetek → jelenetek).
+- **CodexSidebar** (`codex-sidebar.tsx`) — bal struktúra-pane a Codexen.
+- **InspectorPanel** (`components/inspector/`) — jobb oldali, 360px-es inspektor (csak Írás); tabok: **Codex · AI · Beat · Revíziók · Warnings**. Egy `AiGenerationProvider` átfogja a kézirat-`<main>`-t és az inspektort, így a generálás → elfogadás → beszúrás folyam egy állapotot oszt.
+- **StatusBar** (`status-bar.tsx`, 32px, csak Írás) — élő szószám (tabular-nums), fej./jelenet-lokáció a fából, autosave-állapot (`Mentés…` / `Mentve ✓` / hiba, `aria-live` régióban), config-vezérelt aktív modell-badge.
+- **CommandPalette** (`command-palette.tsx` + `…-hotkey.tsx`) — ⌘K/Ctrl-K parancspaletta.
+- **ShortcutsOverlay** (`shortcuts-overlay.tsx`) — billentyű-overlay.
+- **Sparkfield** (`sparkfield.tsx`) — finom navigációs szikra-effekt.
+- **ShellDrawer** (`shell-drawer.tsx`) — `<lg` alatt a bal struktúra-pane és az inspektor slide-in Radix Dialog drawerbe csúszik (focus-trap, Esc/scrim-zár, címkézett). A rail inline marad (már 56px). **Fókusz mód** (Írás): minden chrome eltűnik, csak a kézirat marad; Esc kilép.
 
-- autosave every few seconds
-- show save status
-- never overwrite text with AI result automatically
-- display AI output in review panel
-- accept/reject/copy controls
+---
 
-## Screen 6 — Codex
+## Képernyők / route-ok
 
-### Purpose
+A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/konyv/[bookId]/<szegmens>` formájúak; a `routes` helper (`lib/routes.ts`) generálja őket.
 
-Central knowledge base / Story Bible.
+| Route | Képernyő / belépő | Komponens | Cél | Polish-állapot |
+|---|---|---|---|---|
+| `/` | — | `app/page.tsx` | Redirect a `/projekt`-re (az M0 demo-home kivezetve) | — |
+| `/projekt` | Projektek dashboard | `components/projects/ProjectsDashboard` | Könyvespolc / projektválasztó + új-könyv wizard, TanStack Query-vel | **KÉSZ** — Cormorant (`font-display`) hero, arany eyebrow + lebegő könyv-gerinc ikon, Daily-Spark kártya |
+| `/konyv/[bookId]/terv` | Terv-board | route → terv-screen | NovelCrafter-szerű fejezet/jelenet tervezőfelület, status-pillek, beat-előnézet, drag | **KÉSZ** |
+| `/konyv/[bookId]/iras/[sceneId]` | Írás nézet | route → Tiptap editor + inspektor | Fókuszált kézirat-szerkesztés, autosave, AI-bubble, jelenet-fa, jobb inspektor | **KÉSZ** |
+| `/konyv/[bookId]/codex` | Codex | route → Codex-screen + `CodexSidebar` | Story Bible: karakter/helyszín/worldbuilding, keresés, kártya/tábla/detail, **„Képek" panel** | **KÉSZ** |
+| `/konyv/[bookId]/kapcsolatok` | Kapcsolatok | relations-graph | Karakter-kapcsolat gráf — egyedi SVG force-graph (determinista d3-force, GSAP él-rajz) | **KÉSZ** |
+| `/konyv/[bookId]/cselekmenyszalak` | Cselekményszálak | plotlines-screen | Subplotok típus szerint csoportosítva, status-pillek, jelenet-chipek, attach/detach | **KÉSZ** |
+| `/konyv/[bookId]/idosor` | Idősor | timeline-screen | Fejezet/jelenet kronológia a könyv-fából (GSAP spine-draw) | **KÉSZ** |
+| `/konyv/[bookId]/feladatok` | AI feladatok | jobs-screen | Élő AI-job-képernyő (book-scope `GET /jobs` + polling, history + attention) | **KÉSZ** |
+| `/konyv/[bookId]/chat` | Kutatás (RAG) | chat-screen | Grounded RAG Q&A a Codex + kézirat felett, idézet-chipekkel | **KÉSZ** |
+| `/konyv/[bookId]/export` | Export / Import | `components/export/ExportScreen` | Manuscript-export; **Markdown valódi** (letöltés), **DOCX/EPUB KÉSZ**, **PDF hátra**, Import V1-stub | **Markdown/DOCX/EPUB KÉSZ, PDF hátra** |
+| `/konyv/[bookId]/beallitasok` | Beállítások | `BookTab` + `components/settings/SettingsScreen` | 2-tabos: **Könyv** (cím/műfaj/szerző) + **AI / Szolgáltatók** (Local/Ollama, Cloud/API-kulcs hub, MCP, generálási paraméterek, RAG-index) | **KÉSZ** — provider-hub megőrizve |
+| `/konyv/[bookId]/attekintes` | Áttekintés | `ScreenPlaceholder` | Projekt/könyv áttekintő-nézet | **PLACEHOLDER (V1, M10)** |
+| `/konyv/[bookId]/promptok` | Prompt-tár | `ScreenPlaceholder` | Prompt Library | **PLACEHOLDER (V1, M10)** |
+| `/konyv/[bookId]/hangok` | Hangkönyvtár | `ScreenPlaceholder` | Audio domain | **PLACEHOLDER (V2, M11)** |
+| `/kitchen-sink` | Kit-galéria | `app/kitchen-sink/page.tsx` | Komponens-kit fejlesztői galéria | **dev-only** (production buildből kizárva) |
 
-### Codex sections
+### Két kiemelt panel
 
-- Characters
-- Locations
-- Worldbuilding
-- Plotlines
-- Timeline
-- Style guide
-- Relationships
+- **Codex „Képek" panel** (`components/codex/image-panel.tsx`) — karakter/helyszín képgenerálás (Nano Banana / Gemini image), RQ async job, kanonikus referencia-kép kijelölése (human-in-the-loop). Forrás: `CodexEntry` (entry_type + id).
+- **Könyv-borító panel** (`components/book/cover-panel.tsx`) — borító-generálás (Phase 2): art-generálás + app-oldali tipográfia-kompozit.
 
-### Layout
+---
 
-```txt
-┌────────────────────┬─────────────────────────────────────────────┐
-│ Codex nav          │ Table / card list / detail view              │
-│                    │                                             │
-│ Characters         │ Search + filters                             │
-│ Locations          │ Cards or table                               │
-│ Worldbuilding      │ Detail drawer                                │
-│ Plotlines          │                                             │
-└────────────────────┴─────────────────────────────────────────────┘
-```
+## Komponens-kit (`apps/web/components/kit/index.ts`)
 
-### Character detail tabs
+A képernyők innen importálnak primitíveket, nem nyúlnak az egyes fájlokba. Kategóriák:
 
-- Overview
-- Motivation
-- Voice
-- Backstory
-- Arc
-- Relationships
-- Scene appearances
-- AI notes
+### Display
 
-### Location detail tabs
+`Badge` / `StatusPill` · `StatusDot` · `Avatar` · `Card` (+ accent-él) · `PageHero` / `SectionEyebrow` · `Spinner` · `Skeleton` + `SkeletonCard` / `SkeletonList` / `SkeletonTable` · `ProgressBar` · `AIResultCard` (RAG kontextus-chipekkel) · `ContextChips` · `DiffPane` (szó-szintű diff) · `QuoteBlock` · `BarChart` / `Sparkline` · `TimelineNode`/`Marker`/`Spine` · `BookSpineCard` / `CoverThumbnail` · `BrandStar` · `Icon`.
 
-- Overview
-- Sensory details
-- Rules
-- Associated characters
-- Scenes
-- AI notes
+### Inputs / controls
 
-### Worldbuilding detail tabs
+`Button` (variánsok + **loading state**) · `IconButton` · `Select` (Radix) · `SegmentedControl` · `Tab` / `TabBar` · `PillButton` / `FilterChip` · `FormInput` (+ `FieldLabel`, **prefix/suffix slot**) · `Textarea` · `RadioGroup` / `RadioRow` / `TypedRadioGroup` · `CheckboxRow` / `CheckBox` / `SelectableCheckboxCard` · `ToggleSwitch` · `RangeSlider` · `PasswordInput` · `SplitButtonDropdown` · `ModelSelector` · `VariableTokenChip` · `DashedTile`.
 
-- Overview
-- Rules
-- Contradictions to avoid
-- Related entities
-- Scene usage
+### Struktúra / overlay
 
-### Design style
+`Accordion` · `Modal` (+ shell/header/footer/body/close/title/description) · `AlertDialog` / `ConfirmDialog` · `PopoverMenu` (+ `MenuRow`/`MenuSection`/`MenuSeparator`, raw `Popover`) · `Tooltip` (+ provider/root/trigger/content) · `Toaster` / `toast` · `ErrorBoundary`.
 
-The Codex should feel like an organized writer database, not an admin CRUD table.
+### Patterns
 
-Use:
+`EmptyState` · `ErrorState`.
 
-- searchable cards
-- compact metadata chips
-- right-side detail drawer
-- relationship links
-- “used in scenes” badges
+### Theme
 
-## Screen 7 — Timeline
+`ThemeToggle`.
 
-### Purpose
+> **a11y gate.** A kit + shell `axe-core` accessibility teszt-gate alatt áll; az interaktív elemek `aria-label` / `aria-current` / `aria-live` jelölésűek, a drawerek focus-trappeltek.
 
-Track chronology and narrative order.
+---
 
-### MVP version
+## State-minták (kötelező minden adatnézetre)
 
-Simple list/table with:
+A Phase-2 state-pattern adoptáció óta **minden adatnézet** ugyanazt a három állapotot kezeli a kit-primitívekkel:
 
-- event title
-- relative order
-- related characters
-- related scenes
-- description
+- **Betöltés** → `SkeletonList` / `SkeletonCard` / `SkeletonTable` (a tartalom alakját tükröző skeleton, nem spinner).
+- **Üres** → `EmptyState` (cím + leírás + akció).
+- **Hiba** → inline `ErrorState` **retry-gombbal** (a transport-hibák magyarul lokalizáltak; az infra-hibák hangosak maradnak).
 
-### Future version
+Ez egységesíti a board, Codex, Kutatás, Idősor, Kapcsolatok, Cselekményszálak, feladatok és export nézeteket.
 
-Timeline visualization with zoom and filters.
+---
 
-## Screen 8 — Relationship map
+## Kulcs UX-szabályok
 
-### Purpose
+1. Az író mindig tudja, hol van: projekt → könyv → fejezet → jelenet (breadcrumb + StatusBar lokáció).
+2. Az AI mindig megmutatja, **mit használt** (RAG kontextus-chipek), **mit változtatna** (DiffPane), és **biztonságos-e elfogadni** (HITL: revízió → elfogadás/elvetés, soha nincs néma felülírás).
+3. A Codex közel van az íráshoz: jobb inspektor-tab + parancspaletta-keresés + kapcsolódó bejegyzések.
+4. A tervezés vizuális: jelenet-kártyák, státuszok, beatek, drag-and-drop.
+5. A szerkesztés biztonságos: revíziók, elfogad/elvet, autosave-állapot.
 
-Visualize character relationships.
+---
 
-### Tech
+## Design-rendszer hivatkozás
 
-Use React Flow / xyflow.
-
-### Nodes
-
-- characters
-- organizations later
-- locations optional later
-
-### Edges
-
-- relationship type
-- conflict
-- alliance
-- romance
-- family
-- mentor
-- enemy
-
-## Screen 9 — AI Jobs / Generation Queue
-
-### Purpose
-
-Track long-running AI workflows.
-
-### Components
-
-- JobList
-- JobStatusBadge
-- JobDetailPanel
-- PromptInputPreview
-- RetrievedContextList
-- OutputPreview
-- AcceptRejectControls
-
-### Job statuses
-
-- queued
-- running
-- requires_review
-- completed
-- failed
-- accepted
-- rejected
-
-## Screen 10 — Export
-
-### Purpose
-
-Export manuscript.
-
-### Export formats
-
-- Markdown in MVP
-- DOCX later
-- EPUB later
-- PDF later
-
-### Components
-
-- ExportFormatSelector
-- ExportOptionsPanel
-- ChapterSelectionList
-- ExportPreview
-- ExportJobStatus
-- DownloadButton
-
-## Component inventory
-
-### Layout components
-
-```txt
-AppShell
-TopBar
-LeftSidebar
-RightInspector
-MainWorkspace
-ResizablePanelGroup
-Breadcrumbs
-CommandPalette
-```
-
-### Planning components
-
-```txt
-ChapterList
-ChapterCard
-SceneBoard
-SceneCard
-BeatList
-BeatCard
-StatusBadge
-WordCountBadge
-```
-
-### Editor components
-
-```txt
-ManuscriptEditor
-EditorToolbar
-AIBubbleMenu
-SelectionActionMenu
-AutosaveIndicator
-WordCountFooter
-RevisionHistoryDrawer
-```
-
-### Codex components
-
-```txt
-CodexNav
-CodexSearch
-CodexCardGrid
-CodexTable
-CharacterCard
-CharacterDetail
-LocationCard
-LocationDetail
-WorldbuildingCard
-WorldbuildingDetail
-RelationshipMiniMap
-```
-
-### AI components
-
-```txt
-AIAssistantPanel
-AIActionButton
-AIResultCard
-ReviewDiffPanel
-ContinuityWarningCard
-GenerationJobList
-ModelStatusBadge
-RetrievedContextList
-```
-
-### Export components
-
-```txt
-ExportFormatSelector
-ExportOptionsPanel
-ExportPreview
-DownloadButton
-```
-
-## Design system
-
-### Color tokens
-
-```ts
-export const colors = {
-  background: "#f8f6f2",
-  surface: "#ffffff",
-  surfaceMuted: "#f1eee8",
-  border: "#ded8ce",
-  text: "#2f2a24",
-  textMuted: "#6f675f",
-  accent: "#6d5dfc",
-  accentMuted: "#ebe9ff",
-  success: "#2f7d55",
-  warning: "#b7791f",
-  danger: "#c2410c",
-}
-```
-
-### Spacing
-
-```txt
-xs: 4px
-sm: 8px
-md: 12px
-lg: 16px
-xl: 24px
-2xl: 32px
-```
-
-### Border radius
-
-```txt
-sm: 6px
-md: 10px
-lg: 14px
-xl: 18px
-```
-
-### Typography
-
-Use a clean sans-serif UI font.
-
-For manuscript editor, allow user to choose:
-
-- serif writing font
-- sans writing font
-- monospace only for technical notes, not prose
-
-### UI density
-
-The app should support dense professional UI, but avoid clutter.
-
-Use:
-
-- icons plus labels in nav
-- compact metadata chips
-- collapsible panels
-- tooltips for advanced features
-- keyboard shortcuts later
-
-## Key UX rules
-
-1. The writer should always know where they are:
-   - project
-   - book
-   - chapter
-   - scene
-
-2. AI should always show:
-   - what it used
-   - what it changed
-   - whether it is safe to accept
-
-3. Codex should be close to writing:
-   - right sidebar
-   - quick search
-   - related entries
-   - insert reference into prompt
-
-4. Planning should be visual:
-   - scene cards
-   - statuses
-   - beats
-   - drag-and-drop
-
-5. Editing should be safe:
-   - revisions
-   - accept/reject
-   - no silent overwrites
-
-## MVP UI priority
-
-Build in this order:
-
-1. AppShell
-2. Projects dashboard
-3. Project overview
-4. Book plan board
-5. Scene editor
-6. Codex character/location views
-7. AI assistant panel
-8. Review panel
-9. Export screen
+A színtokenek, térköz, sugár, fontok (UI: **Inter**; kézirat: **Literata**; display: **Cormorant Garamond**; kézírás/márkajel: **Caveat**), valamint a WCAG-AA kontraszt-szabályok a **`docs/09`**-ben élnek. A jelenlegi vizuális identitás a **Claude Design re-skin** (lila accent + arany márkajel) — forrás a **design-doc (doc 18)**.

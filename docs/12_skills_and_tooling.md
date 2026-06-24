@@ -1,6 +1,6 @@
 # 12 — Claude Code Skills és Tooling
 
-Ez a dokumentum összeszedi a ForgeWriter AI fejlesztéséhez ajánlott Claude Code skilleket és külső toolingot.
+Ez a dokumentum összeszedi a Wisdom of Alexandria fejlesztéséhez ajánlott Claude Code skilleket és külső toolingot.
 
 ---
 

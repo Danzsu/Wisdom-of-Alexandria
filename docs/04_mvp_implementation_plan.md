@@ -1,5 +1,9 @@
 # 04 — MVP Implementation Plan
 
+> **⚠️ HISTORICAL ARTIFACT — the MVP is shipped.**
+> This document is the original MVP implementation plan, kept for historical context. The MVP described here has been built and delivered (CRUD, AI rewrite/describe/generate/continue, RAG, Markdown/DOCX/EPUB export, and more). It is **not** a live work tracker.
+> **For current status and the live roadmap, see [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md).**
+
 ## Purpose
 
 This document defines the first practical development plan for the local/self-hosted agentic novel-writing workspace.

@@ -1,9 +1,10 @@
 # 01 — Projekt célja és specifikáció
 
+> Termék: Wisdom of Alexandria (korábbi munkanevek elavultak)
+
 ## Projekt neve
 
-**Saját agentic AI könyvíró platform**  
-Munkanév: **NovaCraft / StoryForge / CodexWriter**
+**Wisdom of Alexandria** — saját agentic AI könyvíró platform
 
 ## Rövid projektdefiníció
 

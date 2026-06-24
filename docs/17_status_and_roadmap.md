@@ -4,7 +4,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 ---
 
-## a) Jelenlegi állapot (2026-06-21)
+## a) Jelenlegi állapot (2026-06-24)
 
 **Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
 
@@ -14,7 +14,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 |---|---|---|
 | `apps/api` | **~493** | CI-ban (Postgres) futnak; +3 pandoc-skip lokálisan |
 | `apps/ai` | **~260** (Postgres) / **~255** (SQLite) | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
-| `apps/web` | **634** | — |
+| `apps/web` | **~757** | — (Phase-1/2 design + state-minták + re-skin tesztjeivel) |
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
@@ -57,6 +57,14 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 - Framer Motion adoptáció + GSAP onboarding scroll-narratíva.
 - Responsive, tablet-first shell (drawerek), axe-core a11y teszt-gate.
 
+### Új a legutóbbi frissítés óta (2026-06-21 → 2026-06-24)
+
+- **Kép-generálás — Phase 1 (KÉSZ):** Codex karakter/helyszín képgenerálás (Nano Banana / Gemini image): `MediaAsset` modell + migráció, `Provider.image_model`, `ModelRouter.generate_image` (google-genai), konzerv stílus-presetek, RQ async job, `/ai/images` + `/ai/media`, Codex **„Képek" panel** kanonikus referenciával (HITL).
+- **Borító-generálás — Phase 2 (BE + FE):** könyv-**borító-generátor** (art-generálás + app-oldali tipográfia-kompozit a KDP-biztonsági zónán belül); FE **borító-panel** (`components/book/cover-panel.tsx`).
+- **Phase-1 design-system alap:** scale-tokenek; `EmptyState` / `Skeleton` (+ `SkeletonCard`/`List`/`Table`) / `ErrorState` primitívek; **Radix `Select`**; `Accordion`; **`Button` loading state**; `FormInput` prefix/suffix slotok; **WCAG-AA kontraszt** + a11y javítások; lokalizált (magyar) transport-hibák.
+- **Phase-2 state-minta adoptáció:** minden adatnézet (board, Codex, Kutatás, Idősor, Kapcsolatok, Cselekményszálak, feladatok, export) az `EmptyState` / `SkeletonList` / inline `ErrorState` (+retry) hármast használja; onboarding konszolidálva (egyetlen inline first-run banner + „Hogyan működik?" pull-trigger).
+- **Claude Design re-skin (DESIGN-A + DESIGN-B):** lila identitás (`--accent #6d5dfc`, AI-violet `#7c3aed`) + arany márkajel-csempe; fontok **Inter** (UI) / **Cormorant Garamond** (`font-display`) / **Caveat** (kézírásos wordmark) / **Literata** (kézirat); a projekt-dashboard Cormorant-hero + arany eyebrow + lebegő könyv-gerinc ikon; minden meglévő képernyő finomítva. **Live-verified:** kontraszt 0/0 mindkét témában, **Lighthouse a11y 100**. Web teszt-szám **~757**.
+
 ### Minőség + CI + biztonság
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
 - `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
@@ -66,50 +74,48 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
 ---
 
-## c) Roadmap — mi van hátra
+## c) Roadmap — mi van hátra (konszolidált)
 
-Prioritás: **P1-maradék** = kis, V1-záró tételek · **P2** = magas user-érték · **P3** = később / nagy spec.
+> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
 
-> **Lezárt P1-tételek (lásd b):** RQ async worker → **KÉSZ** (valódi RQ index-job bizonyítja a worker-infrát) · Lighthouse CI gate → **KÉSZ** (advisory, non-blocking job).
+A maradék három csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **DESIGN-C** (net-új design-képernyők) · **Halasztott / V2**.
 
-### P1-maradék (kicsi)
-
-| Tétel | Scope (1 sor) | Hol |
-|---|---|---|
-| Provider health-check befejezése | Ollama ping véglegesítése (a `/providers/{id}/test` már létezik) | BE (`apps/ai`) |
-
-### P2 (magas user-érték)
+### V1-rések
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| ~~Codex → Kutatás (RAG Q&A)~~ **KÉSZ** | `POST /ai/research` (grounded válasz + idézet-chipek) + a `chat` route „Kutatás" képernyője | BE (`apps/ai`) + FE |
-| ~~Revízió-böngésző + diff/restore~~ **KÉSZ** | Inspector „Revíziók" tab: szó-szintű diff + visszaállítás/elvetés | FE |
-| **Kép-generálás — Phase 1 KÉSZ** | Codex karakter/helyszín képgenerálás Nano Banana (Gemini image) modellel: `MediaAsset` modell + migráció, `Provider.image_model`, `ModelRouter.generate_image` (google-genai), konzerv stílus-presetek `{placeholder}`-ekkel, RQ async job, `/ai/images` + `/ai/media`, Codex „Képek" panel kanonikus referenciával (HITL). Forrás: **CodexEntry** (entry_type+id). Deps: `google-genai`, `Pillow`; `media_dir` config. | BE + FE |
-| Kép-generálás — Phase 2 (hátra) | **Borító-generátor**: Nano Banana Pro art (2:3, full-bleed) + app-oldali tipográfia-kompozit a KDP biztonsági zónán belül + template-ek | BE + FE |
-| CodexProgression UI + timeline-overlay | Progresszió-szerkesztő + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
-| PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF | BE (`apps/api`) + infra |
-| MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |
-| NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |
-| Ollama in-app modell-letöltés | „Modell letöltése" a Beállítások → Local alatt | BE (`apps/ai`) + FE |
-| Tezaurusz / vizualizáció / vázlat-sablonok / daily-spark analitika | Magyar szinonima-szótár, képprompt, Save the Cat/Hős útja sablonok, writing-streak | BE + FE |
-| UX-4c Figma MCP | Design-token szinkron (a user interaktív Figma-auth-ja kell) | FE + infra |
+| PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF (a Markdown/DOCX/EPUB már kész) | BE (`apps/api`) + infra |
+| CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
 | Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
+| Ollama in-app modell-letöltés | „Modell letöltése" a Beállítások → Local alatt (a provider health-check / `/providers/{id}/test` már létezik) | BE (`apps/ai`) + FE |
+| Placeholder-képernyők kitöltése | **Áttekintés** + **Prompt Library** valódi tartalma (az Audio V2 marad) | FE |
+| E2E feloldása | **BLOKKOLT**: az `app` Python-csomagnév ütközik (`apps/api` + `apps/ai`) + nincs web Dockerfile — előbb ezeket kell feloldani, utána nyílik a Playwright kétszolgáltatásos E2E | infra |
 
-### P3 (később / nagy spec)
+### DESIGN-C — net-új design-képernyők
+
+| Tétel | Scope (1 sor) | Hol |
+|---|---|---|
+| Marketing Landing | Nyitó/landing oldal (lásd design-doc, doc 18) | FE |
+| Profil | Felhasználói profil-képernyő | FE |
+| Prompt Library | A prompt-tár teljes design-képernyője (a placeholder helyére) | FE |
+
+### Halasztott / V2
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
 | Audio domain + EPUB-3 media-overlay (SMIL) | Hang-szövegrész horgony-modell + SMIL exporter; saját spec kell | BE + FE + infra |
 | Kollaboráció / megosztás | Több-felhasználós, szerepkörök, presence, realtime — Auth.js átalakítás kell | BE + FE + infra |
-| E2E (Playwright, két szolgáltatás) | **BLOKKOLT**: mindkét app a top-level `app` csomagnevet használja + nincs web Dockerfile — előbb ezeket kell feloldani | infra |
+| MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |
+| NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |
 | Marketplace / launch | Launch-kit, marketplace | termék |
+| Design delight: embers canvas | Hangulati parázs-canvas háttér-effekt | FE |
 
 ---
 
 ## d) Javasolt következő kör
 
-A leg-ésszerűbb következő lépések, érték/kockázat arány szerint (az RQ worker és a Lighthouse gate immár KÉSZ — lásd b):
+Érték/kockázat arány szerint (a RAG, revíziók, design-rendszer, kép/borító-gen, RQ worker és Lighthouse gate immár KÉSZ — lásd b):
 
-1. **Codex → Kutatás (RAG Q&A)** — a retrieval-infra már kész (`EmbeddingService` + projekt-scope-olt index), „csak" az interaktív Q&A-réteget kell rákötni. Magas user-érték, alacsony infra-kockázat.
-2. **Revízió-böngésző + diff/restore** — a HITL-revíziók már perzisztálva vannak, a `DiffPane` is létezik; egy revízió-lista + diff/restore felület zárja a human-in-the-loop hurkot a felületen.
-3. **E2E feloldása** — a Playwright kétszolgáltatásos E2E **blokkolt**, mert mindkét backend-app a top-level `app` Python-csomagnevet használja, és nincs web Dockerfile. A csomagnév-ütközés + a web Dockerfile feloldása nyitja meg az E2E-kört.
+1. **Placeholder-képernyők kitöltése (Áttekintés + Prompt Library)** — a shell, a route-ok és a kit már állnak; ezek tisztán FE-tartalom-feladatok, magas láthatósággal.
+2. **PDF export** — a Markdown/DOCX/EPUB Pandoc-pipeline kész, a PDF a természetes következő formátum (Pandoc+LaTeX vagy Playwright HTML→PDF).
+3. **E2E feloldása** — az `app` Python-csomagnév-ütközés (`apps/api` + `apps/ai`) + a hiányzó web Dockerfile feloldása nyitja meg a Playwright kétszolgáltatásos E2E-kört.

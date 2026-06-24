@@ -2,9 +2,11 @@
 
 ## Project name
 
-Working title: **ForgeWriter AI**
+Product name: **Wisdom of Alexandria** (in-app wordmark "Wisdom of Alexandria" set in Caveat). Earlier working titles — *ForgeWriter AI*, *NovaCraft* — are deprecated.
 
 Alternative product description: **local-first, agentic AI novel-writing workspace inspired by NovelCrafter-style story organization, Sudowrite-style creative assistance, and BookNova-style chapter automation.**
+
+> **Current state:** MVP + much of V1 are shipped, and the UI has been re-skinned to the Claude Design system. For the live status + roadmap see [docs/17](docs/17_status_and_roadmap.md); for the current design system see [docs/09](docs/09_design_system_novelcrafter_inspired.md); for the UI/screen inventory [docs/07](docs/07_ui_ux_routes_and_components.md); for the design rollout + remaining design screens [docs/18](docs/18_design_rollout_and_remaining.md).
 
 ## Core goal
 
@@ -87,8 +89,14 @@ const theme = {
 }
 ```
 
-UI font: Inter or Geist  
-Manuscript font: Literata (serif)
+Fonts (current, via `apps/web/lib/fonts.ts`):
+
+- **Inter** — UI sans (`--font-sans`)
+- **Literata** — manuscript serif (`--font-serif`)
+- **Cormorant Garamond** — editorial display headings (`--font-display`)
+- **Caveat** — hand / brand wordmark ("Wisdom of Alexandria", `--font-hand`)
+
+The accent is **purple `#6d5dfc`** (primary); **gold** (`--gold*`) is a secondary editorial accent (eyebrows, daily-spark, the wordmark). The block above is a summary — the authoritative, full token set (light + dark, the `--text-*` type scale, shadows, AA-derived values) lives in `apps/web/app/globals.css` and is documented in [docs/09](docs/09_design_system_novelcrafter_inspired.md). The UI is WCAG-AA verified (0 contrast failures both themes, Lighthouse a11y 100).
 
 ## Recommended stack
 
