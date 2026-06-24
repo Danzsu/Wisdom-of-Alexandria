@@ -129,7 +129,7 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
     "flex h-[30px] items-center gap-1.5 rounded-full border border-border bg-transparent px-3 text-[13px] text-text-soft transition-colors hover:border-accent hover:bg-accent-muted hover:text-accent-text";
 
   return (
-    <div className="flex h-12 flex-none items-center gap-2 border-b border-border bg-surface px-5">
+    <div className="flex h-12 flex-none items-center gap-2 border-b border-border bg-surface-soft/90 px-5 backdrop-blur-sm">
       <SplitButtonDropdown
         label={hu.write.write}
         leadingIcon={<Icon icon={PenLine} size={14} />}

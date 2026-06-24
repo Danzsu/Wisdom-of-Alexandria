@@ -66,6 +66,11 @@ export function AiTab() {
 
   return (
     <div className="flex flex-col gap-3.5">
+      {/* Section header: "AI segéd" label (per design). Model shown in selector below. */}
+      <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.07em] text-ai-text">
+        {hu.inspector.panelAria}
+      </p>
+
       {/* Selected-text QuoteBox (Literata italic). */}
       <div>
         <p className="m-0 mb-[7px] text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
@@ -129,12 +134,12 @@ export function AiTab() {
         />
       )}
 
-      {/* Generálás CTA. */}
+      {/* Generálás CTA — uses --ai purple per the design's generate button spec. */}
       <button
         type="button"
         onClick={() => gen.trigger("rewrite", instruction)}
         disabled={gen.isGenerating || !hasSelection}
-        className="woa-cta flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border-none bg-accent-strong text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className="woa-cta flex h-[42px] w-full items-center justify-center gap-2 rounded-[11px] border-none bg-ai text-[13.5px] font-semibold text-ai-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Icon icon={Sparkles} size={15} className="fill-current" />
         {hu.inspector.generate}

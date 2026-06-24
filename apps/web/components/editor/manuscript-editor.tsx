@@ -203,7 +203,7 @@ export function ManuscriptEditor({
   );
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-16 pt-10">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-soft px-8 pb-16 pt-10">
       <article
         data-testid="manuscript-article"
         data-indent={docIndent ? "on" : "off"}
@@ -211,7 +211,7 @@ export function ManuscriptEditor({
         style={articleStyle}
         className="woa-manuscript-article mx-auto rounded-2xl border border-border bg-surface-soft py-[clamp(28px,4vw,48px)] px-[clamp(22px,5vw,64px)] shadow-panel [hyphens:auto]"
       >
-        <p className="m-0 mb-2 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+        <p className="m-0 mb-2 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-gold-text">
           {kicker}
         </p>
         <h1 className="m-0 mb-1.5 font-serif text-[26px] font-semibold leading-[1.25] text-text [hyphens:none] [text-wrap:balance]">

@@ -585,7 +585,7 @@ select:focus-visible,
 /* Tiptap body blocks: paragraph rhythm + heading styles matching the prototype. */
 .woa-manuscript-prose p {
   margin: 0 0 18px;
-  color: var(--text);
+  color: var(--text-soft);
   text-wrap: pretty;
 }
 .woa-manuscript-prose p:last-child {

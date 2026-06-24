@@ -129,7 +129,7 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
       {hasInspectorDrawer ? (
         <aside
           aria-label={hu.shell.aiInspectorAria}
-          className="flex w-inspector flex-none flex-col border-l border-border bg-surface max-lg:hidden"
+          className="flex w-inspector flex-none flex-col border-l border-border bg-bg-subtle max-lg:hidden"
         >
           <InspectorPanel />
         </aside>
