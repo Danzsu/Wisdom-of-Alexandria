@@ -4,7 +4,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 ---
 
-## a) Jelenlegi állapot (2026-06-24)
+## a) Jelenlegi állapot (2026-06-25)
 
 **Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
 
@@ -12,9 +12,9 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 | Csomag | Tesztek | Megjegyzés |
 |---|---|---|
-| `apps/api` | **~493** | CI-ban (Postgres) futnak; +3 pandoc-skip lokálisan |
-| `apps/ai` | **~260** (Postgres) / **~255** (SQLite) | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
-| `apps/web` | **~757** | — (Phase-1/2 design + state-minták + re-skin tesztjeivel) |
+| `apps/api` | **~501** | CI-ban (Postgres) futnak; +3 pandoc-skip lokálisan |
+| `apps/ai` | **~368** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
+| `apps/web` | **~781** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C tesztjeivel) |
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
@@ -57,13 +57,15 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 - Framer Motion adoptáció + GSAP onboarding scroll-narratíva.
 - Responsive, tablet-first shell (drawerek), axe-core a11y teszt-gate.
 
-### Új a legutóbbi frissítés óta (2026-06-21 → 2026-06-24)
+### Új a legutóbbi frissítés óta (2026-06-21 → 2026-06-25)
 
 - **Kép-generálás — Phase 1 (KÉSZ):** Codex karakter/helyszín képgenerálás (Nano Banana / Gemini image): `MediaAsset` modell + migráció, `Provider.image_model`, `ModelRouter.generate_image` (google-genai), konzerv stílus-presetek, RQ async job, `/ai/images` + `/ai/media`, Codex **„Képek" panel** kanonikus referenciával (HITL).
 - **Borító-generálás — Phase 2 (BE + FE):** könyv-**borító-generátor** (art-generálás + app-oldali tipográfia-kompozit a KDP-biztonsági zónán belül); FE **borító-panel** (`components/book/cover-panel.tsx`).
 - **Phase-1 design-system alap:** scale-tokenek; `EmptyState` / `Skeleton` (+ `SkeletonCard`/`List`/`Table`) / `ErrorState` primitívek; **Radix `Select`**; `Accordion`; **`Button` loading state**; `FormInput` prefix/suffix slotok; **WCAG-AA kontraszt** + a11y javítások; lokalizált (magyar) transport-hibák.
 - **Phase-2 state-minta adoptáció:** minden adatnézet (board, Codex, Kutatás, Idősor, Kapcsolatok, Cselekményszálak, feladatok, export) az `EmptyState` / `SkeletonList` / inline `ErrorState` (+retry) hármast használja; onboarding konszolidálva (egyetlen inline first-run banner + „Hogyan működik?" pull-trigger).
-- **Claude Design re-skin (DESIGN-A + DESIGN-B):** lila identitás (`--accent #6d5dfc`, AI-violet `#7c3aed`) + arany márkajel-csempe; fontok **Inter** (UI) / **Cormorant Garamond** (`font-display`) / **Caveat** (kézírásos wordmark) / **Literata** (kézirat); a projekt-dashboard Cormorant-hero + arany eyebrow + lebegő könyv-gerinc ikon; minden meglévő képernyő finomítva. **Live-verified:** kontraszt 0/0 mindkét témában, **Lighthouse a11y 100**. Web teszt-szám **~757**.
+- **Claude Design re-skin (DESIGN-A + DESIGN-B):** lila identitás (`--accent #6d5dfc`, AI-violet `#7c3aed`) + arany márkajel-csempe; fontok **Inter** (UI) / **Cormorant Garamond** (`font-display`) / **Caveat** (kézírásos wordmark) / **Literata** (kézirat); a projekt-dashboard Cormorant-hero + arany eyebrow + lebegő könyv-gerinc ikon; minden meglévő képernyő finomítva. **Live-verified:** kontraszt 0/0 mindkét témában, **Lighthouse a11y 100**.
+- **Claude Design re-skin (DESIGN-C — net-új surface-ek, KÉSZ):** a három net-új design-képernyő leszállítva — **Landing** (publikus `/` marketing-oldal, commit `9361dda`), **Profil** (`/profil` + user-menü bekötve, commit `3683c6d`), **Prompt Library** (a `/konyv/[bookId]/promptok` placeholder helyén, commit `6036123`). Követő finomítás (commit `b6768a6`): `PageHero`-címek a design 40px-ére (`text-[clamp(32px,5vw,40px)]`), favicon, kisebb mobil-reszponzív javítások. Ezzel **design-felület nincs több hátra** (részletek: `docs/18`). Web teszt-szám **~781**.
+- **Backend-audit keményítés (commit `8a72244`):** egy adverszariális backend-audit nyomán landolt biztonsági/robusztussági javítások — **upload-méret streaming-cap** (OOM-fix az import/backup-úton, nagy fájl nem olvasódik egészben memóriába); **embedding-dimenzió-validáció** tiszta hibaüzenettel (korábban néma RAG-bukás volt dimenzió-mismatch esetén); provider **`base_url` séma-validáció** (SSRF-részleges; a localhost továbbra is engedett a lokális Ollamához); **AI text-input `max_length` capek**; és **`pool_pre_ping`** a DB-poolon. Az audit **nem talált P0-t**; a javított tételek a kontrollált **P1/P2** bugok voltak. Teszt-állás mindenütt zöld: web **~781**, api **~501**, ai **~368**.
 
 ### Minőség + CI + biztonság
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
@@ -76,28 +78,33 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
 ## c) Roadmap — mi van hátra (konszolidált)
 
-> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
+> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)**. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
 
-A maradék három csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **DESIGN-C** (net-új design-képernyők) · **Halasztott / V2**.
+A maradék két csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **Halasztott / V2**. (A **DESIGN-C** net-új design-képernyők leszállítva — lásd b) + `docs/18`.)
 
 ### V1-rések
 
+A V1-et lezáró konkrét tételek. Mindegyik **döntést / feature-építést igényel** —
+egyik sincs még kész. (A backend-audit által felszínre hozott rések alább külön
+jelölve: **[audit]**.)
+
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF (a Markdown/DOCX/EPUB már kész) | BE (`apps/api`) + infra |
-| CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
+| **Prompt Library backend** **[audit]** | A `/promptok` képernyő ma **csak frontend** (seed-adat) — valódivá tételhez `PromptTemplate` modell + migráció + CRUD API kell | BE (`apps/api`) + FE |
+| **User/profil „me" endpoint** **[audit]** | Nincs ilyen endpoint (egy-felhasználós `.env`-auth); a **Profil** ma statikus identitást + valós projekt-aggregátumokat mutat csak | BE (`apps/api`) + FE |
+| **`scene_count` aggregátum** **[audit]** | Nem elérhető — a Profil 3. statisztikája emiatt a valós **projekt-számot** mutatja, nem a jelenet-számot; ehhez `scene_count` aggregátum kell | BE (`apps/api`) |
+| PDF export | Pandoc+LaTeX vagy Playwright HTML→PDF (a Markdown/DOCX/EPUB már kész; PDF **továbbra sincs**) | BE (`apps/api`) + infra |
+| **Ollama in-app modell-letöltés (pull) endpoint** **[audit]** | „Modell letöltése" a Beállítások → Local alatt — a pull-endpoint **hiányzik** (a provider health-check / `/providers/{id}/test` már létezik) | BE (`apps/ai`) + FE |
+| **CodexProgression sorrend (ordering)** **[audit, P1]** | A modellen **nincs linearizálható sorrend-mező**, így a „codex-állapot az N. jelenetnél" RAG-szűrés egyelőre **nem építhető meg** | BE (`apps/api` modell) |
+| CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg; projekt-scope progresszió-lista endpoint kell (a fenti ordering-rés a blokkoló) | BE (`apps/api`) + FE |
 | Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
-| Ollama in-app modell-letöltés | „Modell letöltése" a Beállítások → Local alatt (a provider health-check / `/providers/{id}/test` már létezik) | BE (`apps/ai`) + FE |
-| Placeholder-képernyők kitöltése | **Áttekintés** + **Prompt Library** valódi tartalma (az Audio V2 marad) | FE |
+| Áttekintés-képernyő kitöltése | Az **Áttekintés** (`/attekintes`) valódi tartalma — **nincs a design-canvasban**, ma `ScreenPlaceholder` (V1-rés, nem design-képernyő; lásd `docs/18`) | FE |
 | E2E feloldása | **BLOKKOLT**: az `app` Python-csomagnév ütközik (`apps/api` + `apps/ai`) + nincs web Dockerfile — előbb ezeket kell feloldani, utána nyílik a Playwright kétszolgáltatásos E2E | infra |
 
-### DESIGN-C — net-új design-képernyők
-
-| Tétel | Scope (1 sor) | Hol |
-|---|---|---|
-| Marketing Landing | Nyitó/landing oldal (lásd design-doc, doc 18) | FE |
-| Profil | Felhasználói profil-képernyő | FE |
-| Prompt Library | A prompt-tár teljes design-képernyője (a placeholder helyére) | FE |
+> **Halasztott biztonságos DB-keményítés (az auditból, MÉG NEM kész):** alacsony
+> kockázatú, additív migrációk, javasolt következő körnek — `index=True` a fő
+> szülő-FK-kra; a pgvector-index váltása `ivfflat lists=100`-ról (ami **üres
+> táblán** épült) **`hnsw`**-re; `server_default` az `embeddings.dim` oszlopra.
 
 ### Halasztott / V2
 
@@ -114,8 +121,10 @@ A maradék három csoportba esik: **V1-rések** (a V1-et lezáró konkrét téte
 
 ## d) Javasolt következő kör
 
-Érték/kockázat arány szerint (a RAG, revíziók, design-rendszer, kép/borító-gen, RQ worker és Lighthouse gate immár KÉSZ — lásd b):
+Érték/kockázat arány szerint (a RAG, revíziók, design-rendszer, kép/borító-gen, RQ worker, Lighthouse gate és a teljes Claude Design re-skin — DESIGN-A + B + C — immár KÉSZ; lásd b):
 
-1. **Placeholder-képernyők kitöltése (Áttekintés + Prompt Library)** — a shell, a route-ok és a kit már állnak; ezek tisztán FE-tartalom-feladatok, magas láthatósággal.
-2. **PDF export** — a Markdown/DOCX/EPUB Pandoc-pipeline kész, a PDF a természetes következő formátum (Pandoc+LaTeX vagy Playwright HTML→PDF).
-3. **E2E feloldása** — az `app` Python-csomagnév-ütközés (`apps/api` + `apps/ai`) + a hiányzó web Dockerfile feloldása nyitja meg a Playwright kétszolgáltatásos E2E-kört.
+1. **Halasztott biztonságos DB-keményítés (auditból)** — `index=True` a fő szülő-FK-kra, `ivfflat`→`hnsw` pgvector-index, `server_default` az `embeddings.dim`-en; alacsony kockázatú, additív migrációk, gyors nyereség.
+2. **Prompt Library backend** — a `/promptok` képernyő ma frontend-only seed-adat; `PromptTemplate` modell + migráció + CRUD API teszi valódivá.
+3. **Profil „me" endpoint + `scene_count` aggregátum** — a Profil ma statikus identitást + projekt-aggregátumokat mutat; egy `me` endpoint + `scene_count` aggregátum zárja a rést.
+4. **PDF export** — a Markdown/DOCX/EPUB Pandoc-pipeline kész, a PDF a természetes következő formátum (Pandoc+LaTeX vagy Playwright HTML→PDF).
+5. **E2E feloldása** — az `app` Python-csomagnév-ütközés (`apps/api` + `apps/ai`) + a hiányzó web Dockerfile feloldása nyitja meg a Playwright kétszolgáltatásos E2E-kört.

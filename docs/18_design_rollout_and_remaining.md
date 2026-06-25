@@ -1,9 +1,9 @@
 # 18 — Design rollout és ami hátra van (élő)
 
-Ez a dokumentum a **Claude Design** re-skin kigördülését írja le, és listázza a
-design-ból még **hátralévő** felületeket / delight-tételeket. A token- és
-betű-referencia a `docs/09`-ben él; ez a fájl a „mi készült el / mi van hátra"
-nézet a design felől.
+Ez a dokumentum a **Claude Design** re-skin kigördülését írja le. A re-skin
+mostanra **teljes** (DESIGN-A + B + C mind kész) — design-felület nincs több hátra,
+csak opcionális delight-tételek. A token- és betű-referencia a `docs/09`-ben él; ez
+a fájl a „mi készült el / mi van hátra" nézet a design felől.
 
 ---
 
@@ -71,28 +71,39 @@ PageHero). Forrásriportok: `.superpowers/sdd/briefs/design-B-*.md`.
 
 ---
 
-## d) DESIGN-C — ami hátra van (új surface-ek a designból)
+## d) DESIGN-C — net-új design-surface-ek (KÉSZ)
 
-A design net-új felületei, amelyek **még nincsenek** implementálva. Mind vagy
-`ScreenPlaceholder`, vagy teljesen hiányzik:
+A design net-új felületei mostanra implementálva + commitolva. Mindhárom
+design-képernyő leszállítva:
 
 | Felület | Állapot ma | Megjegyzés |
 |---|---|---|
-| **Landing page** (marketing) | **hiányzik** — `app/page.tsx` `redirect(/projekt)` | hero + features + filozófia-sáv + showcase + footer CTA; net-új, app-on kívüli route kell |
-| **Profil** képernyő | **hiányzik** — a user-menü „Profil" sora `toast(comingSoon)`-t lő | dedikált képernyő/route nincs |
-| **Prompt Library** | **`ScreenPlaceholder`** — `/konyv/[bookId]/promptok` | egyben **V1-gap** (a roadmap M10/V1 alá esik) |
-| **Áttekintés** (overview) | **`ScreenPlaceholder`** — `/konyv/[bookId]/attekintes` | a design overview-képernyője; placeholder |
+| **Landing page** (marketing) | **KÉSZ** — publikus `/` marketing-oldal | hero + features + filozófia-sáv + showcase + footer CTA; net-új, app-on kívüli route. Commit **`9361dda`** |
+| **Profil** képernyő | **KÉSZ** — `/profil` route + user-menü bekötve | dedikált képernyő; a user-menü „Profil" sora ide navigál. Commit **`3683c6d`** |
+| **Prompt Library** | **KÉSZ** — `/konyv/[bookId]/promptok` (a placeholder helyén) | a `ScreenPlaceholder` valódi prompt-tár-képernyőre cserélve. Commit **`6036123`** |
 
-(A `promptok` és `attekintes` route-ok valódi fájlok, de `ScreenPlaceholder`-t
-renderelnek a `hu.placeholders.*` szöveggel.)
+Követő finomítás (commit **`b6768a6`**): a `PageHero` címek a design 40px-ére
+emelve (`text-[clamp(32px,5vw,40px)]`), favicon hozzáadva, kisebb mobil-reszponzív
+javítások.
+
+> **Áttekintés** (`/konyv/[bookId]/attekintes`): **nincs a design-canvasban**, és
+> továbbra is `ScreenPlaceholder` marad — ez **V1-rés**, nem design-képernyő (lásd
+> `docs/17` V1-rések). A `attekintes` route valódi fájl, de placeholdert renderel a
+> `hu.placeholders.*` szöveggel.
 
 ---
 
-## e) Elhalasztott design / delight tételek
+## e) Elhalasztott design / delight tételek (opcionális)
+
+A három DESIGN-C surface leszállításával **design-felület már nincs hátra** — ami
+marad, az kizárólag opcionális delight / konszolidáció (javasolt, nem kötelező):
 
 - **`woa-embers` dekoratív háttér-canvas:** a design hangulati parázs-/szikra-háttere;
   a sparkfield (`.woa-sparkfield` / `woaSpark`) megvan, a teljes embers-canvas még
   nem adoptálva.
+- **HSR / égi-ihletésű delight-kör (javasolt, opcionális):** egy hangulati
+  „celestial" delight-pass az embers-canvasra építve — tisztán esztétikai
+  ráadás, nem design-követelmény.
 - **Inspector szegmentált-kontroll konszolidáció:** a Write inspector saját, egyedi
   szegmentált kontrollt használ — érdemes a kit `SegmentedControl`-jára húzni
   (`apps/web/components/kit/segmented-control.tsx`), hogy egy primitív legyen.
