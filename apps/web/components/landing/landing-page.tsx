@@ -296,8 +296,9 @@ export function LandingPage() {
 
             {/* right column — floating editor mock */}
             <div data-reveal className={`relative ${revealClass}`}>
-              {/* floating AI-suggestion popover */}
-              <div className="absolute -top-[26px] -right-2 z-[2] flex w-[228px] flex-col gap-[9px] rounded-[14px] border border-ai-muted bg-surface p-[14px] shadow-popover motion-safe:animate-[woaLandFloat_6s_ease-in-out_infinite]">
+              {/* floating AI-suggestion popover — decorative; hidden below sm
+                  where it would otherwise overlap the manuscript-card title */}
+              <div className="absolute -top-[26px] -right-2 z-[2] hidden w-[228px] flex-col gap-[9px] rounded-[14px] border border-ai-muted bg-surface p-[14px] shadow-popover motion-safe:animate-[woaLandFloat_6s_ease-in-out_infinite] sm:flex">
                 <div className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-ai-muted text-ai">
                     <Sparkles size={14} strokeWidth={1.7} aria-hidden="true" />
