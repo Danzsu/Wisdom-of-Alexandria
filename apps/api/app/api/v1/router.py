@@ -15,6 +15,7 @@ from app.api.v1.locations import router as locations_router
 from app.api.v1.plotlines import router as plotlines_router
 from app.api.v1.plotlines import scene_links_router as plotline_scenes_router
 from app.api.v1.projects import router as projects_router
+from app.api.v1.prompt_templates import router as prompt_templates_router
 from app.api.v1.revisions import router as revisions_router
 from app.api.v1.scenes import router as scenes_router
 from app.api.v1.scenes import scene_actions_router
@@ -46,6 +47,7 @@ api_router.include_router(codex_progressions_router)
 api_router.include_router(plotlines_router)
 api_router.include_router(plotline_scenes_router)
 api_router.include_router(snippets_router)
+api_router.include_router(prompt_templates_router)
 api_router.include_router(style_guide_router)
 api_router.include_router(revisions_router)
 api_router.include_router(exports_router)

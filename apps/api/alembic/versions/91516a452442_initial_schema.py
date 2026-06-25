@@ -52,6 +52,8 @@ _TABLES_ADDED_LATER = {
     "plotline_scenes",
     # media_assets -> f6a1b2c3d4e5 (AI image generation, Phase 1)
     "media_assets",
+    # prompt_templates -> b3c5d7e9f1a2 (user-facing Prompt Library)
+    "prompt_templates",
 }
 
 # Columns added by LATER revisions to base tables — dropped from the in-memory

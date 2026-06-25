@@ -1805,16 +1805,16 @@ export const hu = {
     editSoon: "Hamarosan — a profilszerkesztés később érkezik",
   },
   /**
-   * Prompt Library screen (`konyv/[bookId]/promptok`). The prompt seed CONTENT
-   * (names/categories/descriptions/templates) lives in
-   * `apps/web/lib/prompt-library-data.ts`; this namespace holds only the screen
-   * chrome + modal labels.
+   * Prompt Library screen (`konyv/[bookId]/promptok`). The prompt CONTENT
+   * (names/categories/descriptions/bodies) now comes from the backend
+   * `/api/v1/prompt-templates` API; this namespace holds only the screen
+   * chrome, modal labels, and the create form.
    */
   promptLibrary: {
     eyebrow: "AI promptok",
     title: "Prompt könyvtár",
     subtitle: "Magyar nyelvre hangolt promptok minden AI-művelethez.",
-    /** Right-aligned header action (honest stub — no prompts backend yet). */
+    /** Right-aligned header action — opens the create modal. */
     newPrompt: "Új prompt",
     createSoon: "Hamarosan — a saját promptok később érkeznek",
     /** Footer line on each card + the modal usage line. */
@@ -1824,6 +1824,30 @@ export const hu = {
     modalDescription: "Leírás",
     modalTemplate: "Sablon",
     modalClose: "Bezárás",
+    /** Pill marking a workspace-provided (read-only) template. */
+    builtinBadge: "Beépített",
+    /** Loading / error / empty states for the fetched list (retry label comes
+     * from `hu.common.retry` via the shared ErrorState). */
+    loadError: "Nem sikerült betölteni a promptokat.",
+    empty: "Még nincs egyetlen prompt sem.",
+    emptyHint: "Hozz létre egy sajátot az „Új prompt” gombbal.",
+    /** Create modal. */
+    createTitle: "Új prompt",
+    fieldName: "Név",
+    fieldCategory: "Kategória",
+    fieldDescription: "Leírás",
+    fieldBody: "Sablon",
+    namePlaceholder: "pl. Feszültség fokozása",
+    categoryPlaceholder: "pl. Írás",
+    descriptionPlaceholder: "Egy mondatos összefoglaló.",
+    bodyPlaceholder: "A prompt törzse {token} helyőrzőkkel…",
+    cancel: "Mégse",
+    submit: "Létrehozás",
+    createError: "Nem sikerült létrehozni a promptot.",
+    createSuccess: "Prompt létrehozva",
+    /** Per-card delete affordance (user templates only). */
+    deleteLabel: "Törlés",
+    deleteError: "Nem sikerült törölni a promptot.",
   },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [

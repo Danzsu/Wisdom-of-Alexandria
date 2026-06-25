@@ -22,6 +22,7 @@ import type {
   PlotlineRead as GenPlotlineRead,
   PlotlineSceneRead as GenPlotlineSceneRead,
   ProjectRead as GenProjectRead,
+  PromptTemplateRead as GenPromptTemplateRead,
   SceneRead as GenSceneRead,
   SeriesRead as GenSeriesRead,
 } from "@alexandria/shared";
@@ -344,6 +345,52 @@ export const codexEntryUpdateSchema = z.object({
 export type CodexEntryUpdate = z.infer<typeof codexEntryUpdateSchema>;
 
 /* ---------------------------------------------------------------------------
+ * PromptTemplate — mirrors app/schemas/prompt_template.py. The user-facing
+ * Prompt Library is GLOBAL (workspace-wide, NO project scope):
+ *   GET  /prompt-templates            → PromptTemplateRead[] (builtins first)
+ *   POST /prompt-templates            → PromptTemplateRead (201, user template)
+ *   PATCH/DELETE /prompt-templates/{id} → builtins are 403-protected
+ * `body` is the template text with `{token}` placeholders; `is_builtin`/`uses`
+ * are server-owned (clients cannot set them on create).
+ * ------------------------------------------------------------------------- */
+
+/** A prompt-library template as returned by the API (`PromptTemplateRead`). */
+export const promptTemplateReadSchema = z.object({
+  id: idString,
+  name: z.string(),
+  category: z.string(),
+  description: z.string(),
+  body: z.string(),
+  uses: z.number(),
+  is_builtin: z.boolean(),
+  icon_key: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type PromptTemplateRead = z.infer<typeof promptTemplateReadSchema>;
+export const promptTemplateListSchema = z.array(promptTemplateReadSchema);
+
+/** Request body for creating a USER prompt template (`PromptTemplateCreate`). */
+export const promptTemplateCreateSchema = z.object({
+  name: z.string().min(1).max(255),
+  category: z.string().min(1).max(100),
+  description: z.string().max(2000).default(""),
+  body: z.string().min(1).max(20000),
+  icon_key: z.string().max(50).nullable().optional(),
+});
+export type PromptTemplateCreate = z.infer<typeof promptTemplateCreateSchema>;
+
+/** Request body for patching a user prompt template (`PromptTemplateUpdate`). */
+export const promptTemplateUpdateSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  category: z.string().min(1).max(100).optional(),
+  description: z.string().max(2000).optional(),
+  body: z.string().min(1).max(20000).optional(),
+  icon_key: z.string().max(50).nullable().optional(),
+});
+export type PromptTemplateUpdate = z.infer<typeof promptTemplateUpdateSchema>;
+
+/* ---------------------------------------------------------------------------
  * CodexRelation — mirrors app/schemas/codex_relation.py (UX-3a relationship
  * graph). PROJECT-scoped (`/projects/{pid}/codex-relations`). A relation is a
  * directed edge between two polymorphic codex entities: `{from_entity_type,
@@ -543,6 +590,12 @@ export type CoreContractTies = [
   Expect<MatchesContract<z.infer<typeof beatReadSchema>, GenBeatRead>>,
   Expect<
     MatchesContract<z.infer<typeof codexEntryReadSchema>, GenCodexEntryRead>
+  >,
+  Expect<
+    MatchesContract<
+      z.infer<typeof promptTemplateReadSchema>,
+      GenPromptTemplateRead
+    >
   >,
   Expect<
     MatchesContract<

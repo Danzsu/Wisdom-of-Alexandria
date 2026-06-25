@@ -74,6 +74,12 @@ import {
   listPlotlines,
   updatePlotline,
 } from "./plotlines";
+import {
+  createPromptTemplate,
+  deletePromptTemplate,
+  listPromptTemplates,
+  updatePromptTemplate,
+} from "./prompts";
 import type {
   BeatCreate,
   BeatRead,
@@ -96,6 +102,9 @@ import type {
   PlotlineUpdate,
   ProjectCreate,
   ProjectRead,
+  PromptTemplateCreate,
+  PromptTemplateRead,
+  PromptTemplateUpdate,
   SceneCreate,
   SceneRead,
   SceneUpdate,
@@ -132,6 +141,8 @@ export const queryKeys = {
   scene: (chapterId: string, sceneId: string) =>
     ["chapters", chapterId, "scenes", sceneId] as const,
   sceneBeats: (sceneId: string) => ["scenes", sceneId, "beats"] as const,
+  // Prompt Library — GLOBAL (workspace-wide, no project scope).
+  promptTemplates: ["prompt-templates"] as const,
 };
 
 /** List every project. */
@@ -1381,5 +1392,80 @@ export function useDetachPlotlineScene(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: queryKeys.plotlineScenes(plotlineId),
       }),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Prompt Library hooks (GLOBAL — workspace-wide, no project scope). Every
+ * mutation invalidates the single `promptTemplates` list so the catalogue
+ * re-renders. Errors propagate via the query/mutation `error` (never swallowed).
+ * ------------------------------------------------------------------------- */
+
+/** List the workspace's prompt templates (builtins first, then user). */
+export function usePromptTemplates(): UseQueryResult<
+  PromptTemplateRead[],
+  Error
+> {
+  return useQuery({
+    queryKey: queryKeys.promptTemplates,
+    queryFn: () => listPromptTemplates(),
+  });
+}
+
+/**
+ * Create a USER prompt template; invalidates the list on success so the new
+ * card appears. Returns the created template. Errors propagate via the mutation.
+ */
+export function useCreatePromptTemplate(): UseMutationResult<
+  PromptTemplateRead,
+  Error,
+  PromptTemplateCreate
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: PromptTemplateCreate) => createPromptTemplate(data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates }),
+  });
+}
+
+/** Input for the prompt-template update mutation (id + patch). */
+export interface UpdatePromptTemplateInput {
+  id: string;
+  patch: PromptTemplateUpdate;
+}
+
+/**
+ * Patch a USER prompt template; invalidates the list on success. Builtins are
+ * 403-protected server-side (the UI never offers edit on them).
+ */
+export function useUpdatePromptTemplate(): UseMutationResult<
+  PromptTemplateRead,
+  Error,
+  UpdatePromptTemplateInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: UpdatePromptTemplateInput) =>
+      updatePromptTemplate(id, patch),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates }),
+  });
+}
+
+/**
+ * Delete a USER prompt template; invalidates the list on success. Builtins are
+ * 403-protected server-side.
+ */
+export function useDeletePromptTemplate(): UseMutationResult<
+  void,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deletePromptTemplate(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates }),
   });
 }

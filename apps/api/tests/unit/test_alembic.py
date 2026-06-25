@@ -27,6 +27,7 @@ EXPECTED_TABLES = {
     "plotlines",
     "plotline_scenes",
     "media_assets",
+    "prompt_templates",
 }
 
 
@@ -39,11 +40,11 @@ def test_all_tables_in_metadata():
     )
 
 
-def test_metadata_has_22_tables():
-    """Verify that exactly 22 tables are registered."""
+def test_metadata_has_23_tables():
+    """Verify that exactly 23 tables are registered."""
     # Models are already registered via the module-level import above.
-    assert len(Base.metadata.tables) == 22, (
-        f"Expected 22 tables, got {len(Base.metadata.tables)}"
+    assert len(Base.metadata.tables) == 23, (
+        f"Expected 23 tables, got {len(Base.metadata.tables)}"
     )
 
 

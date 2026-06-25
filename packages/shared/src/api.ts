@@ -739,6 +739,43 @@ export interface paths {
         patch: operations["update_api_v1_projects__project_id__worldbuilding__entry_id__patch"];
         trace?: never;
     };
+    "/api/v1/prompt-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List All */
+        get: operations["list_all_api_v1_prompt_templates_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_v1_prompt_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prompt-templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get One */
+        get: operations["get_one_api_v1_prompt_templates__template_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete */
+        delete: operations["delete_api_v1_prompt_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update */
+        patch: operations["update_api_v1_prompt_templates__template_id__patch"];
+        trace?: never;
+    };
     "/api/v1/revisions": {
         parameters: {
             query?: never;
@@ -1715,6 +1752,73 @@ export interface components {
             language?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * PromptTemplateCreate
+         * @description Client payload for creating a user template.
+         *
+         *     ``is_builtin`` and ``uses`` are intentionally NOT accepted — the server
+         *     forces ``is_builtin=False`` / ``uses=0`` so clients cannot forge a builtin.
+         */
+        PromptTemplateCreate: {
+            /** Body */
+            body: string;
+            /** Category */
+            category: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Icon Key */
+            icon_key?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** PromptTemplateRead */
+        PromptTemplateRead: {
+            /** Body */
+            body: string;
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Icon Key */
+            icon_key: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Builtin */
+            is_builtin: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Uses */
+            uses: number;
+        };
+        /** PromptTemplateUpdate */
+        PromptTemplateUpdate: {
+            /** Body */
+            body?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Icon Key */
+            icon_key?: string | null;
+            /** Name */
+            name?: string | null;
         };
         /**
          * RestoreSummary
@@ -4848,6 +4952,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorldbuildingEntryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_api_v1_prompt_templates_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptTemplateRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_v1_prompt_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_api_v1_prompt_templates__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_api_v1_prompt_templates__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_api_v1_prompt_templates__template_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptTemplateRead"];
                 };
             };
             /** @description Validation Error */

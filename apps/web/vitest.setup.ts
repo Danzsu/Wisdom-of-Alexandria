@@ -12,6 +12,7 @@ import {
   resetCodexStore,
   resetPlanStore,
   resetPlotlineStore,
+  resetPromptTemplateStore,
   resetRelationStore,
 } from "./test/msw/handlers";
 
@@ -31,6 +32,7 @@ afterEach(() => {
   resetCodexStore();
   resetRelationStore();
   resetPlotlineStore();
+  resetPromptTemplateStore();
 });
 
 afterAll(() => {

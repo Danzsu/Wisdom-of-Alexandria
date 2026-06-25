@@ -42,6 +42,9 @@ export type CodexRelationRead = ApiSchemas["CodexRelationRead"];
 export type PlotlineRead = ApiSchemas["PlotlineRead"];
 export type PlotlineSceneRead = ApiSchemas["PlotlineSceneRead"];
 export type SnippetRead = ApiSchemas["SnippetRead"];
+export type PromptTemplateRead = ApiSchemas["PromptTemplateRead"];
+export type PromptTemplateCreate = ApiSchemas["PromptTemplateCreate"];
+export type PromptTemplateUpdate = ApiSchemas["PromptTemplateUpdate"];
 
 /* ---------------------------------------------------------------------------
  * apps/ai (`ai.json`) — AI generation, providers, continuity.

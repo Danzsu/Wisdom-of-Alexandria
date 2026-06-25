@@ -14,6 +14,7 @@ from alexandria_core.models.media_asset import MediaAsset  # noqa: F401
 from alexandria_core.models.plotline import Plotline  # noqa: F401
 from alexandria_core.models.plotline_scene import PlotlineScene  # noqa: F401
 from alexandria_core.models.project import Project  # noqa: F401
+from alexandria_core.models.prompt_template import PromptTemplate  # noqa: F401
 from alexandria_core.models.provider import Provider  # noqa: F401
 from alexandria_core.models.revision import Revision  # noqa: F401
 from alexandria_core.models.scene import Scene, SceneStatus  # noqa: F401

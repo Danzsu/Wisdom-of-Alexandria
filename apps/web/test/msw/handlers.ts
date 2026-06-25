@@ -60,6 +60,9 @@ import type {
   PlotlineSceneRead,
   PlotlineUpdate,
   ProjectRead,
+  PromptTemplateCreate,
+  PromptTemplateRead,
+  PromptTemplateUpdate,
   SceneCreate,
   SceneRead,
   SceneUpdate,
@@ -200,6 +203,146 @@ codexStore.seed();
 /** Reset the in-memory Codex store (call in a test's beforeEach for isolation). */
 export function resetCodexStore(): void {
   codexStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory PromptTemplate store (Prompt Library) — GLOBAL (no project scope).
+ * Seeds the six builtins (mirrors the backend seed) so the list is non-empty;
+ * builtins are 403-protected on patch/delete. User templates are full CRUD.
+ * ------------------------------------------------------------------------- */
+const PROMPT_TEMPLATE_BUILTINS: readonly Omit<
+  PromptTemplateRead,
+  "id" | "created_at" | "updated_at"
+>[] = [
+  {
+    name: "Folytatás — alap",
+    category: "Írás",
+    description:
+      "A jelenet természetes folytatása a stíluslap és az előző bekezdés alapján.",
+    body: "Folytasd a jelenetet egyetlen, természetes bekezdéssel.\nTartsd a {stiluslap} hangvételét és az {elozo_bekezdes} ritmusát.\nNe zárd le a jelenetet, ne ugorj időben — csak vezesd tovább.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "sparkles",
+  },
+  {
+    name: "Átírás — irodalmibb",
+    category: "Átírás",
+    description:
+      "A kijelölt szöveg emelt, irodalmi hangvételű újraírása a karakterhang megtartásával.",
+    body: "Írd át a kijelölt részt emeltebb, irodalmi hangvételűre.\nŐrizd meg {karakter} beszédmódját és a {stiluslap} szabályait.\nKerüld az angolos mondatszerkezeteket és a modorosságot.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "refresh",
+  },
+  {
+    name: "Érzéki leírás",
+    category: "Leírás",
+    description:
+      "Hat csatorna: látás, hang, tapintás, szag, íz, metafora — kártyánként.",
+    body: "Gazdagítsd a kijelölt jelenetet érzéki részletekkel.\nAdj egy-egy javaslatot csatornánként: látás, hang, tapintás, szag, íz, metafora.\nIgazodj a {helyszin} hangulatához és az {elozo_bekezdes} képeihez.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "eye",
+  },
+  {
+    name: "Párbeszéd természetesítés",
+    category: "Dialógus",
+    description:
+      "Magyar beszélt nyelvhez igazítás, tegezés/magázás figyelembevételével.",
+    body: "Tedd természetesebbé a kijelölt párbeszédet a magyar beszélt nyelvhez.\nTartsd be {karakter} megszólítási formáját (tegezés/magázás).\nHagyd meg a jelentést, csak a megfogalmazást finomítsd.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "brain",
+  },
+  {
+    name: "Ötletelés — fordulatok",
+    category: "Brainstorm",
+    description:
+      "Alternatív cselekményirányok, konfliktusok és tét-emelő fordulatok.",
+    body: "Adj három alternatív cselekményirányt a jelenlegi helyzetből.\nVedd figyelembe a {cselekmenyszal} tétjét és {karakter} motivációját.\nMinden ötlethez írj egy mondatos indoklást, miért emeli a tétet.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "brain",
+  },
+  {
+    name: "Magyar nyelvi ellenőrzés",
+    category: "Szerkesztés",
+    description: "Angolos szerkezetek, modorosság és ismétlés kiszűrése.",
+    body: "Ellenőrizd a kijelölt szöveget magyar nyelvhelyesség szempontjából.\nJelöld az angolos szerkezeteket, a modorosságot és az ismétléseket.\nTartsd meg a {stiluslap} szóhasználatát; csak javaslatokat adj.",
+    uses: 0,
+    is_builtin: true,
+    icon_key: "check",
+  },
+];
+
+let promptTemplateSeq = 0;
+
+const promptTemplateStore = {
+  items: [] as PromptTemplateRead[],
+
+  seed(): void {
+    promptTemplateSeq = 0;
+    this.items = PROMPT_TEMPLATE_BUILTINS.map((b) => ({
+      ...b,
+      id: `builtin-${(promptTemplateSeq += 1)}`,
+      created_at: "2026-06-25T10:00:00Z",
+      updated_at: "2026-06-25T10:00:00Z",
+    }));
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  /** Builtins first, then user templates (mirrors the backend ordering). */
+  list(): PromptTemplateRead[] {
+    const builtins = this.items.filter((t) => t.is_builtin);
+    const user = this.items.filter((t) => !t.is_builtin);
+    return [...builtins, ...user];
+  },
+
+  get(id: string): PromptTemplateRead | undefined {
+    return this.items.find((t) => t.id === id);
+  },
+
+  create(body: PromptTemplateCreate): PromptTemplateRead {
+    const created: PromptTemplateRead = {
+      id: `user-${(promptTemplateSeq += 1)}`,
+      name: body.name,
+      category: body.category,
+      description: body.description ?? "",
+      body: body.body,
+      uses: 0,
+      is_builtin: false,
+      icon_key: body.icon_key ?? null,
+      created_at: "2026-06-25T11:00:00Z",
+      updated_at: "2026-06-25T11:00:00Z",
+    };
+    this.items.push(created);
+    return created;
+  },
+
+  update(id: string, patch: PromptTemplateUpdate): PromptTemplateRead | "404" | "403" {
+    const target = this.items.find((t) => t.id === id);
+    if (!target) return "404";
+    if (target.is_builtin) return "403";
+    Object.assign(target, patch, { updated_at: "2026-06-25T12:00:00Z" });
+    return target;
+  },
+
+  remove(id: string): "ok" | "404" | "403" {
+    const index = this.items.findIndex((t) => t.id === id);
+    if (index === -1) return "404";
+    if (this.items[index].is_builtin) return "403";
+    this.items.splice(index, 1);
+    return "ok";
+  },
+};
+promptTemplateStore.seed();
+
+/** Reset the in-memory Prompt Library store (call between tests). */
+export function resetPromptTemplateStore(): void {
+  promptTemplateStore.reset();
 }
 
 /* ---------------------------------------------------------------------------
@@ -1378,6 +1521,67 @@ export const handlers = [
       return new HttpResponse(null, { status: 204 });
     },
   ),
+
+  /* ---- Prompt Library (GLOBAL — workspace-wide, no project scope). ---- */
+  http.get(`${base}/prompt-templates`, ({ request }) => {
+    const category = new URL(request.url).searchParams.get("category");
+    const all = promptTemplateStore.list();
+    return HttpResponse.json(
+      category === null ? all : all.filter((t) => t.category === category),
+    );
+  }),
+
+  http.get(`${base}/prompt-templates/:id`, ({ params }) => {
+    const template = promptTemplateStore.get(String(params.id));
+    if (!template) {
+      return HttpResponse.json(
+        { detail: "Prompt template not found" },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(template);
+  }),
+
+  http.post(`${base}/prompt-templates`, async ({ request }) => {
+    const body = (await request.json()) as PromptTemplateCreate;
+    const created = promptTemplateStore.create(body);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.patch(`${base}/prompt-templates/:id`, async ({ params, request }) => {
+    const body = (await request.json()) as PromptTemplateUpdate;
+    const result = promptTemplateStore.update(String(params.id), body);
+    if (result === "404") {
+      return HttpResponse.json(
+        { detail: "Prompt template not found" },
+        { status: 404 },
+      );
+    }
+    if (result === "403") {
+      return HttpResponse.json(
+        { detail: "Built-in prompt templates cannot be edited or deleted" },
+        { status: 403 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  http.delete(`${base}/prompt-templates/:id`, ({ params }) => {
+    const result = promptTemplateStore.remove(String(params.id));
+    if (result === "404") {
+      return HttpResponse.json(
+        { detail: "Prompt template not found" },
+        { status: 404 },
+      );
+    }
+    if (result === "403") {
+      return HttpResponse.json(
+        { detail: "Built-in prompt templates cannot be edited or deleted" },
+        { status: 403 },
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
 
   /* ---- CodexRelations (UX-3a relationship graph). Project-scoped CRUD. ---- */
   http.get(`${base}/projects/:projectId/codex-relations`, ({ params }) =>
