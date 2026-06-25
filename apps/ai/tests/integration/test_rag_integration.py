@@ -249,6 +249,55 @@ async def test_generate_scene_injects_retrieved_snippet_into_prompt(db_session):
 
 
 @pytest.mark.integration
+async def test_generate_scene_injects_beat_text_into_prompt(db_session):
+    """The actual BEAT text must reach the rendered user prompt — not just that
+    a kwarg hit a mocked loader. Real PromptLoader renders {beats}, so blanking
+    the beats path in the source fails this assertion."""
+    scene_id, _ = await _make_scene(db_session)
+    router = _capturing_router()
+    svc = AIService(
+        router=router,
+        loader=prompt_loader,
+        svc=revision_service,
+        embeddings=_embeddings_returning(SNIPPET),
+    )
+    beat = "BEAT-JELZO: a hős átlépi a küszöböt és megdermed."
+    await svc.generate_scene(
+        db_session,
+        beats=[beat],
+        scene_id=scene_id,
+        model="ollama/llama3.2",
+    )
+    user_msg = router.complete.call_args.kwargs["messages"][1]["content"]
+    assert beat in user_msg
+
+
+@pytest.mark.integration
+async def test_generate_scene_injects_style_notes_into_prompt(db_session):
+    """Style-guide notes passed to generate_scene must appear in the rendered
+    user prompt (real PromptLoader renders {style_notes}). Dropping the
+    style_notes path in the source fails this assertion."""
+    scene_id, _ = await _make_scene(db_session)
+    router = _capturing_router()
+    svc = AIService(
+        router=router,
+        loader=prompt_loader,
+        svc=revision_service,
+        embeddings=_embeddings_returning(SNIPPET),
+    )
+    style = "STILUS-JELZO: rövid, pattogó mondatok, jelen idő."
+    await svc.generate_scene(
+        db_session,
+        beats=["A hős belép"],
+        style_notes=style,
+        scene_id=scene_id,
+        model="ollama/llama3.2",
+    )
+    user_msg = router.complete.call_args.kwargs["messages"][1]["content"]
+    assert style in user_msg
+
+
+@pytest.mark.integration
 async def test_write_continue_injects_retrieved_snippet_into_prompt(db_session):
     scene_id, _ = await _make_scene(db_session)
     router = _capturing_router()

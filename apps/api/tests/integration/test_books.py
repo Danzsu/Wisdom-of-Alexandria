@@ -75,11 +75,17 @@ async def test_list_books(client: AsyncClient, auth_headers: dict):
     project_id = await _create_project(client, auth_headers)
     await client.post(f"/api/v1/projects/{project_id}/books", json={"title": "Könyv 1"}, headers=auth_headers)
     await client.post(f"/api/v1/projects/{project_id}/books", json={"title": "Könyv 2"}, headers=auth_headers)
+
+    # Sibling project with its own book — listing one project's books must NOT
+    # leak the other project's rows (catches a dropped project_id scope).
+    other_project_id = await _create_project(client, auth_headers, title="Other Project")
+    await client.post(f"/api/v1/projects/{other_project_id}/books", json={"title": "Idegen könyv"}, headers=auth_headers)
+
     resp = await client.get(f"/api/v1/projects/{project_id}/books", headers=auth_headers)
     assert resp.status_code == 200
     titles = [b["title"] for b in resp.json()]
-    assert "Könyv 1" in titles
-    assert "Könyv 2" in titles
+    assert len(titles) == 2
+    assert set(titles) == {"Könyv 1", "Könyv 2"}
 
 
 async def test_list_books_empty(client: AsyncClient, auth_headers: dict):

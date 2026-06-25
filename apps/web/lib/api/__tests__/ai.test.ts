@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
-import { AI_BASE_URL, ApiError } from "@/lib/api/client";
+import { AI_BASE_URL, API_BASE_URL, ApiError } from "@/lib/api/client";
 import {
   approveRevision,
   createSnippet,
@@ -65,6 +65,61 @@ describe("lib/api/ai", () => {
     expect(res.revision.approved).toBe(false);
     expect(res.revision.content.length).toBeGreaterThan(0);
     expect(res.revision.model_name).toBe("ollama/llama3.2");
+  });
+
+  it("generation NEVER auto-approves: a server-sent approved:true does not trigger an approve call (HITL invariant)", async () => {
+    // The human-in-the-loop contract: insertion/approval is a SEPARATE explicit
+    // step. The generation path (rewrite) must NEVER call /revisions/{id}/approve
+    // as a side effect — even if a misbehaving server marks the fresh revision
+    // approved:true, the client must not act on it (no auto-insert, no approve).
+    let approveCalled = false;
+    server.use(
+      http.post(`${aiBase}/ai/rewrite`, () =>
+        HttpResponse.json({
+          revision: {
+            id: "rev-srv-approved",
+            scene_id: null,
+            job_id: null,
+            content: "szöveg",
+            // Server (wrongly) claims the brand-new revision is already approved.
+            approved: true,
+            revision_type: "rewrite",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          job: {
+            id: "job-srv-approved",
+            project_id: null,
+            scene_id: null,
+            chapter_id: null,
+            job_type: "rewrite",
+            status: "done",
+            model_name: "ollama/llama3.2",
+            prompt_version: "1.0",
+            input_data: {},
+            output_data: {},
+            error_message: null,
+            created_at: "2026-06-14T16:00:00Z",
+            updated_at: "2026-06-14T16:00:00Z",
+          },
+          context_entities: [],
+        }),
+      ),
+      // Any approve hit during a plain generation is a HITL breach. Approval is
+      // a DOMAIN endpoint (:8000), so register the guard on the domain base.
+      http.post(`${API_BASE_URL}/api/v1/revisions/:id/approve`, () => {
+        approveCalled = true;
+        return HttpResponse.json({ detail: "should-not-be-called" }, { status: 500 });
+      }),
+    );
+    const res = await rewrite({ selected_text: "x", instruction: "y" });
+    // The generation call alone must NOT have approved anything.
+    expect(approveCalled).toBe(false);
+    // Approval only ever happens through the dedicated, explicit approveRevision
+    // call — proving the gate is a separate user-driven step, not generation.
+    expect(res.revision.id).toBe("rev-srv-approved");
   });
 
   it("generateScene returns a revision", async () => {

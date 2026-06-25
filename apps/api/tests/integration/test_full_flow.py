@@ -301,9 +301,8 @@ async def test_snippet_tag_filter(client: AsyncClient, auth_headers: dict):
 
     r = await client.get(f"/api/v1/projects/{pid}/snippets?tag=akció", headers=auth_headers)
     titles = [s["title"] for s in r.json()]
-    assert "S1" in titles
-    assert "S3" in titles
-    assert "S2" not in titles
+    assert set(titles) == {"S1", "S3"}
+    assert len(titles) == 2
 
 
 # ── style guide upsert ───────────────────────────────────────────────────────

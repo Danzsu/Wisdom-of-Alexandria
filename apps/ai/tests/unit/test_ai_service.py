@@ -4,7 +4,7 @@ import pytest
 from alexandria_core.models.generation_job import GenerationJob, JobStatus
 from alexandria_core.models.revision import Revision
 
-from app.services.ai_service import AIService
+from app.services.ai_service import DESCRIBE_CHANNELS, AIService
 from app.services.model_router import ModelResponse, ModelRouter
 from app.services.prompt_loader import PromptLoader
 from app.services.revision_service import RevisionService
@@ -147,6 +147,13 @@ async def test_describe_all_6_channels_by_default(mock_db):
 
     revisions, job = await service.describe(mock_db, selected_text="Szöveg")
     assert router.complete.call_count == 6
+    # Each channel must be generated EXACTLY ONCE with its OWN name — not the same
+    # channel six times. Capture the channel kwarg of every load_user call and
+    # assert it equals the canonical 6 distinct channels (source order). A
+    # mutation generating channel="Látás" 6× fails here.
+    channels_used = [c.kwargs["channel"] for c in loader.load_user.call_args_list]
+    assert channels_used == DESCRIBE_CHANNELS
+    assert len(set(channels_used)) == 6
 
 
 async def test_describe_invalid_channel_raises(mock_db):

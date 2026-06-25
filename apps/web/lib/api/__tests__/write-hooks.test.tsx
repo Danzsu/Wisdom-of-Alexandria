@@ -124,6 +124,35 @@ describe("useUpdateScene", () => {
     expect(result.current.data?.word_count).toBe(5);
   });
 
+  it("PATCHes the nested chapter/scene path (chapterId + sceneId in URL)", async () => {
+    let seenUrl: string | null = null;
+    let seenMethod: string | null = null;
+    server.use(
+      http.patch(
+        `${base}/chapters/:chapterId/scenes/:sceneId`,
+        ({ request }) => {
+          seenUrl = request.url;
+          seenMethod = request.method;
+          return HttpResponse.json({ ...SCENE_ACTIVE, content: "x", word_count: 1 });
+        },
+      ),
+    );
+    const { result } = renderHook(() => useUpdateScene(), { wrapper: wrapper() });
+    result.current.mutate({
+      chapterId: CHAPTER_TWO.id,
+      sceneId: SCENE_ACTIVE.id,
+      patch: { content: "x" },
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // The mutation must hit the nested path with BOTH segments — dropping either
+    // (e.g. building `/chapters//scenes/...`) breaks this. Assert the full path,
+    // not just substrings, so a swapped/missing segment fails.
+    expect(seenMethod).toBe("PATCH");
+    expect(seenUrl).toBe(
+      `${base}/chapters/${CHAPTER_TWO.id}/scenes/${SCENE_ACTIVE.id}`,
+    );
+  });
+
   it("surfaces a save error (not swallowed)", async () => {
     server.use(
       http.patch(`${base}/chapters/:chapterId/scenes/:sceneId`, () =>

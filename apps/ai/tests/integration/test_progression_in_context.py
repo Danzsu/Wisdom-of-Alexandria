@@ -151,3 +151,8 @@ async def test_no_progression_does_not_break_context(db_session):
     user_msg = router.complete.call_args.kwargs["messages"][1]["content"]
     assert "Aragorn" in user_msg
     assert len(entities) == 1
+    # With NO progression for this entity, the prompt must carry NO progression
+    # annotation at all — a stale/default-state injection (the "(állapot a
+    # jelenetig: …)" marker) must not leak. A source path that emits a default
+    # marker when there is no progression fails here.
+    assert "állapot a jelenetig" not in user_msg

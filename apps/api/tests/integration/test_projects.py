@@ -55,7 +55,7 @@ async def test_create_project_missing_title_fails(client: AsyncClient, auth_head
 async def test_list_projects_empty(client: AsyncClient, auth_headers: dict):
     resp = await client.get("/api/v1/projects", headers=auth_headers)
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    assert resp.json() == []
 
 
 async def test_list_projects_returns_created(client: AsyncClient, auth_headers: dict):
@@ -161,7 +161,7 @@ async def test_list_projects_pagination(client: AsyncClient, auth_headers: dict)
         await client.post("/api/v1/projects", json={"title": f"Paginalt {i}"}, headers=auth_headers)
     resp = await client.get("/api/v1/projects?limit=2&skip=0", headers=auth_headers)
     assert resp.status_code == 200
-    assert len(resp.json()) <= 2
+    assert len(resp.json()) == 2
 
 
 # ── A4: pagination bounds ───────────────────────────────────────────────────

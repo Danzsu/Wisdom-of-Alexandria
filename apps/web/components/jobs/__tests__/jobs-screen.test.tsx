@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Providers } from "@/test/test-utils";
@@ -19,25 +19,62 @@ function renderScreen(bookId: string | undefined = FAROSZ_BOOK.id) {
   );
 }
 
+/**
+ * Resolve the job-row card that owns a given (unique) type label. The type label
+ * is a `<span>` and the status badge is its sibling inside the same Card, so we
+ * walk up to the nearest element that contains both — letting us scope each
+ * status assertion to ONE row instead of asserting it exists somewhere on screen.
+ */
+function rowByTypeLabel(typeLabel: string): HTMLElement {
+  const label = screen.getByText(typeLabel);
+  // Card → body wrapper → flex header where the type span + status badge live.
+  // `closest("div")` chain: the type span's parent (the flex header) holds both.
+  const row = label.closest("div");
+  if (!row) throw new Error(`No row container for "${typeLabel}"`);
+  return row as HTMLElement;
+}
+
 describe("JobsScreen (AI feladatok)", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("renders the seeded jobs with localized type + status badges", async () => {
+  it("renders each seeded job with its OWN type→status pairing", async () => {
     renderScreen();
-    // The done job (rewrite) and its status pill.
-    expect(await screen.findByText("Átírás")).toBeInTheDocument();
-    expect(screen.getByText("Kész")).toBeInTheDocument();
-    // The running job (generate_scene).
-    expect(screen.getByText("Jelenet generálása")).toBeInTheDocument();
-    expect(screen.getByText("Folyamatban")).toBeInTheDocument();
-    // The failed job (describe).
-    expect(screen.getByText("Érzéki leírás")).toBeInTheDocument();
-    expect(screen.getByText("Sikertelen")).toBeInTheDocument();
+    await screen.findByText("Átírás");
+
+    // Each status is scoped to ITS OWN row keyed off the job's type label. This
+    // is the mutation-proof part: swapping the running↔done label mapping in
+    // jobs-screen.tsx moves "Kész"/"Folyamatban" onto the WRONG row → fails here.
+    // The done job is "Átírás" (rewrite).
+    expect(within(rowByTypeLabel("Átírás")).getByText("Kész")).toBeInTheDocument();
+    // The running job is "Jelenet generálása" (generate_scene).
+    expect(
+      within(rowByTypeLabel("Jelenet generálása")).getByText("Folyamatban"),
+    ).toBeInTheDocument();
+    // The failed job is "Érzéki leírás" (describe).
+    expect(
+      within(rowByTypeLabel("Érzéki leírás")).getByText("Sikertelen"),
+    ).toBeInTheDocument();
   });
 
-  it("reveals the sanitized error message for a failed job on expand", async () => {
+  it("renders exactly the seeded number of job rows (no drop / duplicate)", async () => {
+    renderScreen();
+    await screen.findByText("Átírás");
+    // Every job row shows a status badge; the badge text set is the 3 statuses.
+    // Counting the three distinct type labels pins the rendered row count to the
+    // 3 seeded jobs.
+    expect(screen.getByText("Átírás")).toBeInTheDocument();
+    expect(screen.getByText("Jelenet generálása")).toBeInTheDocument();
+    expect(screen.getByText("Érzéki leírás")).toBeInTheDocument();
+    // No EXTRA job rows: there must be exactly 3 status badges on screen.
+    const statusBadges = [
+      ...screen.getAllByText(/^(Kész|Folyamatban|Sikertelen)$/),
+    ];
+    expect(statusBadges).toHaveLength(3);
+  });
+
+  it("reveals the backend error message for a failed job on expand", async () => {
     renderScreen();
     const toggle = await screen.findByRole("button", {
       name: "Hibaüzenet megjelenítése",
