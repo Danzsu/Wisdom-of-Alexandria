@@ -5,6 +5,7 @@ import {
   Brain,
   CheckCircle,
   Eye,
+  Pencil,
   Plus,
   RefreshCw,
   Sparkles,
@@ -34,8 +35,9 @@ import {
   useCreatePromptTemplate,
   useDeletePromptTemplate,
   usePromptTemplates,
+  useUpdatePromptTemplate,
 } from "@/lib/api/hooks";
-import type { PromptTemplateRead } from "@/lib/api/types";
+import type { PromptTemplateRead, PromptTemplateUpdate } from "@/lib/api/types";
 
 /**
  * Maps the backend `icon_key` to a lucide icon. Unknown / null keys fall back to
@@ -53,6 +55,80 @@ function iconFor(key: string | null): LucideIcon {
   return (key && PROMPT_ICONS[key]) || Wand2;
 }
 
+/** The editable fields shared by the create and edit forms. */
+interface PromptFormState {
+  name: string;
+  category: string;
+  description: string;
+  body: string;
+}
+
+const EMPTY_FORM: PromptFormState = {
+  name: "",
+  category: "",
+  description: "",
+  body: "",
+};
+
+/**
+ * The form-body markup shared by both the create and edit modals (DRY — a
+ * single source for the four field rows). The parent owns the state and submit
+ * handler; this only renders the inputs.
+ */
+function PromptFormFields({
+  form,
+  onChange,
+}: Readonly<{
+  form: PromptFormState;
+  onChange: (patch: Partial<PromptFormState>) => void;
+}>) {
+  const t = hu.promptLibrary;
+  return (
+    <ModalBody className="space-y-3.5">
+      <div>
+        <FieldLabel htmlFor="prompt-name">{t.fieldName}</FieldLabel>
+        <FormInput
+          id="prompt-name"
+          value={form.name}
+          placeholder={t.namePlaceholder}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </div>
+      <div>
+        <FieldLabel htmlFor="prompt-category">{t.fieldCategory}</FieldLabel>
+        <FormInput
+          id="prompt-category"
+          value={form.category}
+          placeholder={t.categoryPlaceholder}
+          onChange={(e) => onChange({ category: e.target.value })}
+        />
+      </div>
+      <div>
+        <FieldLabel htmlFor="prompt-description">
+          {t.fieldDescription}
+        </FieldLabel>
+        <FormInput
+          id="prompt-description"
+          value={form.description}
+          placeholder={t.descriptionPlaceholder}
+          onChange={(e) => onChange({ description: e.target.value })}
+        />
+      </div>
+      <div>
+        <FieldLabel htmlFor="prompt-body">{t.fieldBody}</FieldLabel>
+        <Textarea
+          id="prompt-body"
+          variant="mono"
+          minHeight={140}
+          value={form.body}
+          placeholder={t.bodyPlaceholder}
+          onChange={(e) => onChange({ body: e.target.value })}
+        />
+      </div>
+    </ModalBody>
+  );
+}
+
 /**
  * Prompt Library (`konyv/[bookId]/promptok`) — the user-facing AI prompt
  * catalogue, backed by the GLOBAL `/api/v1/prompt-templates` API.
@@ -64,40 +140,75 @@ function iconFor(key: string | null): LucideIcon {
 export function PromptLibraryScreen() {
   const query = usePromptTemplates();
   const createMutation = useCreatePromptTemplate();
+  const updateMutation = useUpdatePromptTemplate();
   const deleteMutation = useDeletePromptTemplate();
 
   const [selected, setSelected] = useState<PromptTemplateRead | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    category: "",
-    description: "",
-    body: "",
-  });
+  const [createForm, setCreateForm] = useState<PromptFormState>(EMPTY_FORM);
+  // The template currently being edited (drives the prefilled edit modal); null
+  // when the edit modal is closed.
+  const [editing, setEditing] = useState<PromptTemplateRead | null>(null);
+  const [editForm, setEditForm] = useState<PromptFormState>(EMPTY_FORM);
 
   const t = hu.promptLibrary;
-  const canSubmit =
-    form.name.trim().length > 0 && form.category.trim().length > 0 &&
-    form.body.trim().length > 0;
 
-  function resetForm() {
-    setForm({ name: "", category: "", description: "", body: "" });
+  function isFormValid(f: PromptFormState) {
+    return (
+      f.name.trim().length > 0 &&
+      f.category.trim().length > 0 &&
+      f.body.trim().length > 0
+    );
+  }
+  const canCreate = isFormValid(createForm);
+  const canSave = isFormValid(editForm);
+
+  function resetCreateForm() {
+    setCreateForm(EMPTY_FORM);
   }
 
   async function handleCreate() {
-    if (!canSubmit) return;
+    if (!canCreate) return;
     try {
       await createMutation.mutateAsync({
-        name: form.name.trim(),
-        category: form.category.trim(),
-        description: form.description.trim(),
-        body: form.body,
+        name: createForm.name.trim(),
+        category: createForm.category.trim(),
+        description: createForm.description.trim(),
+        body: createForm.body,
       });
       toast.success(t.createSuccess);
       setCreateOpen(false);
-      resetForm();
+      resetCreateForm();
     } catch {
       toast.error(t.createError);
+    }
+  }
+
+  /** Open the edit modal prefilled with the template's current values. */
+  function openEdit(template: PromptTemplateRead) {
+    setEditing(template);
+    setEditForm({
+      name: template.name,
+      category: template.category,
+      description: template.description,
+      body: template.body,
+    });
+  }
+
+  async function handleUpdate() {
+    if (!editing || !canSave) return;
+    const patch: PromptTemplateUpdate = {
+      name: editForm.name.trim(),
+      category: editForm.category.trim(),
+      description: editForm.description.trim(),
+      body: editForm.body,
+    };
+    try {
+      await updateMutation.mutateAsync({ id: editing.id, patch });
+      toast.success(t.updateSuccess);
+      setEditing(null);
+    } catch {
+      toast.error(t.updateError);
     }
   }
 
@@ -176,14 +287,30 @@ export function PromptLibraryScreen() {
                 </span>
               </button>
               {prompt.is_builtin ? null : (
-                <button
-                  type="button"
-                  aria-label={`${t.deleteLabel}: ${prompt.name}`}
-                  onClick={() => handleDelete(prompt)}
-                  className="absolute right-2.5 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-text-faint hover:bg-surface-muted hover:text-danger-text"
-                >
-                  <Icon icon={Trash2} size={14} />
-                </button>
+                <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`${t.editLabel}: ${prompt.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEdit(prompt);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-faint hover:bg-surface-muted hover:text-ai-text"
+                  >
+                    <Icon icon={Pencil} size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${t.deleteLabel}: ${prompt.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(prompt);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-faint hover:bg-surface-muted hover:text-danger-text"
+                  >
+                    <Icon icon={Trash2} size={14} />
+                  </button>
+                </div>
               )}
             </div>
           );
@@ -272,7 +399,7 @@ export function PromptLibraryScreen() {
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);
-          if (!open) resetForm();
+          if (!open) resetCreateForm();
         }}
       >
         <ModalShell maxWidth={560}>
@@ -291,65 +418,17 @@ export function PromptLibraryScreen() {
               void handleCreate();
             }}
           >
-            <ModalBody className="space-y-3.5">
-              <div>
-                <FieldLabel htmlFor="prompt-name">{t.fieldName}</FieldLabel>
-                <FormInput
-                  id="prompt-name"
-                  value={form.name}
-                  placeholder={t.namePlaceholder}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="prompt-category">
-                  {t.fieldCategory}
-                </FieldLabel>
-                <FormInput
-                  id="prompt-category"
-                  value={form.category}
-                  placeholder={t.categoryPlaceholder}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, category: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="prompt-description">
-                  {t.fieldDescription}
-                </FieldLabel>
-                <FormInput
-                  id="prompt-description"
-                  value={form.description}
-                  placeholder={t.descriptionPlaceholder}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, description: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="prompt-body">{t.fieldBody}</FieldLabel>
-                <Textarea
-                  id="prompt-body"
-                  variant="mono"
-                  minHeight={140}
-                  value={form.body}
-                  placeholder={t.bodyPlaceholder}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, body: e.target.value }))
-                  }
-                />
-              </div>
-            </ModalBody>
+            <PromptFormFields
+              form={createForm}
+              onChange={(patch) => setCreateForm((f) => ({ ...f, ...patch }))}
+            />
             <ModalFooter>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => {
                   setCreateOpen(false);
-                  resetForm();
+                  resetCreateForm();
                 }}
               >
                 {t.cancel}
@@ -357,10 +436,58 @@ export function PromptLibraryScreen() {
               <Button
                 type="submit"
                 variant="cta"
-                disabled={!canSubmit}
+                disabled={!canCreate}
                 loading={createMutation.isPending}
               >
                 {t.submit}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalShell>
+      </Modal>
+
+      {/* Edit modal — PATCHes a user template (prefilled), then refetches. */}
+      <Modal
+        open={editing !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+      >
+        <ModalShell maxWidth={560}>
+          <ModalHeader
+            title={t.editTitle}
+            leadingIcon={
+              <span className="inline-flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-ai-muted text-ai-text">
+                <Icon icon={Pencil} size={17} />
+              </span>
+            }
+            closeLabel={t.modalClose}
+          />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleUpdate();
+            }}
+          >
+            <PromptFormFields
+              form={editForm}
+              onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
+            />
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditing(null)}
+              >
+                {t.cancel}
+              </Button>
+              <Button
+                type="submit"
+                variant="cta"
+                disabled={!canSave}
+                loading={updateMutation.isPending}
+              >
+                {t.editSubmit}
               </Button>
             </ModalFooter>
           </form>

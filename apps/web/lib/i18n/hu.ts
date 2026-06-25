@@ -1871,6 +1871,12 @@ export const hu = {
     /** Per-card delete affordance (user templates only). */
     deleteLabel: "Törlés",
     deleteError: "Nem sikerült törölni a promptot.",
+    /** Per-card edit affordance + edit modal (user templates only). */
+    editLabel: "Szerkesztés",
+    editTitle: "Prompt szerkesztése",
+    editSubmit: "Mentés",
+    updateError: "Nem sikerült módosítani a promptot.",
+    updateSuccess: "Prompt módosítva",
   },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
