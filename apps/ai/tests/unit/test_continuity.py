@@ -101,6 +101,10 @@ def _patch_resolve(service, project_id, scene_content="A jelenet szövege."):
     service._resolve_scope = AsyncMock(return_value=(project_id, None))
     service._resolve_project_id = AsyncMock(return_value=project_id)
     service._load_scene_content = AsyncMock(return_value=scene_content)
+    # Progression "state as of S" annotation also touches the DB; stub it out so
+    # these unit tests run against the mock_db without hitting the real query
+    # (its behaviour is covered by the integration tests). Default: no notes.
+    service._progression_notes = AsyncMock(return_value={})
     return service
 
 

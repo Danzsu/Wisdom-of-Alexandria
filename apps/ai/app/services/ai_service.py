@@ -18,6 +18,7 @@ from app.services.embedding_service import (
     embedding_service,
 )
 from app.services.model_router import ModelRouter, model_router
+from app.services.progression_service import current_progressions_as_of_scene
 from app.services.prompt_loader import PromptLoader, prompt_loader
 from app.services.revision_service import RevisionService, revision_service
 
@@ -116,13 +117,28 @@ RAG_TOP_K = 5
 RAG_SYNC_MAX_ITEMS = 200
 
 
-def _format_context(items: list[RetrievedItem]) -> str:
-    """Render retrieved entries into the prompt's ``{context}`` block."""
+def _format_context(
+    items: list[RetrievedItem],
+    progression_notes: dict[tuple[str, uuid.UUID], str] | None = None,
+) -> str:
+    """Render retrieved entries into the prompt's ``{context}`` block.
+
+    When ``progression_notes`` maps an entry's ``(entity_type, entity_id)`` to a
+    non-empty "state as of the target scene" note, that note is appended to the
+    entry's line so the writer/reviewer sees the entity's CURRENT state (never a
+    future / spoiler state — the note is pre-filtered to ``<=`` S by
+    :func:`current_progressions_as_of_scene`).
+    """
     if not items:
         return ""
+    progression_notes = progression_notes or {}
     lines: list[str] = []
     for it in items:
-        lines.append(f"- [{it.entity_type}] {it.label}: {it.snippet}")
+        line = f"- [{it.entity_type}] {it.label}: {it.snippet}"
+        note = progression_notes.get((it.entity_type, it.entity_id))
+        if note and note.strip():
+            line += f" (állapot a jelenetig: {note.strip()})"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -268,7 +284,11 @@ class AIService:
             logger.debug("RAG skipped: no resolvable project for scene_id=%s", scene_id)
             return "", []
         return await self._retrieve_context(
-            db, project_id=project_id, active_series_id=active_series_id, query=query
+            db,
+            project_id=project_id,
+            active_series_id=active_series_id,
+            query=query,
+            scene_id=scene_id,
         )
 
     async def _retrieve_context(
@@ -278,6 +298,7 @@ class AIService:
         project_id: uuid.UUID,
         active_series_id: uuid.UUID | None,
         query: str,
+        scene_id: uuid.UUID | None = None,
     ) -> tuple[str, list[RetrievedItem]]:
         """Shared RAG core: bounded project sync + series-scoped top-k retrieve.
 
@@ -285,6 +306,11 @@ class AIService:
         Q&A (``research``). Degrades to ``("", [])`` — logged, never crashed — when
         no embedding provider is configured or any embedding/retrieval call fails;
         a flaky provider must never block the feature that called it.
+
+        When a ``scene_id`` is supplied, each retrieved entry is annotated with its
+        CodexProgression "state as of that scene" (latest progression at-or-before
+        the scene in story order) so the prompt reflects the entity's current —
+        never future — state.
         """
         if not query.strip():
             return "", []
@@ -317,7 +343,42 @@ class AIService:
                 safe_error(e),
             )
             return "", []
-        return _format_context(items), items
+        progression_notes = await self._progression_notes(db, scene_id, items)
+        return _format_context(items, progression_notes), items
+
+    async def _progression_notes(
+        self,
+        db: AsyncSession,
+        scene_id: uuid.UUID | None,
+        items: list[RetrievedItem],
+    ) -> dict[tuple[str, uuid.UUID], str]:
+        """Map each retrieved entry to its progression note current as-of ``scene_id``.
+
+        Returns ``{}`` when there is no scene context or no items. Progression
+        annotation is a NON-fatal enhancement: any failure here is caught, logged
+        as a WARNING (never silent), and degraded to no annotation so a progression
+        glitch never blocks the actual writing — mirroring RAG's own degradation.
+        """
+        if scene_id is None or not items:
+            return {}
+        entities = [(it.entity_type, it.entity_id) for it in items]
+        try:
+            states = await current_progressions_as_of_scene(
+                db, scene_id=scene_id, entities=entities
+            )
+        except Exception as e:  # noqa: BLE001 — degrade, don't crash the caller
+            logger.warning(
+                "Progression lookup failed for scene %s; continuing without "
+                "progression state: %s",
+                scene_id,
+                safe_error(e),
+            )
+            return {}
+        return {
+            (s.entity_type, s.entity_id): s.note
+            for s in states
+            if s.note and s.note.strip()
+        }
 
     async def rewrite(
         self,
@@ -742,7 +803,11 @@ class AIService:
         # retrieval to project-global + that book's series; otherwise project-wide.
         active_series_id = await self._resolve_series_id(db, scene_id)
         context, retrieved = await self._retrieve_context(
-            db, project_id=project_id, active_series_id=active_series_id, query=question
+            db,
+            project_id=project_id,
+            active_series_id=active_series_id,
+            query=question,
+            scene_id=scene_id,
         )
 
         job = await self.svc.create_job(
