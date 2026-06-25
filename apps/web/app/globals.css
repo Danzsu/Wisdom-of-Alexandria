@@ -397,6 +397,19 @@ select:focus-visible,
   }
 }
 
+/* Very gentle ambient drift for the celestial star field — a few px on both
+   axes so stars wander slowly rather than bob. Transform-only; the global
+   reduced-motion block collapses its duration to a static rest. */
+@keyframes woaFloatSlow {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(2px, -3px);
+  }
+}
+
 @keyframes woaFlash {
   from {
     background: var(--accent-muted);

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
+import { CelestialBackdrop } from "./celestial-backdrop";
 
 export interface EmptyStateActionObject {
   label: string;
@@ -47,25 +48,32 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 rounded-lg px-6 py-14 text-center",
+        "relative flex flex-col items-center gap-3 overflow-hidden rounded-lg px-6 py-14 text-center",
         className,
       )}
     >
+      {/* Decorative "starlit" backdrop — faint, behind the content. */}
+      <CelestialBackdrop density={14} opacity={0.5} />
+
       {icon ? (
         <span
           aria-hidden="true"
-          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-muted text-accent-text"
+          className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-muted text-accent-text [animation:woaGlow_5.5s_ease-in-out_infinite]"
         >
           {icon}
         </span>
       ) : null}
-      <h2 className="m-0 font-serif text-title font-semibold text-text">
+      <h2 className="relative z-10 m-0 font-serif text-title font-semibold text-text">
         {title}
       </h2>
       {description ? (
-        <p className="m-0 max-w-prose text-body text-text-muted">{description}</p>
+        <p className="relative z-10 m-0 max-w-prose text-body text-text-muted">
+          {description}
+        </p>
       ) : null}
-      {actionNode ? <div className="mt-1">{actionNode}</div> : null}
+      {actionNode ? (
+        <div className="relative z-10 mt-1">{actionNode}</div>
+      ) : null}
     </div>
   );
 }

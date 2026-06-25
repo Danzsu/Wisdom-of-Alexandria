@@ -176,6 +176,10 @@ export {
   type EmptyStateProps,
   type EmptyStateActionObject,
 } from "./empty-state";
+export {
+  CelestialBackdrop,
+  type CelestialBackdropProps,
+} from "./celestial-backdrop";
 export { ErrorState, type ErrorStateProps } from "./error-state";
 
 /* ---------------------------------------------------------------------------

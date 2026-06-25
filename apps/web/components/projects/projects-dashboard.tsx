@@ -32,6 +32,7 @@ import {
   SegmentedControl,
   Skeleton,
   toast,
+  CelestialBackdrop,
 } from "@/components/kit";
 import { ErrorState } from "@/components/kit/error-state";
 import { BrandStar } from "@/components/kit/brand-star";
@@ -257,7 +258,15 @@ function BookSpineIcon({ size = 50 }: Readonly<{ size?: number }>) {
 
 function WelcomeHero() {
   return (
-    <div className="mb-1.5 flex flex-col items-center">
+    <div className="relative mb-1.5 flex flex-col items-center">
+      {/* Ambient "quiet starlit shelf" star field — decorative, sits behind the
+          radial glow + floating book-spine. Very faint, low density. */}
+      <CelestialBackdrop
+        density={16}
+        opacity={0.55}
+        className="-inset-x-8 -top-8"
+      />
+
       {/* Floating gold book-spine icon */}
       <span
         aria-hidden="true"
