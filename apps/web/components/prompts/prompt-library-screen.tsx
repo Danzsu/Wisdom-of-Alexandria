@@ -80,7 +80,7 @@ export function PromptLibraryScreen() {
                 key={prompt.id}
                 type="button"
                 onClick={() => setSelected(prompt)}
-                className="block cursor-pointer rounded-[14px] border border-border bg-surface p-[18px] text-left shadow-card transition hover:-translate-y-1 hover:shadow-hover"
+                className="woa-card-aura block cursor-pointer rounded-[14px] border border-border bg-surface p-[18px] text-left shadow-card hover:-translate-y-1"
               >
                 <span className="mb-[11px] flex items-center gap-[11px]">
                   <span className="inline-flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-ai-muted text-ai-text">

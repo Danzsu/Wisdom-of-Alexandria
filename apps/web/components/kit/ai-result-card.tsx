@@ -78,7 +78,11 @@ export function AIResultCard({
         animate="visible"
         exit="exit"
         className={cn(
-          "overflow-hidden rounded-xl border border-ai/20 bg-ai-muted shadow-card ring-1 ring-ai/20",
+          // `woa-ai-reveal` plays the one-shot gold→purple sweep + soft purple
+          // settle-glow on mount (the "channeling settled" delight). The sweep
+          // is a pointer-events:none ::after so it never blocks text/buttons;
+          // reduced motion collapses both to the calm resting state.
+          "woa-ai-reveal overflow-hidden rounded-xl border border-ai/20 bg-ai-muted shadow-card ring-1 ring-ai/20",
           className,
         )}
       >
@@ -90,7 +94,9 @@ export function AIResultCard({
           }}
           aria-hidden="true"
         />
-        <div className="flex flex-col gap-2.5 p-3.5">
+        {/* z-[2] keeps the card content above the woa-ai-reveal sweep ::after
+            (z-1) so text contrast and button hit-targets are never affected. */}
+        <div className="relative z-[2] flex flex-col gap-2.5 p-3.5">
           <div className="flex items-center gap-1.5">
             <BrandStar
               size={14}

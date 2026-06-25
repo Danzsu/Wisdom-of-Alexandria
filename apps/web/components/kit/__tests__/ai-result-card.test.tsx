@@ -41,6 +41,14 @@ describe("AIResultCard", () => {
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
+  it("carries the one-shot reveal treatment class on the card root", () => {
+    render(<AIResultCard label="Átírás" body="Szelene meg sem rezzent." />);
+    const body = screen.getByText("Szelene meg sem rezzent.");
+    const card = body.closest("div.rounded-xl");
+    // The gold→purple sweep + settle-glow delight is applied via woa-ai-reveal.
+    expect(card?.className ?? "").toContain("woa-ai-reveal");
+  });
+
   it("fires accept / reject / copy / star callbacks", async () => {
     const onAccept = vi.fn();
     const onReject = vi.fn();

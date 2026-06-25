@@ -501,7 +501,7 @@ function RecentCard({
       type="button"
       data-press=""
       onClick={onClick}
-      className="flex items-center gap-3 rounded-[14px] border border-border bg-surface p-3.5 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
+      className="woa-card-aura flex items-center gap-3 rounded-[14px] border border-border bg-surface p-3.5 text-left shadow-card hover:border-border-strong"
     >
       <span
         className="flex h-14 w-10 flex-none items-end justify-center rounded-md border border-accent pb-1.5"
@@ -756,7 +756,7 @@ function ProjectCard({
           type="button"
           data-press=""
           onClick={onClick}
-          className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-3 pr-10 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
+          className="woa-card-aura flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-3 pr-10 text-left shadow-card hover:border-border-strong"
         >
           <span
             className="flex h-12 w-9 flex-none items-end justify-center rounded-md border border-accent pb-1"
@@ -787,7 +787,7 @@ function ProjectCard({
         type="button"
         data-press=""
         onClick={onClick}
-        className="block w-full overflow-hidden rounded-[14px] border border-border bg-surface p-0 text-left shadow-card transition-shadow hover:border-border-strong hover:shadow-panel"
+        className="woa-card-aura block w-full overflow-hidden rounded-[14px] border border-border bg-surface p-0 text-left shadow-card hover:border-border-strong"
       >
         <span
           className="flex h-[88px] items-end justify-center border-b border-border pb-3"
