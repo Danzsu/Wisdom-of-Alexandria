@@ -34,7 +34,7 @@ export function PageHero({
         </span>
       </span>
       <div className="flex items-end justify-between gap-4">
-        <h1 className="m-0 font-display text-[34px] font-semibold leading-[1.04] text-text">
+        <h1 className="m-0 font-display text-[clamp(32px,5vw,40px)] font-semibold leading-[1.04] text-text">
           {title}
         </h1>
         {action ? <div className="flex-none pb-1">{action}</div> : null}

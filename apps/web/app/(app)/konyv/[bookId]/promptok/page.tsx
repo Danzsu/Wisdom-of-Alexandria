@@ -1,12 +1,6 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+import { PromptLibraryScreen } from "@/components/prompts/prompt-library-screen";
 
-/** Prompt Library placeholder — filled in M10 (V1). */
+/** Prompt Library — the AI prompt catalogue (DESIGN-C). Book-scoped route. */
 export default function PromptokPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.promptokLabel}
-      hint={hu.placeholders.promptokHint}
-    />
-  );
+  return <PromptLibraryScreen />;
 }

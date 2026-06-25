@@ -1804,6 +1804,27 @@ export const hu = {
     edit: "Szerkesztés",
     editSoon: "Hamarosan — a profilszerkesztés később érkezik",
   },
+  /**
+   * Prompt Library screen (`konyv/[bookId]/promptok`). The prompt seed CONTENT
+   * (names/categories/descriptions/templates) lives in
+   * `apps/web/lib/prompt-library-data.ts`; this namespace holds only the screen
+   * chrome + modal labels.
+   */
+  promptLibrary: {
+    eyebrow: "AI promptok",
+    title: "Prompt könyvtár",
+    subtitle: "Magyar nyelvre hangolt promptok minden AI-művelethez.",
+    /** Right-aligned header action (honest stub — no prompts backend yet). */
+    newPrompt: "Új prompt",
+    createSoon: "Hamarosan — a saját promptok később érkeznek",
+    /** Footer line on each card + the modal usage line. */
+    usesLabel: (n: string) => `${n} használat`,
+    /** Read-only detail modal section headings. */
+    modalCategory: "Kategória",
+    modalDescription: "Leírás",
+    modalTemplate: "Sablon",
+    modalClose: "Bezárás",
+  },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
     "történelmi fantasy",
