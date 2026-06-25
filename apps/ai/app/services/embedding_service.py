@@ -37,6 +37,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 
+from alexandria_core.core.config import settings
 from alexandria_core.db.vector import cosine_distance
 from alexandria_core.models.chapter import Chapter
 from alexandria_core.models.character import Character
@@ -61,6 +62,36 @@ DEFAULT_MAX_ITEMS = 500
 
 # Max characters of a source field folded into the snippet returned by retrieve.
 _SNIPPET_LEN = 400
+
+
+class EmbeddingDimError(ValueError):
+    """Raised when an embedding provider returns a vector whose width does not
+    match the fixed stored column width (``settings.embedding_dim``).
+
+    Carries a clear, actionable message naming the model + the expected vs actual
+    dimension, so the failure surfaces as a usable hint (e.g. on ``POST /ai/index``
+    and the provider-test path) instead of a silent RAG break / generic 502.
+    """
+
+
+def _check_embedding_dim(model: str, vectors: list[list[float]]) -> None:
+    """Validate every returned vector matches ``settings.embedding_dim``.
+
+    The stored ``Embedding.embedding`` column is a fixed ``Vector(EMBEDDING_DIM)``;
+    a non-matching width (e.g. Ollama nomic-embed-text = 768 vs the expected 1536)
+    silently breaks RAG and 502s the index path with no actionable detail. Fail
+    LOUDLY here, before any insert, naming expected vs actual.
+    """
+    expected = settings.embedding_dim
+    for vec in vectors:
+        actual = len(vec)
+        if actual != expected:
+            raise EmbeddingDimError(
+                f"Embedding model '{model}' returned {actual}-dim vectors but the "
+                f"index expects {expected}-dim. Configure an embedding model whose "
+                f"output width is {expected} (e.g. text-embedding-3-small), or "
+                f"change the stored embedding dimension (requires a migration)."
+            )
 
 
 @dataclass
@@ -395,6 +426,11 @@ class EmbeddingService:
             vectors = await self.router.embed(
                 [it.text for it in to_embed], model=embedding_model, db=db
             )
+            # Validate the provider's output width matches the fixed stored column
+            # BEFORE any insert. A mismatch (e.g. 768-dim Ollama vs the expected
+            # 1536) raises a clear EmbeddingDimError that the /ai/index handler
+            # surfaces verbatim, instead of a silent RAG break / generic 502.
+            _check_embedding_dim(embedding_model, vectors)
             dim = len(vectors[0]) if vectors else 0
             for it, vec in zip(to_embed, vectors, strict=True):
                 content_hash = _hash(it.text)

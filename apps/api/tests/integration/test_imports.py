@@ -304,3 +304,20 @@ async def test_import_rolls_back_on_create_failure(
         )
     ).scalar_one()
     assert books_after == books_before  # rollback left no orphan book
+
+
+async def test_import_oversize_returns_413(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """An oversize .docx upload is rejected with 413 (P1 OOM guard) BEFORE the
+    whole body is buffered / handed to pandoc. The cap is monkeypatched down so
+    the test body stays small but proves the contract."""
+    monkeypatch.setattr("app.api.v1.imports._MAX_UPLOAD_BYTES", 1024)
+    project_id = await _create_project(client, auth_headers)
+    oversize = b"PK" + b"x" * 5000  # 5x the (patched) 1 KiB cap, looks like docx
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/imports",
+        headers=auth_headers,
+        files=_upload(content=oversize),
+    )
+    assert resp.status_code == 413

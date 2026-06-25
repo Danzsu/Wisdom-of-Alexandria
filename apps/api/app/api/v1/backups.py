@@ -37,6 +37,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
+from app.core.uploads import read_upload_capped
 from app.schemas.backup import RestoreSummary
 from app.services.backup_service import (
     BackupError,
@@ -123,19 +124,14 @@ async def restore(
     The restore is transactional — a failure rolls back, leaving no orphan
     project.
     """
-    raw = await file.read()
+    # Read in bounded chunks: an oversize body aborts with 413 BEFORE the whole
+    # request is buffered into RAM (so a huge upload cannot OOM the worker). The
+    # cap value is unchanged.
+    raw = await read_upload_capped(file, max_bytes=_MAX_UPLOAD_BYTES)
     if len(raw) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The uploaded file is empty.",
-        )
-    if len(raw) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=(
-                "The uploaded file is too large "
-                f"(limit {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."
-            ),
         )
 
     try:

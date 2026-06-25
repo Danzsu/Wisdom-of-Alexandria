@@ -1,11 +1,32 @@
 import uuid
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Supported provider types. ``custom`` is any OpenAI-compatible endpoint.
 ProviderType = Literal["ollama", "gemini", "anthropic", "openai", "openrouter", "custom"]
+
+
+def _validate_base_url(value: str | None) -> str | None:
+    """Reject a ``base_url`` that is not a well-formed ``http(s)`` URL.
+
+    The base_url is used verbatim as the outbound LiteLLM/HTTP endpoint, so a
+    non-http scheme (``file://``, ``ftp://``) or a malformed string must not pass
+    the schema boundary. We enforce scheme (http/https) + a non-empty host only.
+
+    LOCAL-FIRST: loopback/localhost is the PRIMARY use case (Ollama runs at
+    ``http://localhost:11434``), so it is explicitly allowed.
+
+    # TODO: block private/link-local ranges when this deploys multi-user/cloud.
+    """
+    if value is None:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("base_url must be a valid http:// or https:// URL")
+    return value
 
 
 class ProviderCreate(BaseModel):
@@ -21,6 +42,8 @@ class ProviderCreate(BaseModel):
     image_model: str | None = Field(default=None, max_length=255)
     enabled: bool = True
 
+    _validate_base_url = field_validator("base_url")(_validate_base_url)
+
 
 class ProviderUpdate(BaseModel):
     type: ProviderType | None = None
@@ -32,6 +55,8 @@ class ProviderUpdate(BaseModel):
     embedding_model: str | None = Field(default=None, max_length=255)
     image_model: str | None = Field(default=None, max_length=255)
     enabled: bool | None = None
+
+    _validate_base_url = field_validator("base_url")(_validate_base_url)
 
 
 class ProviderRead(BaseModel):

@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Annotated
 
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
@@ -16,6 +17,7 @@ from app.services.ai_service import AIService, ai_service
 from app.services.crud_generation_job import create_index_job
 from app.services.crud_provider import list_providers
 from app.services.embedding_service import (
+    EmbeddingDimError,
     EmbeddingService,
     SyncResult,
     embedding_service,
@@ -101,9 +103,15 @@ async def list_models(
 _TemperatureField = Field(default=None, ge=0.0, le=2.0)
 _MaxTokensField = Field(default=None, ge=1, le=32768)
 
+# Length caps on free-text AI inputs. Generous enough for real long-form use
+# (a long scene/chapter is well under this), but they reject a pathological
+# payload with a 422 rather than letting it balloon a prompt / embedding cost.
+_TEXT_MAX_CHARS = 200_000  # selected_text / scene_text / summarize content
+_BEAT_MAX_CHARS = 2_000  # a single beat line
+
 
 class RewriteRequest(BaseModel):
-    selected_text: str
+    selected_text: str = Field(max_length=_TEXT_MAX_CHARS)
     instruction: str
     scene_id: uuid.UUID | None = None
     model: str | None = None
@@ -112,7 +120,7 @@ class RewriteRequest(BaseModel):
 
 
 class DescribeRequest(BaseModel):
-    selected_text: str
+    selected_text: str = Field(max_length=_TEXT_MAX_CHARS)
     channels: list[str] | None = None  # defaults to all 6 in AIService
     scene_id: uuid.UUID | None = None
     model: str | None = None
@@ -121,7 +129,7 @@ class DescribeRequest(BaseModel):
 
 
 class WriteContinueRequest(BaseModel):
-    scene_text: str
+    scene_text: str = Field(max_length=_TEXT_MAX_CHARS)
     context: str = ""
     word_count_target: int = 300
     scene_id: uuid.UUID | None = None
@@ -131,7 +139,8 @@ class WriteContinueRequest(BaseModel):
 
 
 class GenerateSceneRequest(BaseModel):
-    beats: list[str]
+    # Each beat is length-capped so a pathological beat can't balloon the prompt.
+    beats: list[Annotated[str, Field(max_length=_BEAT_MAX_CHARS)]]
     characters: str = ""
     location: str = ""
     style_notes: str = ""
@@ -142,7 +151,7 @@ class GenerateSceneRequest(BaseModel):
 
 
 class SummarizeRequest(BaseModel):
-    content: str
+    content: str = Field(max_length=_TEXT_MAX_CHARS)
     content_type: str = "jelenet"
     scene_id: uuid.UUID | None = None
     chapter_id: uuid.UUID | None = None
@@ -532,6 +541,16 @@ async def index_project(
             return IndexResult(**SyncResult(skipped_no_provider=True).as_dict())
         result = await svc.sync_project(db, resolved_project_id, embedding_model=model)
         return IndexResult(**result.as_dict())
+    except EmbeddingDimError as e:
+        # A wrong-width embedding provider is a CONFIGURATION error: surface the
+        # clear, actionable dim-mismatch message (expected vs actual + model)
+        # verbatim instead of a generic "Indexing failed" so the operator can fix
+        # the provider's embedding model rather than chasing an opaque 502.
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=safe_error(e),
+        )
     except Exception as e:
         # Roll back so the request session is clean, then surface a sanitized
         # 502 (consistent with the other AI endpoints).

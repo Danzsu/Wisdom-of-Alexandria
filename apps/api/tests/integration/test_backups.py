@@ -503,6 +503,19 @@ async def test_restore_endpoint_bad_version_422(client, auth_headers):
     assert resp.status_code == 422
 
 
+async def test_restore_endpoint_oversize_413(client, auth_headers, monkeypatch):
+    """An upload over the cap is rejected with 413 (P1 OOM guard). The cap is
+    monkeypatched down so the test body stays small but proves the contract:
+    a body exceeding the cap aborts with 413, never reaching JSON parsing."""
+    monkeypatch.setattr("app.api.v1.backups._MAX_UPLOAD_BYTES", 1024)
+    oversize = b"x" * 5000  # 5x the (patched) 1 KiB cap
+    files = {"file": ("big.json", io.BytesIO(oversize), "application/json")}
+    resp = await client.post(
+        "/api/v1/projects/restore", headers=auth_headers, files=files
+    )
+    assert resp.status_code == 413
+
+
 async def test_restore_endpoint_requires_auth(client):
     payload = json.dumps({"version": 1, "project": {"title": "x"}}).encode()
     files = {"file": ("x.json", io.BytesIO(payload), "application/json")}
