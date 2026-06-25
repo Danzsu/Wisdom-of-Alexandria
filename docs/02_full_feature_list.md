@@ -214,7 +214,7 @@ Jelölések:
 | Context pack builder | V1 | AI kéréshez releváns kontextuscsomag |
 | Saliency Engine | V1 | Okos context selection: relevancia alapján szűr, nem dumpol mindent |
 | Chapter Continuity linking | V1 | Dokumentumok összekapcsolása; AI visszaolvashat előző fejezetekből (akár 20k szó) |
-| Codex Progression context | V1 | Az AI csak a scene aktuális idejéig érvényes Codex állapotot kapja |
+| Codex Progression context | V1 | Az AI csak a scene aktuális idejéig érvényes Codex állapotot kapja — **megvalósítva** (join-alapú „állapot az N. jelenetnél" RAG-szűrés). Lásd `docs/17` |
 | Long context compression | V2 | Régi fejezetek tömörített memóriája |
 | Memory update after approval | V1 | Csak jóváhagyott szöveg kerüljön memóriába |
 
@@ -243,7 +243,7 @@ Jelölések:
 | Markdown export | MVP | Teljes kézirat Markdownban |
 | DOCX export | MVP | Word kompatibilis export |
 | EPUB export | V1 | E-book export |
-| PDF export | V1 | Olvasható PDF export |
+| PDF export | V1 | Olvasható PDF export — **megvalósítva** (`pandoc --pdf-engine=weasyprint`; motor hiányában kecses 503). Lásd `docs/17` |
 | Chapter-only export | V1 | Egy fejezet exportja |
 | Scene-only export | V1 | Egy jelenet exportja |
 | Project backup JSON | MVP | Teljes projekt adatmentés |
@@ -260,7 +260,7 @@ Jelölések:
 |---|---:|---|
 | Model provider settings | MVP | Ollama, OpenAI-compatible, Gemini, OpenRouter stb. |
 | Model collection | V1 | Feladatokhoz modellek csoportosítása |
-| Prompt preset editor | V1 | Promptok szerkesztése UI-ból |
+| Prompt preset editor | V1 | Promptok szerkesztése UI-ból — **részben kész** (`PromptTemplate` backend + CRUD API + létrehozó/törlő UI; inline szerkesztő-UI még hátra). Lásd `docs/17` |
 | Temperature / max tokens | MVP | Modellparaméterek beállítása |
 | Local model health check | MVP | Ollama elérhetőség tesztelése |
 | Cloud API key storage | V1 | Biztonságos API kulcs kezelés |

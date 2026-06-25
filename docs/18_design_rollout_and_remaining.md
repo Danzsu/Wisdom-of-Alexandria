@@ -1,9 +1,10 @@
 # 18 — Design rollout és ami hátra van (élő)
 
 Ez a dokumentum a **Claude Design** re-skin kigördülését írja le. A re-skin
-mostanra **teljes** (DESIGN-A + B + C mind kész) — design-felület nincs több hátra,
-csak opcionális delight-tételek. A token- és betű-referencia a `docs/09`-ben él; ez
-a fájl a „mi készült el / mi van hátra" nézet a design felől.
+mostanra **teljes** (DESIGN-A + B + C **és a delight-pass** mind kész) —
+design-felület nincs több hátra; ami marad, az kizárólag opcionális
+konszolidáció. A token- és betű-referencia a `docs/09`-ben él; ez a fájl a „mi
+készült el / mi van hátra" nézet a design felől.
 
 ---
 
@@ -93,24 +94,37 @@ javítások.
 
 ---
 
-## e) Elhalasztott design / delight tételek (opcionális)
+## e) Delight-pass — „celestial calm" (KÉSZ)
 
-A három DESIGN-C surface leszállításával **design-felület már nincs hátra** — ami
-marad, az kizárólag opcionális delight / konszolidáció (javasolt, nem kötelező):
+A re-skin záró rétege egy **HSR-ihletésű, de visszafogott** „celestial calm"
+delight-kör — tisztán esztétikai ráadás, nem új design-surface. Mind **token-alapú**
+és **reduced-motion-safe**:
+
+- **`CelestialBackdrop`** a dashboard-heron + az üres állapotokon — finom égi
+  háttér-hangulat.
+- **AI-result reveal shimmer** + **lágy kártya-aurák** az AI-result-kártyákon.
+
+Commitok: **`6354035`** + **`1bd977a`**. Ezzel a **design-rollout teljes**
+(DESIGN-A + B + C + delight) — design-felület már nincs hátra.
+
+---
+
+## f) Elhalasztott konszolidáció (opcionális)
+
+A delight-pass leszállításával **design-felület már nincs hátra** — ami marad, az
+kizárólag opcionális konszolidáció (javasolt, nem kötelező):
 
 - **`woa-embers` dekoratív háttér-canvas:** a design hangulati parázs-/szikra-háttere;
-  a sparkfield (`.woa-sparkfield` / `woaSpark`) megvan, a teljes embers-canvas még
-  nem adoptálva.
-- **HSR / égi-ihletésű delight-kör (javasolt, opcionális):** egy hangulati
-  „celestial" delight-pass az embers-canvasra építve — tisztán esztétikai
-  ráadás, nem design-követelmény.
+  a sparkfield (`.woa-sparkfield` / `woaSpark`) megvan, és a visszafogott
+  `CelestialBackdrop` delight-réteg már landolt (lásd e), de a **teljes**
+  embers-canvas tudatosan nincs adoptálva (opcionális V2 — lásd `docs/17`).
 - **Inspector szegmentált-kontroll konszolidáció:** a Write inspector saját, egyedi
   szegmentált kontrollt használ — érdemes a kit `SegmentedControl`-jára húzni
   (`apps/web/components/kit/segmented-control.tsx`), hogy egy primitív legyen.
 
 ---
 
-## f) Hogyan iteráljunk tovább (design → kód)
+## g) Hogyan iteráljunk tovább (design → kód)
 
 A design→kód kézfogás az **artifact / DesignSync URL**-en megy: a Claude Design
 fájl (`Alexandria.dc.html`) frissül a design-projektben, onnan a `claude_design`

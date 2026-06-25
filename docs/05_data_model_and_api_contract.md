@@ -65,7 +65,7 @@ User
         │     └── PlotlineScene  ← IMPLEMENTED: Plotline↔Scene link (related_scenes[])
         ├── Relationship
         ├── CodexRelation        ← kapcsolatok Codex entryk között
-        ├── CodexProgression     ← temporális Codex változások (CRUD only, AI még nem szűr)
+        ├── CodexProgression     ← temporális Codex változások (CRUD + AI szűr: „állapot az N. jelenetnél")
         ├── CodexEntry           (search/index layer; + aliases/role/series_id oszlopok)
         ├── Snippet              ← félretett szövegek, töredékek
         ├── StyleGuide
@@ -76,7 +76,7 @@ User
         └── AIComment
 ```
 
-> **Megvalósítási megjegyzés (2026-06-16):** az élő állapot- és roadmap-leírás a [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md). Az alábbi tábla-definíciók közül a `Provider`, `Embedding`, `Series` (+ `Book.series_id`), `Plotline`, `PlotlineScene` és a `CodexEntry` `aliases`/`role`/`series_id` oszlopai **megvalósultak** (`packages/db` / `alexandria_core`). A `CodexProgression` továbbra is CRUD-only (az AI-réteg még nem szűr progresszió szerint).
+> **Megvalósítási megjegyzés (frissítve 2026-06-25):** az élő állapot- és roadmap-leírás a [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md). Az alábbi tábla-definíciók közül a `Provider`, `Embedding`, `Series` (+ `Book.series_id`), `Plotline`, `PlotlineScene` és a `CodexEntry` `aliases`/`role`/`series_id` oszlopai **megvalósultak** (`packages/db` / `alexandria_core`). A `CodexProgression` immár **nem csak CRUD**: az AI-réteg join-alapú „állapot az N. jelenetnél" linearizációval szűri a progresszió-jegyzeteket az AI-kontextusba (horgony nélkül projekt-globális baseline, horgonyzott = könyv+pozíció-scope). Külön, **workspace-globális** `PromptTemplate` entitás is megvalósult (modell + migráció `b3c5d7e9f1a2` + builtin seedek + CRUD API; lásd `docs/17`).
 
 ## Tables
 
@@ -424,7 +424,7 @@ created_at
 updated_at
 ```
 
-MVP: schema and CRUD only — the AI layer does not yet filter by progressions. V1: context pack builder respects progressions and filters out future states when building AI context for a given scene.
+MVP: schema and CRUD only. **V1 (megvalósítva, 2026-06-25):** the AI layer now filters by progressions via a join-based "state as of scene N" linearization — anchorless progressions form a project-global baseline, anchored ones are book+position scoped, and future states are excluded when building AI context for a given scene. See `docs/17`.
 
 ---
 
