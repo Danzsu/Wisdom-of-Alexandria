@@ -17,7 +17,10 @@ class Scene(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "scenes"
 
     chapter_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("chapters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -31,6 +34,7 @@ class Scene(UUIDPrimaryKey, Timestamps, Base):
         Uuid(as_uuid=True),
         ForeignKey("characters.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
 
     chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="scenes")

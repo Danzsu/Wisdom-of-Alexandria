@@ -13,6 +13,7 @@ class AIComment(UUIDPrimaryKey, Timestamps, Base):
         Uuid(as_uuid=True),
         ForeignKey("scenes.id", ondelete="CASCADE"),
         nullable=True,
+        index=True,
     )
     start_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
     end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -39,6 +39,7 @@ class GenerationJob(UUIDPrimaryKey, Timestamps, Base):
         Uuid(as_uuid=True),
         ForeignKey("scenes.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     chapter_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True

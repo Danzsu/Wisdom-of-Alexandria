@@ -10,7 +10,10 @@ class Book(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "books"
 
     project_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     # Optional sub-universe grouping. SET NULL on series delete: removing a
     # series must NOT delete its books — they fall back to project-only scope.

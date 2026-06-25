@@ -10,7 +10,10 @@ class Beat(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "beats"
 
     scene_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("scenes.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("scenes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     beat_type: Mapped[str | None] = mapped_column(String(100), nullable=True)

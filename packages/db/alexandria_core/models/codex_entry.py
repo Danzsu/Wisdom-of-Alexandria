@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, Text, Uuid
+from sqlalchemy import JSON, Boolean, ForeignKey, String, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from alexandria_core.models.base import Base, Timestamps, UUIDPrimaryKey
@@ -12,7 +12,10 @@ class CodexEntry(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "codex_entries"
 
     project_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     # Optional series scope. NULL = project-global (visible everywhere in the
     # project); set = scoped to that series only. SET NULL on series delete so a
@@ -39,7 +42,9 @@ class CodexEntry(UUIDPrimaryKey, Timestamps, Base):
     aliases: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # The single story role (Hős / Antagonista / …) — mirrors Character.role.
     role: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    ai_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    ai_visible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     # No Python-side ``default=list`` here either (same mutable-default footgun as
     # aliases): the create schema defaults tags to ``[]`` and CodexEntryRead coerces
     # a NULL back to ``[]``, so a direct construction never leaks a shared list.

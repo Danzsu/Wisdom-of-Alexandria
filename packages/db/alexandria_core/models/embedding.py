@@ -87,4 +87,9 @@ class Embedding(UUIDPrimaryKey, Timestamps, Base):
     # The embedding model that produced the vector (e.g. text-embedding-3-small).
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     # The vector width actually stored (mirrors EMBEDDING_DIM at write time).
-    dim: Mapped[int] = mapped_column(Integer, nullable=False, default=EMBEDDING_DIM)
+    dim: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=EMBEDDING_DIM,
+        server_default=str(EMBEDDING_DIM),
+    )

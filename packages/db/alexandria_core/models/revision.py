@@ -13,11 +13,13 @@ class Revision(UUIDPrimaryKey, Timestamps, Base):
         Uuid(as_uuid=True),
         ForeignKey("scenes.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     job_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("generation_jobs.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

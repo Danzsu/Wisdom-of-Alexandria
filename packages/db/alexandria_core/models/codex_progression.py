@@ -17,10 +17,12 @@ class CodexProgression(UUIDPrimaryKey, Timestamps, Base):
         Uuid(as_uuid=True),
         ForeignKey("chapters.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     scene_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("scenes.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
