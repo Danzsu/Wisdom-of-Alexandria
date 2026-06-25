@@ -1070,6 +1070,7 @@ function makeProject(body: Partial<ProjectRead>): ProjectRead {
     // A brand-new project has no books or scenes yet (mirrors the backend).
     book_count: 0,
     word_count: 0,
+    scene_count: 0,
   };
 }
 

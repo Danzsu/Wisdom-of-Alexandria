@@ -32,6 +32,7 @@ type AiSchemas = AiComponents["schemas"];
  * apps/api (`api.json`) — core writing-workspace resources.
  * ------------------------------------------------------------------------- */
 export type ProjectRead = ApiSchemas["ProjectRead"];
+export type MeRead = ApiSchemas["MeRead"];
 export type BookRead = ApiSchemas["BookRead"];
 export type SeriesRead = ApiSchemas["SeriesRead"];
 export type ChapterRead = ApiSchemas["ChapterRead"];

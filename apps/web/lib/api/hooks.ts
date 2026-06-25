@@ -26,6 +26,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
+import { getMe } from "./auth";
 import { createProject, getProject, listProjects } from "./projects";
 import { createBook, listBooks, updateBook } from "./books";
 import { exportQueryKeys } from "./export-hooks";
@@ -100,6 +101,7 @@ import type {
   PlotlineSceneCreate,
   PlotlineSceneRead,
   PlotlineUpdate,
+  MeRead,
   ProjectCreate,
   ProjectRead,
   PromptTemplateCreate,
@@ -112,6 +114,8 @@ import type {
 
 /** Stable query-key factory — keeps cache keys consistent across the app. */
 export const queryKeys = {
+  /** The authenticated user's identity (GET /auth/me). */
+  me: ["me"] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   projectBooks: (projectId: string) =>
@@ -144,6 +148,18 @@ export const queryKeys = {
   // Prompt Library — GLOBAL (workspace-wide, no project scope).
   promptTemplates: ["prompt-templates"] as const,
 };
+
+/**
+ * Fetch the authenticated user's identity (GET /auth/me). The Profil screen
+ * renders the real `display_name`/`initials`/username from this, falling back to
+ * static i18n while it loads or if it errors — so identity is never blank.
+ */
+export function useMe(): UseQueryResult<MeRead, Error> {
+  return useQuery({
+    queryKey: queryKeys.me,
+    queryFn: () => getMe(),
+  });
+}
 
 /** List every project. */
 export function useProjects(): UseQueryResult<ProjectRead[], Error> {

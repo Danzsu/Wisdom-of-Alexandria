@@ -35,7 +35,8 @@ import { UserMenu } from "@/components/shell/user-menu";
 
 /**
  * Two projects whose aggregates SUM to the values the stat cards must show:
- * books 2 + 3 = 5; words 40000 + 25080 = 65080 → "65 080" (hu-HU grouping).
+ * books 2 + 3 = 5; words 40000 + 25080 = 65080 → "65 080" (hu-HU grouping);
+ * scenes 12 + 30 = 42.
  */
 const TWO_PROJECTS: ProjectRead[] = [
   {
@@ -47,6 +48,7 @@ const TWO_PROJECTS: ProjectRead[] = [
     updated_at: "2026-01-01T00:00:00Z",
     book_count: 2,
     word_count: 40000,
+    scene_count: 12,
   },
   {
     id: "p2",
@@ -57,12 +59,34 @@ const TWO_PROJECTS: ProjectRead[] = [
     updated_at: "2026-01-02T00:00:00Z",
     book_count: 3,
     word_count: 25080,
+    scene_count: 30,
   },
 ];
+
+/** The /me identity the real-data path renders (distinct from the fallback). */
+const ME = {
+  username: "szerzo",
+  display_name: "Szerző",
+  initials: "SZ",
+};
 
 function useTwoProjects() {
   server.use(
     http.get(`${base}/projects`, () => HttpResponse.json(TWO_PROJECTS)),
+  );
+}
+
+/** Mock GET /auth/me with the real identity (the success path). */
+function useMeOk() {
+  server.use(http.get(`${base}/auth/me`, () => HttpResponse.json(ME)));
+}
+
+/** Mock GET /auth/me with a 500 (the graceful-fallback path). */
+function useMeError() {
+  server.use(
+    http.get(`${base}/auth/me`, () =>
+      HttpResponse.json({ detail: "boom" }, { status: 500 }),
+    ),
   );
 }
 
@@ -84,12 +108,28 @@ describe("ProfileScreen", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the author identity (name + initials + handle)", async () => {
+  it("renders the REAL author identity from /me (name + initials + handle)", async () => {
     useTwoProjects();
+    useMeOk();
     renderScreen();
+    // display_name + initials come from /me, NOT the static hu.user fallback.
+    expect(await screen.findByText(ME.display_name)).toBeInTheDocument();
+    expect(screen.getByText(ME.initials)).toBeInTheDocument();
+    // The handle is derived from the /me username (`@<username>`).
+    expect(
+      screen.getByText(
+        `@${ME.username} · ${hu.profil.workspace} · ${hu.profil.role}`,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the static hu.user identity when /me fails", async () => {
+    useTwoProjects();
+    useMeError();
+    renderScreen();
+    // The card never goes blank — it shows the static i18n identity instead.
     expect(await screen.findByText(hu.user.name)).toBeInTheDocument();
     expect(screen.getByText(hu.user.initials)).toBeInTheDocument();
-    // The meta line is the handle · workspace · role triple.
     expect(
       screen.getByText(
         `${hu.profil.handle} · ${hu.profil.workspace} · ${hu.profil.role}`,
@@ -99,6 +139,7 @@ describe("ProfileScreen", () => {
 
   it("binds the SUMMED real aggregates from useProjects into the stat cards", async () => {
     useTwoProjects();
+    useMeOk();
     renderScreen();
     // 2 + 3 books on the shelf.
     expect(await screen.findByText("5")).toBeInTheDocument();
@@ -115,13 +156,14 @@ describe("ProfileScreen", () => {
         (_t, el) => collapse(el?.textContent ?? "") === collapse(expectedWords),
       ),
     ).toBeInTheDocument();
-    // 2 projects (the honest substitute for the design's "jelenet" count).
-    expect(screen.getByText("2")).toBeInTheDocument();
-    // …with the project label, proving the third card is the project count.
-    expect(screen.getByText(hu.profil.statProjects)).toBeInTheDocument();
+    // 12 + 30 scenes — the SUMMED real scene_count (the third card).
+    expect(screen.getByText("42")).toBeInTheDocument();
+    // …with the scene label, proving the third card is the scene count.
+    expect(screen.getByText(hu.profil.statScenes)).toBeInTheDocument();
   });
 
   it("shows an em dash for every stat while the aggregates are loading", () => {
+    useMeOk();
     // Never-resolving handler → the query stays pending.
     server.use(
       http.get(`${base}/projects`, () => new Promise(() => {})),
@@ -135,13 +177,14 @@ describe("ProfileScreen", () => {
   });
 
   it("shows an em dash for every stat on a fetch error (no crash)", async () => {
+    useMeError();
     server.use(
       http.get(`${base}/projects`, () =>
         HttpResponse.json({ detail: "boom" }, { status: 500 }),
       ),
     );
     const { container } = renderScreen();
-    // The identity card still renders…
+    // The identity card still renders (the /me fallback name)…
     expect(await screen.findByText(hu.user.name)).toBeInTheDocument();
     // …and the stats degrade to em dashes rather than throwing.
     const dashes = Array.from(
@@ -152,6 +195,7 @@ describe("ProfileScreen", () => {
 
   it("fires an info toast (Hamarosan) when Szerkesztés is clicked", async () => {
     useTwoProjects();
+    useMeError();
     const user = userEvent.setup();
     renderScreen();
     await screen.findByText(hu.user.name);
@@ -162,6 +206,7 @@ describe("ProfileScreen", () => {
 
   it("renders the writer-settings rows (display-only)", async () => {
     useTwoProjects();
+    useMeError();
     renderScreen();
     await screen.findByText(hu.user.name);
     expect(screen.getByText(hu.profil.settingsLabel)).toBeInTheDocument();
@@ -172,8 +217,9 @@ describe("ProfileScreen", () => {
 
   it("has no a11y violations", async () => {
     useTwoProjects();
+    useMeOk();
     const { container } = renderScreen();
-    await screen.findByText(hu.user.name);
+    await screen.findByText(ME.display_name);
     await expectNoA11yViolations(container);
   });
 });

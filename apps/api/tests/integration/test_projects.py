@@ -226,6 +226,7 @@ async def test_create_project_returns_zero_aggregates(client: AsyncClient, auth_
     data = resp.json()
     assert data["book_count"] == 0
     assert data["word_count"] == 0
+    assert data["scene_count"] == 0
 
 
 async def test_aggregates_two_books_with_scenes(client: AsyncClient, auth_headers: dict):
@@ -251,6 +252,7 @@ async def test_aggregates_two_books_with_scenes(client: AsyncClient, auth_header
     detail = get_resp.json()
     assert detail["book_count"] == 2
     assert detail["word_count"] == 10
+    assert detail["scene_count"] == 4  # 2 + 1 + 1 non-archived scenes
 
     # GET list — same aggregates for this project.
     list_resp = await client.get("/api/v1/projects", headers=auth_headers)
@@ -258,6 +260,7 @@ async def test_aggregates_two_books_with_scenes(client: AsyncClient, auth_header
     listed = next(p for p in list_resp.json() if p["id"] == pid)
     assert listed["book_count"] == 2
     assert listed["word_count"] == 10
+    assert listed["scene_count"] == 4
 
 
 async def test_aggregates_empty_project(client: AsyncClient, auth_headers: dict):
@@ -268,6 +271,7 @@ async def test_aggregates_empty_project(client: AsyncClient, auth_headers: dict)
     data = resp.json()
     assert data["book_count"] == 0
     assert data["word_count"] == 0
+    assert data["scene_count"] == 0
 
 
 async def test_aggregates_books_without_scenes(client: AsyncClient, auth_headers: dict):
@@ -282,6 +286,7 @@ async def test_aggregates_books_without_scenes(client: AsyncClient, auth_headers
     data = resp.json()
     assert data["book_count"] == 2
     assert data["word_count"] == 0  # coalesced null SUM
+    assert data["scene_count"] == 0
 
 
 async def test_word_count_excludes_archived_scenes(client: AsyncClient, auth_headers: dict):
@@ -319,6 +324,8 @@ async def test_word_count_excludes_archived_scenes(client: AsyncClient, auth_hea
     assert resp.status_code == 200
     # word_count == N (3), excludes the archived M (4) → NOT 7.
     assert resp.json()["word_count"] == 3
+    # scene_count counts only the 1 non-archived scene (NOT 2).
+    assert resp.json()["scene_count"] == 1
 
 
 async def test_aggregates_do_not_leak_across_projects(client: AsyncClient, auth_headers: dict):
@@ -340,5 +347,7 @@ async def test_aggregates_do_not_leak_across_projects(client: AsyncClient, auth_
     by_id = {p["id"]: p for p in resp.json()}
     assert by_id[proj_a["id"]]["book_count"] == 1
     assert by_id[proj_a["id"]]["word_count"] == 3
+    assert by_id[proj_a["id"]]["scene_count"] == 1
     assert by_id[proj_b["id"]]["book_count"] == 2
     assert by_id[proj_b["id"]]["word_count"] == 2
+    assert by_id[proj_b["id"]]["scene_count"] == 1

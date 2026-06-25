@@ -1787,7 +1787,7 @@ export const hu = {
     /** Stat-card labels (numbers bind from real `useProjects()` aggregates). */
     statBooks: "könyv a polcon",
     statWords: "megírt szó",
-    statProjects: "projekt",
+    statScenes: "jelenet",
     /** Section label above the writer-settings card. */
     settingsLabel: "Írói beállítások",
     /** Settings rows (display-only this pass — sourced from the design). */

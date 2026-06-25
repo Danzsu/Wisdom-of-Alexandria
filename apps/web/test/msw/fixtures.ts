@@ -48,6 +48,7 @@ export const FAROSZ_PROJECT: ProjectRead = {
   // the hu-locale thousands grouping in the card meta line).
   book_count: 1,
   word_count: 12450,
+  scene_count: 8,
 };
 
 export const HOMOK_PROJECT: ProjectRead = {
@@ -60,6 +61,7 @@ export const HOMOK_PROJECT: ProjectRead = {
   // No book yet → the card shows the "Nincs könyv · 0 szó" empty path.
   book_count: 0,
   word_count: 0,
+  scene_count: 0,
 };
 
 /* ---------------------------------------------------------------------------

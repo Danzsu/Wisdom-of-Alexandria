@@ -38,10 +38,35 @@ def _word_count_subquery():
     )
 
 
-def _to_read(project: Project, book_count: int, word_count: int) -> ProjectRead:
+def _scene_count_subquery():
+    """Correlated scalar subquery: number of non-archived Scenes across the project.
+
+    Walks the same FK chain as ``_word_count_subquery`` (Scene → Chapter → Book →
+    Project) and applies the identical archived-exclusion so ``scene_count`` and
+    ``word_count`` stay consistent (a scene that doesn't count its words also
+    doesn't count toward the scene total).
+    """
+    return (
+        select(func.count(Scene.id))
+        .select_from(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Book, Chapter.book_id == Book.id)
+        .where(Book.project_id == Project.id, Scene.status != "archived")
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
+
+def _to_read(
+    project: Project, book_count: int, word_count: int, scene_count: int
+) -> ProjectRead:
     """Build a ProjectRead from a Project plus its computed aggregates."""
     return ProjectRead.model_validate(project).model_copy(
-        update={"book_count": book_count, "word_count": word_count}
+        update={
+            "book_count": book_count,
+            "word_count": word_count,
+            "scene_count": scene_count,
+        }
     )
 
 
@@ -63,15 +88,18 @@ async def get_project_read(
 ) -> ProjectRead | None:
     """Fetch one project WITH its aggregates as a single query (no N+1)."""
     result = await db.execute(
-        select(Project, _book_count_subquery(), _word_count_subquery()).where(
-            Project.id == project_id
-        )
+        select(
+            Project,
+            _book_count_subquery(),
+            _word_count_subquery(),
+            _scene_count_subquery(),
+        ).where(Project.id == project_id)
     )
     row = result.first()
     if row is None:
         return None
-    project, book_count, word_count = row
-    return _to_read(project, book_count, word_count)
+    project, book_count, word_count, scene_count = row
+    return _to_read(project, book_count, word_count, scene_count)
 
 
 async def list_projects_read(
@@ -82,14 +110,19 @@ async def list_projects_read(
     Keeps the existing pagination + newest-first ordering.
     """
     result = await db.execute(
-        select(Project, _book_count_subquery(), _word_count_subquery())
+        select(
+            Project,
+            _book_count_subquery(),
+            _word_count_subquery(),
+            _scene_count_subquery(),
+        )
         .offset(skip)
         .limit(limit)
         .order_by(Project.created_at.desc())
     )
     return [
-        _to_read(project, book_count, word_count)
-        for project, book_count, word_count in result.all()
+        _to_read(project, book_count, word_count, scene_count)
+        for project, book_count, word_count, scene_count in result.all()
     ]
 
 

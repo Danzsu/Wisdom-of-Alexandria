@@ -19,6 +19,7 @@ import type {
   CodexRelationRead as GenCodexRelationRead,
   Expect,
   MatchesContract,
+  MeRead as GenMeRead,
   PlotlineRead as GenPlotlineRead,
   PlotlineSceneRead as GenPlotlineSceneRead,
   ProjectRead as GenProjectRead,
@@ -39,10 +40,12 @@ export const projectReadSchema = z.object({
   language: z.string(),
   created_at: z.string(), // ISO-8601 datetime
   updated_at: z.string(),
-  // Card aggregates (Feature #1): number of books and total words across the
-  // whole project (sum of Scene.word_count). Computed server-side on read paths.
+  // Card aggregates (Feature #1): number of books, total words (sum of
+  // Scene.word_count) and number of non-archived scenes across the whole
+  // project. Computed server-side on read paths.
   book_count: z.number().int(),
   word_count: z.number().int(),
+  scene_count: z.number().int(),
 });
 export type ProjectRead = z.infer<typeof projectReadSchema>;
 
@@ -53,6 +56,20 @@ export const projectCreateSchema = z.object({
   language: z.string().max(10).default("hu"),
 });
 export type ProjectCreate = z.infer<typeof projectCreateSchema>;
+
+/* ---------------------------------------------------------------------------
+ * Current user — mirrors app/api/v1/auth.py `MeRead` (GET /auth/me). Single-user
+ * .env auth: `username` is the authenticated account; `display_name` + `initials`
+ * are derived server-side from the username (no explicit author setting exists).
+ * ------------------------------------------------------------------------- */
+
+/** The authenticated user's identity as returned by the API (`MeRead`). */
+export const meReadSchema = z.object({
+  username: z.string(),
+  display_name: z.string(),
+  initials: z.string(),
+});
+export type MeRead = z.infer<typeof meReadSchema>;
 
 /* ---------------------------------------------------------------------------
  * Series — mirrors app/schemas/series.py (Feature #3a). A Series groups books
@@ -583,6 +600,7 @@ export const codexEntryListSchema = z.array(codexEntryReadSchema);
 // documented contract surface for this module.
 export type CoreContractTies = [
   Expect<MatchesContract<z.infer<typeof projectReadSchema>, GenProjectRead>>,
+  Expect<MatchesContract<z.infer<typeof meReadSchema>, GenMeRead>>,
   Expect<MatchesContract<z.infer<typeof seriesReadSchema>, GenSeriesRead>>,
   Expect<MatchesContract<z.infer<typeof bookReadSchema>, GenBookRead>>,
   Expect<MatchesContract<z.infer<typeof chapterReadSchema>, GenChapterRead>>,

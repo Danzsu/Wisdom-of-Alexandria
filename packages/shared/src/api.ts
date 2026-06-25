@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description Return the authenticated user's identity (username + derived fields).
+         */
+        get: operations["me_api_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/token": {
         parameters: {
             query?: never;
@@ -1580,6 +1600,23 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /**
+         * MeRead
+         * @description Identity of the authenticated single-user account.
+         *
+         *     There is no explicit display-name/author setting in config, so
+         *     ``display_name`` is derived from the username (title-cased, with
+         *     ``_``/``.`` treated as word separators) and ``initials`` is the uppercase
+         *     first letter of each display-name word (capped at two).
+         */
+        MeRead: {
+            /** Display Name */
+            display_name: string;
+            /** Initials */
+            initials: string;
+            /** Username */
+            username: string;
+        };
         /** PlotlineCreate */
         PlotlineCreate: {
             /** Book Id */
@@ -1731,6 +1768,11 @@ export interface components {
             id: string;
             /** Language */
             language: string;
+            /**
+             * Scene Count
+             * @default 0
+             */
+            scene_count: number;
             /** Title */
             title: string;
             /**
@@ -2272,6 +2314,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    me_api_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeRead"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_token_post: {
         parameters: {
             query?: never;

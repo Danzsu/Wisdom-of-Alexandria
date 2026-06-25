@@ -57,9 +57,10 @@ function installRecordingHandlers(): RecordedCall[] {
           language: (body.language as string) ?? "hu",
           created_at: "2026-06-14T15:00:00Z",
           updated_at: "2026-06-14T15:00:00Z",
-          // Feature #1: the backend returns 0/0 aggregates on create.
+          // Feature #1: the backend returns zero aggregates on create.
           book_count: 0,
           word_count: 0,
+          scene_count: 0,
         },
         { status: 201 },
       );

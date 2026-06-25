@@ -5,14 +5,17 @@
  *
  * The author profile: a gold-rule header, an identity card, a 3-up stat row and
  * a writer-settings card. The three stats bind REAL aggregates from
- * {@link useProjects} (total books, total words, project count); while the query
- * is loading or errored the numbers fall back to an em dash so the screen never
- * crashes. Writer settings are display-only this pass; the "Szerkesztés" button
- * is an honest V1+ stub that toasts `profil.editSoon`.
+ * {@link useProjects} (total books, total words, total scenes — summed across
+ * every project); while the query is loading or errored the numbers fall back to
+ * an em dash so the screen never crashes. The identity (name / initials / handle)
+ * binds the REAL authenticated user from {@link useMe} (GET /auth/me), falling
+ * back to the static `hu.user` values while it loads or if it fails so the card
+ * is never blank. Writer settings are display-only this pass; the "Szerkesztés"
+ * button is an honest V1+ stub that toasts `profil.editSoon`.
  */
 import { Cpu, Pencil } from "lucide-react";
 import { Button, Icon, PageHero, toast } from "@/components/kit";
-import { useProjects } from "@/lib/api/hooks";
+import { useMe, useProjects } from "@/lib/api/hooks";
 import { hu } from "@/lib/i18n/hu";
 
 /** Em dash shown while the aggregates load or after a fetch error. */
@@ -20,6 +23,7 @@ const DASH = "—";
 
 export function ProfileScreen() {
   const projectsQuery = useProjects();
+  const meQuery = useMe();
 
   // Real aggregates — summed across every project. While loading or on error we
   // show the em dash rather than a misleading "0" (and never throw).
@@ -32,7 +36,16 @@ export function ProfileScreen() {
   const totalWords = projects
     ? projects.reduce((sum, p) => sum + p.word_count, 0)
     : null;
-  const projectCount = projects ? projects.length : null;
+  const totalScenes = projects
+    ? projects.reduce((sum, p) => sum + p.scene_count, 0)
+    : null;
+
+  // Real identity from /me, with a graceful fall back to the static i18n values
+  // while the query loads or if it fails — so the card is never blank.
+  const me = meQuery.data;
+  const displayName = me?.display_name ?? hu.user.name;
+  const initials = me?.initials ?? hu.user.initials;
+  const handle = me ? `@${me.username}` : hu.profil.handle;
 
   const stats: { value: string; label: string }[] = [
     {
@@ -44,8 +57,8 @@ export function ProfileScreen() {
       label: hu.profil.statWords,
     },
     {
-      value: projectCount === null ? DASH : String(projectCount),
-      label: hu.profil.statProjects,
+      value: totalScenes === null ? DASH : String(totalScenes),
+      label: hu.profil.statScenes,
     },
   ];
 
@@ -68,14 +81,14 @@ export function ProfileScreen() {
         {/* Identity card */}
         <div className="mb-4 flex items-center gap-[18px] rounded-2xl border border-border bg-surface p-[22px_24px] shadow-card">
           <span className="flex h-[74px] w-[74px] flex-none items-center justify-center rounded-full bg-pov2-bg font-display text-[30px] font-semibold text-pov2-tx shadow-card">
-            {hu.user.initials}
+            {initials}
           </span>
           <div className="min-w-0 flex-1">
             <div className="font-display text-[26px] font-semibold text-text">
-              {hu.user.name}
+              {displayName}
             </div>
             <div className="mt-0.5 text-[13px] text-text-muted">
-              {`${hu.profil.handle} · ${hu.profil.workspace} · ${hu.profil.role}`}
+              {`${handle} · ${hu.profil.workspace} · ${hu.profil.role}`}
             </div>
           </div>
           <Button
