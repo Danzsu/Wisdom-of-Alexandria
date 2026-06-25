@@ -40,6 +40,14 @@ async def test_seed_is_idempotent(db_session: AsyncSession, seeded: int):
     # Re-running seeds zero new rows.
     again = await seed_builtin_prompt_templates(db_session)
     assert again == 0
+    # Trust the table, not just the counter: a dedup regression that drops or
+    # duplicates rows while still returning 0 must be caught — exactly 6 remain.
+    from sqlalchemy import func, select
+
+    from alexandria_core.models.prompt_template import PromptTemplate
+
+    total = await db_session.scalar(select(func.count()).select_from(PromptTemplate))
+    assert total == 6
 
 
 # --- list ----------------------------------------------------------------
@@ -61,11 +69,30 @@ async def test_list_returns_seeded_builtins(
         assert "created_at" in t and "updated_at" in t
 
 
-async def test_list_does_not_require_auth(client: AsyncClient, seeded: int):
-    # Read routes are open (single-user local app); list still works unauthenticated.
-    resp = await client.get("/api/v1/prompt-templates")
-    assert resp.status_code == 200
-    assert len(resp.json()) == 6
+async def test_list_requires_auth(
+    client: AsyncClient, auth_headers: dict, seeded: int
+):
+    # GET is gated like every other CRUD router: 401 without a token, 200 with.
+    unauth = await client.get("/api/v1/prompt-templates")
+    assert unauth.status_code == 401
+    ok = await client.get("/api/v1/prompt-templates", headers=auth_headers)
+    assert ok.status_code == 200
+    assert len(ok.json()) == 6
+
+
+async def test_get_one_requires_auth(
+    client: AsyncClient, auth_headers: dict, seeded: int
+):
+    listed = (
+        await client.get("/api/v1/prompt-templates", headers=auth_headers)
+    ).json()
+    target_id = listed[0]["id"]
+    unauth = await client.get(f"/api/v1/prompt-templates/{target_id}")
+    assert unauth.status_code == 401
+    ok = await client.get(
+        f"/api/v1/prompt-templates/{target_id}", headers=auth_headers
+    )
+    assert ok.status_code == 200
 
 
 async def test_list_builtins_before_user_templates(

@@ -1134,6 +1134,12 @@ export const hu = {
       /** Shown when no local (Ollama) provider is configured to pull onto. */
       noProvider:
         "Nincs lokális (Ollama) provider beállítva — előbb adj hozzá egyet.",
+      /**
+       * Shown when the providers list could NOT be loaded (backend unreachable)
+       * — distinct from the "add a provider" hint, which assumes a healthy list.
+       */
+      providersUnreachable:
+        "A providerek listája nem érhető el. Ellenőrizd, hogy fut-e a háttérszolgáltatás.",
       emptyName: "Add meg a letöltendő modell nevét.",
     },
     /** Cloud subpage (P1.1 — real provider/API-key configuration). */

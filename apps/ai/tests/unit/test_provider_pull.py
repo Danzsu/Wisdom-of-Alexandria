@@ -77,7 +77,11 @@ async def test_pull_model_streams_progress_to_success():
 @pytest.mark.unit
 async def test_pull_model_rejects_non_ollama_provider():
     provider = Provider(type="openai", label="Cloud")
-    with pytest.raises(PullModelError):
+    # Match the guard's discriminating message ("Ollama"), not just the exception
+    # type — the catch-all PullModelError path would also raise, so a type-only
+    # assertion would still pass if the type guard were deleted. The "Ollama"
+    # substring is produced ONLY by the guard path.
+    with pytest.raises(PullModelError, match="Ollama"):
         # The generator must raise on first iteration (no POST to a cloud endpoint).
         async for _ in pull_model(provider, "gpt-4o"):
             pass

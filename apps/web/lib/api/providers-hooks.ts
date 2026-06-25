@@ -13,7 +13,7 @@
  * SECURITY: the cache holds only `ProviderRead` shapes (masked key + has_key);
  * the real plaintext key never enters the query cache.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -37,6 +37,7 @@ import {
   type PullProgress,
 } from "./providers";
 import { aiQueryKeys } from "./ai-hooks";
+import { hu } from "@/lib/i18n/hu";
 
 /** Stable query-key factory for the provider resource. */
 export const providerQueryKeys = {
@@ -187,13 +188,28 @@ export function usePullModel(
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState<PullProgress | null>(null);
 
+  // Abort the in-flight stream on unmount so a mid-pull navigation does not
+  // leave the ReadableStream reader running. Re-created per pull in mutationFn.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
   const mutation = useMutation({
     mutationFn: async (model: string) => {
       if (!providerId) {
-        throw new Error("Nincs lokális (Ollama) provider beállítva.");
+        throw new Error(hu.settings.modelPull.noProvider);
       }
       setProgress(null);
-      await pullModel(providerId, model, (p) => setProgress(p));
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      await pullModel(
+        providerId,
+        model,
+        (p) => setProgress(p),
+        controller.signal,
+      );
     },
     onSuccess: () =>
       Promise.all([

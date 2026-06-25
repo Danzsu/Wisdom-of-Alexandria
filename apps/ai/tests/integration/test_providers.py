@@ -416,6 +416,41 @@ async def test_pull_unreachable_ollama_returns_clear_5xx(
     assert resp.json()["detail"]  # actionable, non-empty
 
 
+async def test_pull_midstream_error_emits_final_error_line(
+    client: AsyncClient, auth_headers: dict
+):
+    """The "never a silent truncation" guarantee: if the pull yields some progress
+    and THEN fails mid-stream (after the 200 is already committed), the streamed
+    NDJSON's final line must be a JSON object carrying an ``error`` key — not a
+    silent stop. This fails if the try/except in ``_ndjson`` is removed.
+    """
+    import json as _json
+
+    from app.services.provider_service import PullModelError
+
+    pid = await _create_ollama(client, auth_headers)
+
+    async def _fail_midstream(provider, model):  # noqa: ANN001
+        yield {"status": "pulling manifest"}
+        raise PullModelError("connection reset mid-stream")
+
+    with patch("app.api.v1.providers.pull_model", new=_fail_midstream):
+        resp = await client.post(
+            f"{BASE}/{pid}/models/pull",
+            json={"model": "llama3.1:8b"},
+            headers=auth_headers,
+        )
+
+    # We already committed to a 200 streaming response before the failure.
+    assert resp.status_code == 200
+    parsed = [_json.loads(ln) for ln in resp.text.splitlines() if ln.strip()]
+    # The progress chunk arrived first...
+    assert parsed[0]["status"] == "pulling manifest"
+    # ...and the FINAL line is an in-band error object (never a silent truncation).
+    assert "error" in parsed[-1]
+    assert parsed[-1]["error"]  # non-empty, actionable
+
+
 async def test_pull_empty_model_name_is_422(client: AsyncClient, auth_headers: dict):
     pid = await _create_ollama(client, auth_headers)
     resp = await client.post(

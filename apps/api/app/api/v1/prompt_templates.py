@@ -28,6 +28,7 @@ _BUILTIN_PROTECTED = "Built-in prompt templates cannot be edited or deleted"
 async def list_all(
     category: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
 ) -> list[PromptTemplateRead]:
     return await list_prompt_templates(db, category=category)
 
@@ -36,6 +37,7 @@ async def list_all(
 async def get_one(
     template_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
 ) -> PromptTemplateRead:
     template = await get_prompt_template(db, template_id)
     if template is None:

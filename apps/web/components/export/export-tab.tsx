@@ -51,9 +51,9 @@ export interface ExportTabProps {
 /**
  * The EXPORT tab body: format grid + scope radios + (for chapter/scene scope) a
  * target picker + filename preview + the V2 audio accordion + the real Markdown
- * export button. Markdown export is fully wired for ALL three scopes (whole
- * book / a chosen chapter / a chosen scene); the non-Markdown formats remain
- * honest stubs.
+ * export button. Export is fully wired for ALL three scopes (whole book / a
+ * chosen chapter / a chosen scene) across the real formats — Markdown, DOCX,
+ * EPUB and PDF (Pandoc-backed). Only `txt` remains an honest stub.
  */
 export function ExportTab({ bookId, title }: ExportTabProps) {
   const [format, setFormat] = useState<ExportFormat>("markdown");
@@ -91,7 +91,7 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
   }
 
   const filename = exportFilename(targetTitle, FORMAT_EXTENSION[format]);
-  // The backend `format` value, or undefined for the not-yet-wired stub formats.
+  // The backend `format` value, or undefined for the `txt` stub (not wired).
   const apiFormat = FORMAT_TO_API[format];
   // For non-book scopes a target MUST be chosen before exporting.
   const needsTarget = scope !== "book";
@@ -100,7 +100,7 @@ export function ExportTab({ bookId, title }: ExportTabProps) {
 
   function handleExport() {
     if (!apiFormat) {
-      // pdf / txt are not wired yet — honest stub toast.
+      // `txt` is not wired yet — honest stub toast.
       toast.info(hu.exportScreen.formatStubToast(formatDisplayName(format)));
       return;
     }

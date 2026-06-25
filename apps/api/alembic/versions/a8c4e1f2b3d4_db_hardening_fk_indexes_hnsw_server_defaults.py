@@ -195,6 +195,16 @@ def downgrade() -> None:
     #    existence check so the drop is a no-op if an index is already absent —
     #    keeps downgrade safe regardless of whether the initial create_all or
     #    this revision physically created it.
+    #
+    #    INTENTIONAL ASYMMETRY: the models now declare ``index=True`` on these FK
+    #    columns, so on a fresh DB ``create_all`` (the test/dev metadata tier)
+    #    creates these indexes itself. This downgrade unconditionally removes the
+    #    model-declared FK indexes, so an ``upgrade -> downgrade`` round-trip on a
+    #    fresh DB leaves the schema missing indexes the models declare. This is
+    #    acceptable and expected: a subsequent ``upgrade`` re-adds them
+    #    idempotently (the upgrade path is guarded the same way). We do not try to
+    #    distinguish "create_all made it" from "this revision made it" because the
+    #    forward migration is the single source of truth for these indexes.
     for name, table, _cols in reversed(_FK_INDEXES):
         if name in _existing_indexes(bind, table):
             op.drop_index(name, table_name=table)

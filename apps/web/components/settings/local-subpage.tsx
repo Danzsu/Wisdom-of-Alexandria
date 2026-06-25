@@ -237,12 +237,44 @@ export function LocalSubpage({ onBack }: LocalSubpageProps) {
           </div>
         ) : null}
 
-        {!ollamaProvider && !providersQuery.isLoading ? (
-          <p className="mt-2 text-[12px] text-text-muted" role="note">
-            {hu.settings.modelPull.noProvider}
-          </p>
-        ) : null}
+        <ProviderHint
+          isError={providersQuery.isError}
+          isLoading={providersQuery.isLoading}
+          hasProvider={Boolean(ollamaProvider)}
+        />
       </div>
     </div>
   );
+}
+
+/**
+ * The hint shown under the download form. Three cases, kept distinct:
+ *  - the providers query ERRORED (backend down) → an unreachable error (alert),
+ *  - the query settled with NO Ollama provider → the "add a provider" hint,
+ *  - otherwise (loading, or a provider exists) → nothing.
+ */
+function ProviderHint({
+  isError,
+  isLoading,
+  hasProvider,
+}: Readonly<{
+  isError: boolean;
+  isLoading: boolean;
+  hasProvider: boolean;
+}>) {
+  if (isError) {
+    return (
+      <p className="mt-2 text-[12px] text-danger-text" role="alert">
+        {hu.settings.modelPull.providersUnreachable}
+      </p>
+    );
+  }
+  if (!hasProvider && !isLoading) {
+    return (
+      <p className="mt-2 text-[12px] text-text-muted" role="note">
+        {hu.settings.modelPull.noProvider}
+      </p>
+    );
+  }
+  return null;
 }

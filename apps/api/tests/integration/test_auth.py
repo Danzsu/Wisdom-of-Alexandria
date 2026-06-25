@@ -28,6 +28,23 @@ async def test_login_wrong_username(client: AsyncClient):
     assert resp.status_code == 401
 
 
+async def test_login_constant_time_comparison_behavior_unchanged(client: AsyncClient):
+    """Switching to ``secrets.compare_digest`` must not change observable behavior:
+    a wrong password still 401s; the correct credentials still 200 with a token."""
+    wrong = await client.post(
+        "/api/v1/auth/token",
+        data={"username": "admin", "password": "not-the-password"},
+    )
+    assert wrong.status_code == 401
+
+    right = await client.post(
+        "/api/v1/auth/token",
+        data={"username": "admin", "password": "changeme"},
+    )
+    assert right.status_code == 200
+    assert right.json()["access_token"]
+
+
 async def test_protected_endpoint_without_token(client: AsyncClient):
     """Accessing a protected endpoint without token should 401.
     We'll use /api/v1/projects (not yet built) or just verify the auth deps work.

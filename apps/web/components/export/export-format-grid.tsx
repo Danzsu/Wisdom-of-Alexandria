@@ -4,14 +4,17 @@ import { Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 
-/** The export formats. Only `markdown` is real (MVP); the rest are stubs. */
+/**
+ * The export formats. `markdown`, `docx`, `epub` and `pdf` are all REAL +
+ * wired (Pandoc-backed on the backend). Only `txt` remains a stub.
+ */
 export type ExportFormat = "markdown" | "docx" | "epub" | "pdf" | "txt";
 
 interface FormatCardDef {
   id: ExportFormat;
   label: string;
   hint: string;
-  /** Whether the format is the real, wired one (only Markdown in the MVP). */
+  /** Whether the format is real + wired (md / docx / epub / pdf; not txt). */
   real: boolean;
   /** Show the small "hang" media badge (EPUB). */
   audioBadge?: boolean;

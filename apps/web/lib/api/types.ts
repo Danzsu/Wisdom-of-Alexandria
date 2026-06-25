@@ -378,7 +378,7 @@ export const promptTemplateReadSchema = z.object({
   category: z.string(),
   description: z.string(),
   body: z.string(),
-  uses: z.number(),
+  uses: z.number().int(),
   is_builtin: z.boolean(),
   icon_key: z.string().nullable(),
   created_at: z.string(),

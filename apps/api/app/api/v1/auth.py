@@ -1,3 +1,5 @@
+import secrets
+
 from alexandria_core.core.config import settings
 from alexandria_core.core.security import create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -39,10 +41,19 @@ def _derive_identity(username: str) -> MeRead:
 
 @router.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
-    if (
-        form_data.username != settings.admin_username
-        or form_data.password != settings.admin_password
-    ):
+    # Constant-time comparison for both fields to avoid a timing side-channel
+    # that could leak how many leading characters of the username/password
+    # matched. ``compare_digest`` is short-circuit-free; encode to bytes so
+    # non-ASCII credentials compare safely.
+    username_ok = secrets.compare_digest(
+        form_data.username.encode("utf-8"),
+        settings.admin_username.encode("utf-8"),
+    )
+    password_ok = secrets.compare_digest(
+        form_data.password.encode("utf-8"),
+        settings.admin_password.encode("utf-8"),
+    )
+    if not (username_ok and password_ok):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
