@@ -85,6 +85,34 @@ class ProviderTestResult(BaseModel):
     detail: str
 
 
+class ProviderPullRequest(BaseModel):
+    """Request body for ``POST /providers/{id}/models/pull``.
+
+    ``model`` is interpolated into the Ollama ``/api/pull`` JSON body, so there
+    is no injection surface, but we still cap length and restrict the charset to
+    a sane Ollama tag (``namespace/name:tag``) — letters, digits and the small
+    set of separators Ollama model refs use. This rejects whitespace/control
+    chars and pathologically long input at the schema boundary (422).
+    """
+
+    model: str = Field(..., min_length=1, max_length=128)
+
+    @field_validator("model")
+    @classmethod
+    def _validate_model(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("A modell neve nem lehet üres.")
+        allowed = set(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:/"
+        )
+        if not all(ch in allowed for ch in candidate):
+            raise ValueError(
+                "A modell neve csak betűket, számokat és a . _ - : / jeleket tartalmazhat."
+            )
+        return candidate
+
+
 class ProviderModelInfo(BaseModel):
     id: str
     label: str

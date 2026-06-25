@@ -32,7 +32,13 @@ import type {
   MatchesContract,
   ProviderRead as GenProviderRead,
 } from "@alexandria/shared";
-import { AI_BASE_URL, apiFetch } from "./client";
+import {
+  AI_BASE_URL,
+  API_PREFIX,
+  ApiError,
+  apiFetch,
+  getAuthToken,
+} from "./client";
 import { idString } from "./schema-primitives";
 
 /* ---------------------------------------------------------------------------
@@ -258,4 +264,142 @@ export async function listProviderModels(
     baseUrl: AI_BASE_URL,
   });
   return providerModelsResponseSchema.parse(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * Model pull (Ollama download) — STREAMING.
+ *
+ * `POST /providers/{id}/models/pull` streams NDJSON progress: one JSON object
+ * per line, ending with `{"status":"success"}`. We read the ReadableStream and
+ * hand each parsed line to a callback so the UI can render a live progress bar.
+ * A startup failure (non-Ollama provider → 400, Ollama down → 502) arrives as a
+ * normal non-2xx JSON body and is thrown as an `ApiError` (never swallowed); a
+ * mid-stream failure arrives in-band as a final `{"error": ...}` line.
+ * ------------------------------------------------------------------------- */
+
+/** One streamed progress line from the Ollama pull. */
+export interface PullProgress {
+  /** Ollama status text (e.g. "pulling manifest", "downloading", "success"). */
+  status?: string;
+  /** Bytes downloaded so far for the current layer (when downloading). */
+  completed?: number;
+  /** Total bytes for the current layer (when downloading). */
+  total?: number;
+  /** Set by the backend on a mid-stream failure (never alongside success). */
+  error?: string;
+}
+
+/** Start the pull request, throwing a typed `ApiError` on transport failure. */
+async function _startPull(
+  providerId: string,
+  model: string,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const url = `${AI_BASE_URL}${API_PREFIX}/providers/${providerId}/models/pull`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/x-ndjson",
+  };
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model }),
+      signal,
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    throw new ApiError(
+      0,
+      "Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot.",
+      cause,
+    );
+  }
+}
+
+/** Throw an `ApiError` carrying the FastAPI `{ detail }` from a non-2xx body. */
+async function _throwPullStartError(res: Response): Promise<never> {
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON error body — fall back to the status code */
+  }
+  const detail =
+    body && typeof body === "object" && "detail" in body
+      ? body.detail
+      : null;
+  const message =
+    typeof detail === "string" && detail.length > 0
+      ? detail
+      : `A modell letöltése sikertelen (HTTP ${res.status}).`;
+  throw new ApiError(res.status, message, body);
+}
+
+/** Parse one NDJSON line; skip blanks/garbage, throw on an in-band `error`. */
+function _parsePullLine(line: string): PullProgress | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  let parsed: PullProgress;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    // A malformed line is a backend/transport glitch; skip it rather than
+    // aborting the whole download.
+    return null;
+  }
+  if (parsed.error) {
+    // Mid-stream failure signalled in-band — surface it as an error.
+    throw new ApiError(502, parsed.error, parsed);
+  }
+  return parsed;
+}
+
+/**
+ * Pull (download) a model on a local Ollama provider, invoking `onProgress`
+ * with each streamed NDJSON line. Resolves when the stream ends.
+ *
+ * Throws an {@link ApiError} on a startup failure (the backend answers a non-2xx
+ * before streaming: 400 non-Ollama, 422 bad model name, 502/503 Ollama down).
+ * If a progress line carries an `error` field (mid-stream failure), this throws
+ * an `ApiError` too so the caller's `onError` path fires — a failure is never
+ * silently treated as success.
+ */
+export async function pullModel(
+  providerId: string,
+  model: string,
+  onProgress: (progress: PullProgress) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await _startPull(providerId, model, signal);
+  if (!res.ok) await _throwPullStartError(res);
+  if (!res.body) return; // No stream on a 200 (shouldn't happen) — clean no-op.
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const handleLine = (line: string): void => {
+    const parsed = _parsePullLine(line);
+    if (parsed) onProgress(parsed);
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      handleLine(buffer.slice(0, newlineIndex));
+      buffer = buffer.slice(newlineIndex + 1);
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+  // Flush any trailing partial line (a final object without a newline).
+  if (buffer.trim()) handleLine(buffer);
 }

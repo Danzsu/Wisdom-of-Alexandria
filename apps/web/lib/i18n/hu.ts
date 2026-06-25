@@ -1119,6 +1119,23 @@ export const hu = {
     modelRecommended: "ajánlott",
     downloadModel: "Modell letöltése",
     downloadModelToast: "A modell-letöltés a V1-ben érkezik",
+    /** Model pull (Ollama download) — real streaming download UI. */
+    modelPull: {
+      title: "Modell letöltése",
+      hint: "Tölts le egy Ollama-modellt közvetlenül a saját gépedre. A letöltés a modell méretétől függően több percig is eltarthat.",
+      placeholder: "llama3.1:8b",
+      label: "Modell neve",
+      button: "Letöltés",
+      pulling: "Letöltés folyamatban…",
+      /** Status text shown while a download streams (no provider yet / running). */
+      progressLabel: "Modell letöltése",
+      success: (model: string) => `A(z) „${model}” modell letöltve.`,
+      error: "A modell letöltése sikertelen.",
+      /** Shown when no local (Ollama) provider is configured to pull onto. */
+      noProvider:
+        "Nincs lokális (Ollama) provider beállítva — előbb adj hozzá egyet.",
+      emptyName: "Add meg a letöltendő modell nevét.",
+    },
     /** Cloud subpage (P1.1 — real provider/API-key configuration). */
     cloudSubtitle:
       "Add meg az API-kulcsokat a felhőszolgáltatókhoz. A kulcsok titkosítva, a szerveren tárolódnak.",

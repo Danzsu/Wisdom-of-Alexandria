@@ -13,6 +13,7 @@
  * SECURITY: the cache holds only `ProviderRead` shapes (masked key + has_key);
  * the real plaintext key never enters the query cache.
  */
+import { useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -25,6 +26,7 @@ import {
   deleteProvider,
   listProviderModels,
   listProviders,
+  pullModel,
   testProvider,
   updateProvider,
   type ProviderCreate,
@@ -32,6 +34,7 @@ import {
   type ProviderRead,
   type ProviderTestResult,
   type ProviderUpdate,
+  type PullProgress,
 } from "./providers";
 import { aiQueryKeys } from "./ai-hooks";
 
@@ -144,4 +147,76 @@ export function useProviderModels(
     enabled: Boolean(providerId) && enabled,
     staleTime: 5 * 60_000,
   });
+}
+
+/* ---------------------------------------------------------------------------
+ * Model pull (Ollama download) — streaming mutation.
+ *
+ * The pull endpoint streams NDJSON progress; a TanStack `useMutation` wraps the
+ * streaming call and surfaces the latest progress line via local state so the
+ * UI can render a live progress bar. On success we invalidate the provider's
+ * model list AND the aggregated `GET /ai/models` picker, so the freshly pulled
+ * model appears in the installed list without a manual refresh.
+ * ------------------------------------------------------------------------- */
+
+/** What {@link usePullModel} exposes to the Local subpage download UI. */
+export interface PullModelState {
+  /** Start a pull for the given model name on the resolved Ollama provider. */
+  start: (model: string) => void;
+  /** The latest streamed progress line (null before the first one arrives). */
+  progress: PullProgress | null;
+  /** A 0–1 fraction derived from `completed`/`total`, or null when unknown. */
+  fraction: number | null;
+  /** True from `start` until the stream ends (success or error). */
+  isPulling: boolean;
+  /** The error from a failed pull (null when healthy). */
+  error: Error | null;
+  /** True once a pull has completed successfully (resets on the next start). */
+  isSuccess: boolean;
+}
+
+/**
+ * Pull (download) a model on a local Ollama provider, tracking live progress.
+ * `providerId` is the Ollama provider's id (the Local subpage resolves it from
+ * the provider list). Errors surface via `error` — never swallowed; a
+ * mid-stream failure throws too (see `pullModel`).
+ */
+export function usePullModel(
+  providerId: string | undefined,
+): PullModelState {
+  const queryClient = useQueryClient();
+  const [progress, setProgress] = useState<PullProgress | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async (model: string) => {
+      if (!providerId) {
+        throw new Error("Nincs lokális (Ollama) provider beállítva.");
+      }
+      setProgress(null);
+      await pullModel(providerId, model, (p) => setProgress(p));
+    },
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: providerQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: aiQueryKeys.models }),
+        providerId
+          ? queryClient.invalidateQueries({
+              queryKey: providerQueryKeys.models(providerId),
+            })
+          : Promise.resolve(),
+      ]),
+  });
+
+  const total = progress?.total ?? 0;
+  const completed = progress?.completed ?? 0;
+  const fraction = total > 0 ? Math.min(1, completed / total) : null;
+
+  return {
+    start: (model: string) => mutation.mutate(model),
+    progress,
+    fraction,
+    isPulling: mutation.isPending,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  };
 }

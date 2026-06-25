@@ -5,7 +5,9 @@ calls used by ``POST /providers/{id}/test`` and ``GET /providers/{id}/models``.
 Secrets are decrypted only in-memory here and are NEVER logged or returned.
 """
 
+import json
 import logging
+from collections.abc import AsyncIterator
 
 import httpx
 from alexandria_core.core.errors import safe_error as _safe_error
@@ -15,6 +17,20 @@ from app.core.crypto import DecryptionError, decrypt_secret
 from app.schemas.provider import ProviderModelInfo, ProviderTestResult
 
 logger = logging.getLogger(__name__)
+
+# Default Ollama endpoint when a provider has no explicit base_url (Docker
+# Compose service name; local-first dev maps to http://localhost:11434).
+_DEFAULT_OLLAMA_BASE = "http://ollama:11434"
+
+
+class PullModelError(Exception):
+    """Raised when an Ollama model pull cannot start or fails mid-stream.
+
+    Carries a safe, bounded message (sanitized via ``safe_error``) so the
+    endpoint can surface an actionable 5xx instead of an opaque 500. Used both
+    for a misuse (pull requested on a non-Ollama provider) and a transport
+    failure (Ollama unreachable / HTTP error).
+    """
 
 # Static, well-known model catalogs per cloud provider type. The UI must not
 # hardcode model names (CLAUDE.md); it reads them from the API. These are the
@@ -88,7 +104,7 @@ async def check_provider(provider: Provider) -> ProviderTestResult:
     """
     try:
         if provider.type == "ollama":
-            base = provider.base_url or "http://ollama:11434"
+            base = provider.base_url or _DEFAULT_OLLAMA_BASE
             return await _ping_ollama(base)
 
         # Cloud providers: a missing key is a configuration error.
@@ -128,7 +144,7 @@ async def list_provider_models(provider: Provider) -> list[ProviderModelInfo]:
     failure for Ollama we return an empty list rather than raising.
     """
     if provider.type == "ollama":
-        base = provider.base_url or "http://ollama:11434"
+        base = provider.base_url or _DEFAULT_OLLAMA_BASE
         try:
             return await _ollama_models(base)
         except Exception as e:  # noqa: BLE001 — unreachable Ollama -> no models
@@ -140,6 +156,52 @@ async def list_provider_models(provider: Provider) -> list[ProviderModelInfo]:
             )
             return []
     return list(STATIC_CLOUD_MODELS.get(provider.type, []))
+
+
+# Pulls can take many minutes for a multi-GB model — no overall timeout on the
+# stream body (only a connect timeout so an unreachable host fails fast).
+_PULL_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0)
+
+
+async def pull_model(provider: Provider, model: str) -> AsyncIterator[dict]:
+    """Stream an Ollama model download, yielding each NDJSON progress dict.
+
+    POSTs ``{"model": <name>, "stream": true}`` to ``{base_url}/api/pull`` and
+    yields Ollama's progress lines verbatim (parsed): ``{"status": ...}`` with
+    optional ``completed``/``total`` byte counts, ending with
+    ``{"status": "success"}``.
+
+    Pull only makes sense for a local Ollama provider — a non-Ollama provider
+    raises ``PullModelError`` before any request is made. A transport failure
+    (Ollama unreachable) or a non-2xx response also raises ``PullModelError``
+    with a bounded, sanitized message. Blank / unparsable keep-alive lines are
+    skipped rather than crashing the stream.
+    """
+    if provider.type != "ollama":
+        raise PullModelError("A modell letöltése csak Ollama providerhez érhető el.")
+
+    base = provider.base_url or _DEFAULT_OLLAMA_BASE
+    url = base.rstrip("/") + "/api/pull"
+    body = {"model": model, "stream": True}
+    try:
+        async with httpx.AsyncClient(timeout=_PULL_TIMEOUT) as http:
+            async with http.stream("POST", url, json=body) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.strip():
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        # A non-JSON keep-alive must not abort the download.
+                        continue
+                    if isinstance(chunk, dict):
+                        yield chunk
+    except PullModelError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — convert to a clear, bounded error
+        logger.warning("Ollama pull failed for %s: %s", base, _safe_error(exc))
+        raise PullModelError(_safe_error(exc)) from exc
 
 
 def _default_probe_model(provider_type: str) -> str | None:

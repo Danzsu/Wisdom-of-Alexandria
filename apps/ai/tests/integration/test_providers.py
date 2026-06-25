@@ -336,6 +336,122 @@ async def test_models_requires_auth(client: AsyncClient):
     assert resp.status_code == 401
 
 
+# ── /models/pull endpoint (Ollama model download) ────────────────────────────
+
+
+async def _create_ollama(client: AsyncClient, auth_headers: dict) -> str:
+    created = (
+        await client.post(
+            BASE,
+            json={"type": "ollama", "label": "Local", "base_url": "http://ollama:11434"},
+            headers=auth_headers,
+        )
+    ).json()
+    return created["id"]
+
+
+def _patch_pull(progress_lines: list[dict]):
+    """Patch the service ``pull_model`` to yield the given progress dicts."""
+
+    async def _fake_pull(provider, model):  # noqa: ANN001
+        for line in progress_lines:
+            yield line
+
+    return patch("app.api.v1.providers.pull_model", new=_fake_pull)
+
+
+async def test_pull_streams_progress_to_success(client: AsyncClient, auth_headers: dict):
+    import json as _json
+
+    pid = await _create_ollama(client, auth_headers)
+    lines = [
+        {"status": "pulling manifest"},
+        {"status": "downloading", "completed": 50, "total": 100},
+        {"status": "success"},
+    ]
+    with _patch_pull(lines):
+        resp = await client.post(
+            f"{BASE}/{pid}/models/pull",
+            json={"model": "llama3.1:8b"},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 200
+    # NDJSON: one JSON object per line, streamed through verbatim.
+    parsed = [_json.loads(ln) for ln in resp.text.splitlines() if ln.strip()]
+    assert parsed[0]["status"] == "pulling manifest"
+    assert parsed[1]["completed"] == 50
+    assert parsed[-1]["status"] == "success"
+
+
+async def test_pull_rejects_non_ollama_provider(client: AsyncClient, auth_headers: dict):
+    created = await _create_cloud(client, auth_headers)
+    pid = created["id"]
+    resp = await client.post(
+        f"{BASE}/{pid}/models/pull",
+        json={"model": "gpt-4o"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]  # clear, non-empty message
+
+
+async def test_pull_unreachable_ollama_returns_clear_5xx(
+    client: AsyncClient, auth_headers: dict
+):
+    from app.services.provider_service import PullModelError
+
+    pid = await _create_ollama(client, auth_headers)
+
+    async def _raise_pull(provider, model):  # noqa: ANN001
+        raise PullModelError("Connection refused")
+        yield  # pragma: no cover — makes this an async generator
+
+    with patch("app.api.v1.providers.pull_model", new=_raise_pull):
+        resp = await client.post(
+            f"{BASE}/{pid}/models/pull",
+            json={"model": "llama3.1:8b"},
+            headers=auth_headers,
+        )
+    assert resp.status_code in (502, 503)
+    assert resp.json()["detail"]  # actionable, non-empty
+
+
+async def test_pull_empty_model_name_is_422(client: AsyncClient, auth_headers: dict):
+    pid = await _create_ollama(client, auth_headers)
+    resp = await client.post(
+        f"{BASE}/{pid}/models/pull",
+        json={"model": ""},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+async def test_pull_overlong_model_name_is_422(client: AsyncClient, auth_headers: dict):
+    pid = await _create_ollama(client, auth_headers)
+    resp = await client.post(
+        f"{BASE}/{pid}/models/pull",
+        json={"model": "a" * 500},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+async def test_pull_not_found(client: AsyncClient, auth_headers: dict):
+    resp = await client.post(
+        f"{BASE}/{uuid.uuid4()}/models/pull",
+        json={"model": "llama3.1:8b"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_pull_requires_auth(client: AsyncClient):
+    resp = await client.post(
+        f"{BASE}/{uuid.uuid4()}/models/pull", json={"model": "llama3.1:8b"}
+    )
+    assert resp.status_code == 401
+
+
 # ── /ai/models aggregation ───────────────────────────────────────────────────
 
 

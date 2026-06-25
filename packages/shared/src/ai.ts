@@ -521,6 +521,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/{provider_id}/models/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull
+         * @description Download (pull) an Ollama model, streaming NDJSON progress to the client.
+         *
+         *     Only valid for a local Ollama provider (others → 400). Progress is streamed
+         *     verbatim from Ollama: one JSON object per line, ending with
+         *     ``{"status": "success"}``. If Ollama is unreachable / errors before the
+         *     first byte, an actionable 502/503 is returned instead of a broken stream.
+         */
+        post: operations["pull_api_v1_providers__provider_id__models_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/{provider_id}/test": {
         parameters: {
             query?: never;
@@ -909,6 +934,20 @@ export interface components {
         ProviderModelsResult: {
             /** Models */
             models: components["schemas"]["ProviderModelInfo"][];
+        };
+        /**
+         * ProviderPullRequest
+         * @description Request body for ``POST /providers/{id}/models/pull``.
+         *
+         *     ``model`` is interpolated into the Ollama ``/api/pull`` JSON body, so there
+         *     is no injection surface, but we still cap length and restrict the charset to
+         *     a sane Ollama tag (``namespace/name:tag``) — letters, digits and the small
+         *     set of separators Ollama model refs use. This rejects whitespace/control
+         *     chars and pathologically long input at the schema boundary (422).
+         */
+        ProviderPullRequest: {
+            /** Model */
+            model: string;
         };
         /**
          * ProviderRead
@@ -2028,6 +2067,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderModelsResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_api_v1_providers__provider_id__models_pull_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPullRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
