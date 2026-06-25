@@ -21,20 +21,22 @@ from app.services.pandoc import (
     PandocConversionError,
     PandocFormat,
     PandocUnavailableError,
+    PdfEngineUnavailableError,
     convert_markdown,
 )
 
 router = APIRouter(tags=["exports"])
 
 ExportScope = Literal["book", "chapter", "scene"]
-ExportFormat = Literal["md", "docx", "epub"]
+ExportFormat = Literal["md", "docx", "epub", "pdf"]
 
 #: File extension + download media type per export format. `md` is the native
-#: path; `docx`/`epub` are produced by pandoc.
+#: path; `docx`/`epub`/`pdf` are produced by pandoc.
 _FORMAT_EXTENSION: dict[ExportFormat, str] = {
     "md": "md",
     "docx": "docx",
     "epub": "epub",
+    "pdf": "pdf",
 }
 _FORMAT_MEDIA_TYPE: dict[ExportFormat, str] = {
     "md": "text/markdown; charset=utf-8",
@@ -42,6 +44,7 @@ _FORMAT_MEDIA_TYPE: dict[ExportFormat, str] = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ),
     "epub": "application/epub+zip",
+    "pdf": "application/pdf",
 }
 
 
@@ -71,14 +74,15 @@ def _markdown_response(content: str, title: str) -> Response:
 
 
 def _pandoc_response(markdown: str, title: str, fmt: PandocFormat) -> Response:
-    """Convert `markdown` to docx/epub via pandoc and wrap it in a download.
+    """Convert `markdown` to docx/epub/pdf via pandoc and wrap it in a download.
 
-    pandoc-missing -> 503 (actionable), conversion failure -> 502 (sanitized).
-    Neither becomes a silent empty download nor a raw 500 traceback.
+    pandoc-missing OR pdf-engine-missing -> 503 (actionable), conversion failure
+    -> 502 (sanitized). Neither becomes a silent empty download nor a raw 500
+    traceback.
     """
     try:
         data = convert_markdown(markdown, fmt, title=title)
-    except PandocUnavailableError as exc:
+    except (PandocUnavailableError, PdfEngineUnavailableError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
@@ -149,13 +153,14 @@ async def export_book(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> Response:
-    """Export a book / chapter / scene as Markdown, DOCX or EPUB.
+    """Export a book / chapter / scene as Markdown, DOCX, EPUB or PDF.
 
     `scope` selects the export tartomány; `target_id` identifies the chapter or
     scene and is REQUIRED for the chapter/scene scopes. `format` selects the
-    output: `md` is the native-Python Markdown path; `docx`/`epub` generate the
-    same Markdown then convert it via the pandoc CLI (503 if pandoc is missing,
-    502 if the conversion fails — never a silent empty download).
+    output: `md` is the native-Python Markdown path; `docx`/`epub`/`pdf` generate
+    the same Markdown then convert it via the pandoc CLI (PDF via pandoc's
+    `--pdf-engine`). Conversion is robust: 503 if pandoc OR the PDF engine is
+    missing, 502 if the conversion fails — never a silent empty download.
 
     Ownership is validated for EVERY format: the target chapter must belong to
     the book, and the target scene must belong to a chapter of the book (404

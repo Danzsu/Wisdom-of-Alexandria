@@ -215,7 +215,39 @@ describe("ExportScreen", () => {
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
   });
 
-  it("still-stubbed formats (PDF) show the coming toast and make no export call", async () => {
+  it("PDF export sends format=pdf and downloads the converted file", async () => {
+    const seen: { format: string | null }[] = [];
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF
+    server.use(
+      http.post(`${base}/books/:bookId/exports`, ({ request }) => {
+        seen.push({ format: new URL(request.url).searchParams.get("format") });
+        return new HttpResponse(pdfBytes, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition":
+              'attachment; filename="a_farosz_orzoje.pdf"',
+          },
+        });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByText(`Teljes könyv — ${FAROSZ_BOOK.title}`);
+
+    await user.click(screen.getByRole("button", { name: /PDF/ }));
+    await user.click(screen.getByRole("button", { name: "Exportálás" }));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]).toEqual({ format: "pdf" });
+    expect(
+      await screen.findByText("Exportálva: a_farosz_orzoje.pdf"),
+    ).toBeInTheDocument();
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+  });
+
+  it("still-stubbed formats (TXT) show the coming toast and make no export call", async () => {
     let called = 0;
     server.use(
       http.post(`${base}/books/:bookId/exports`, () => {
@@ -228,12 +260,12 @@ describe("ExportScreen", () => {
     renderScreen();
     await screen.findByText(`Teljes könyv — ${FAROSZ_BOOK.title}`);
 
-    // PDF card carries a "hamarosan" badge (still a stub).
-    await user.click(screen.getByRole("button", { name: /PDF/ }));
+    // TXT card carries a "hamarosan" badge (still a stub).
+    await user.click(screen.getByRole("button", { name: /TXT/ }));
     await user.click(screen.getByRole("button", { name: "Exportálás" }));
 
     expect(
-      await screen.findByText("A(z) PDF export a V1-ben érkezik"),
+      await screen.findByText("A(z) TXT export a V1-ben érkezik"),
     ).toBeInTheDocument();
     expect(called).toBe(0);
   });

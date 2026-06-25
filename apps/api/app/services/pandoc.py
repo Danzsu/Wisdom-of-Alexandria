@@ -1,15 +1,21 @@
-"""Pandoc CLI conversion for DOCX / EPUB export (Feature #2a).
+"""Pandoc CLI conversion for DOCX / EPUB / PDF export (Feature #2a).
 
 The native-Python Markdown generators in `export_service` produce the document
-body; this module converts that Markdown to a binary format (DOCX / EPUB) by
-shelling out to the `pandoc` CLI. Pandoc is installed in the API Docker image
+body; this module converts that Markdown to a binary format (DOCX / EPUB / PDF)
+by shelling out to the `pandoc` CLI. Pandoc is installed in the API Docker image
 (and on CI), but NOT necessarily on a developer machine — so every failure mode
 is surfaced LOUDLY and actionably, never as a silent empty download or a raw
 500 traceback:
 
-  * pandoc not on PATH        -> PandocUnavailableError -> 503 (actionable)
-  * pandoc exits non-zero     -> PandocConversionError  (sanitized stderr) -> 502
-  * pandoc exceeds the timeout-> PandocConversionError  -> 502
+  * pandoc not on PATH         -> PandocUnavailableError       -> 503 (actionable)
+  * PDF engine not on PATH      -> PdfEngineUnavailableError    -> 503 (actionable)
+  * pandoc exits non-zero       -> PandocConversionError  (sanitized stderr) -> 502
+  * pandoc exceeds the timeout  -> PandocConversionError        -> 502
+
+PDF is produced via pandoc's `--pdf-engine`. We default to **WeasyPrint** (an
+HTML->PDF engine): it is pure-Python (pip-installable, no system LaTeX toolchain
+needed) and renders Unicode / Hungarian text natively. The DOCX/EPUB writers are
+ZIP containers written to an output file; PDF is likewise written to a file.
 
 The endpoint maps these to clear HTTP responses. stderr is sanitized so no
 absolute temp paths leak into the client-facing message.
@@ -24,7 +30,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-PandocFormat = Literal["docx", "epub"]
+PandocFormat = Literal["docx", "epub", "pdf"]
 
 #: Per-conversion subprocess timeout (seconds). Pandoc is fast even for a full
 #: book; a generous cap still prevents a hung/zombie process from wedging a
@@ -32,7 +38,16 @@ PandocFormat = Literal["docx", "epub"]
 _PANDOC_TIMEOUT_SECONDS = 60
 
 #: Pandoc's writer name + the produced file extension for each supported format.
-_FORMAT_EXTENSION: dict[PandocFormat, str] = {"docx": "docx", "epub": "epub"}
+_FORMAT_EXTENSION: dict[PandocFormat, str] = {
+    "docx": "docx",
+    "epub": "epub",
+    "pdf": "pdf",
+}
+
+#: The HTML->PDF engine pandoc shells out to for `format=pdf`. WeasyPrint is the
+#: lightest viable choice (pure-Python, no LaTeX toolchain) and handles Unicode
+#: / Hungarian text out of the box. Passed to pandoc as `--pdf-engine`.
+_PDF_ENGINE = "weasyprint"
 
 
 class PandocError(RuntimeError):
@@ -45,6 +60,16 @@ class PandocUnavailableError(PandocError):
     The endpoint turns this into a 503 with an actionable message — this is an
     environment/deployment gap (pandoc not installed), not a client error and
     not an unexpected server crash.
+    """
+
+
+class PdfEngineUnavailableError(PandocError):
+    """Raised when pandoc is present but the PDF engine (WeasyPrint) is not.
+
+    PDF export needs both pandoc AND the `--pdf-engine` binary on PATH. This is a
+    distinct, actionable environment gap (engine not installed) — the endpoint
+    maps it to a 503 with a message naming the missing engine, never an opaque
+    500.
     """
 
 
@@ -78,6 +103,16 @@ def pandoc_available() -> bool:
     return shutil.which("pandoc") is not None
 
 
+def pdf_engine_available() -> bool:
+    """Return True when BOTH pandoc and the PDF engine are resolvable on PATH.
+
+    PDF export needs pandoc to drive the conversion AND the `--pdf-engine`
+    binary (WeasyPrint) to actually rasterize the HTML. Used to skip the
+    pandoc-gated REAL pdf round-trip when the engine is absent.
+    """
+    return pandoc_available() and shutil.which(_PDF_ENGINE) is not None
+
+
 def convert_markdown(
     markdown: str,
     target: PandocFormat,
@@ -105,12 +140,24 @@ def convert_markdown(
     pandoc = shutil.which("pandoc")
     if pandoc is None:
         raise PandocUnavailableError(
-            "DOCX/EPUB export requires pandoc; not available on this server. "
+            "DOCX/EPUB/PDF export requires pandoc; not available on this server. "
             "Install pandoc (the API Docker image and CI provide it)."
         )
 
+    # PDF additionally needs the HTML->PDF engine binary on PATH. Resolve it up
+    # front so a missing engine is a clear 503, not a confusing pandoc failure.
+    pdf_engine: str | None = None
+    if target == "pdf":
+        pdf_engine = shutil.which(_PDF_ENGINE)
+        if pdf_engine is None:
+            raise PdfEngineUnavailableError(
+                f"PDF export requires the '{_PDF_ENGINE}' engine; not available "
+                f"on this server. Install {_PDF_ENGINE} (the API Docker image "
+                "and CI provide it)."
+            )
+
     extension = _FORMAT_EXTENSION[target]
-    # EPUB always needs a title; DOCX benefits from one. Never empty.
+    # EPUB/PDF always need a title; DOCX benefits from one. Never empty.
     doc_title = (title or "").strip() or "Untitled"
 
     with tempfile.TemporaryDirectory(prefix="woa-export-") as tmp:
@@ -131,6 +178,9 @@ def convert_markdown(
             "-o",
             str(output_path),
         ]
+        # For PDF, tell pandoc which engine to drive (resolved above).
+        if target == "pdf":
+            cmd += [f"--pdf-engine={_PDF_ENGINE}"]
 
         try:
             result = subprocess.run(  # noqa: S603 — fixed argv, no shell, pandoc resolved via which

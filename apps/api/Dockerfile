@@ -5,11 +5,20 @@ FROM python:3.12-slim
 # (alexandria-db). A context scoped to apps/api could not reach packages/db.
 WORKDIR /workspace
 
-# Install pandoc (DOCX/EPUB export converts Markdown via the pandoc CLI). Done
-# as root, before the USER switch, so the binary is on PATH for appuser at
-# runtime. Clean apt lists to keep the image lean.
+# Install pandoc (DOCX/EPUB/PDF export converts Markdown via the pandoc CLI).
+# PDF goes through pandoc's --pdf-engine=weasyprint; WeasyPrint itself is a
+# Python dependency (see apps/api/pyproject.toml) but needs these native libs at
+# runtime (Pango / Cairo / GDK-Pixbuf / HarfBuzz). Done as root, before the USER
+# switch, so the binaries/libs are on PATH for appuser at runtime. Clean apt
+# lists to keep the image lean.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends pandoc \
+    && apt-get install -y --no-install-recommends \
+        pandoc \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libffi-dev \
+        libharfbuzz0b \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

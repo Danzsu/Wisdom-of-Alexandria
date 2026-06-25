@@ -41,7 +41,7 @@ const FORMAT_CARDS: FormatCardDef[] = [
     id: "pdf",
     label: hu.exportScreen.fmtPdf,
     hint: hu.exportScreen.fmtPdfHint,
-    real: false,
+    real: true,
   },
   {
     id: "txt",

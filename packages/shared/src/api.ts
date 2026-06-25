@@ -86,13 +86,14 @@ export interface paths {
         put?: never;
         /**
          * Export Book
-         * @description Export a book / chapter / scene as Markdown, DOCX or EPUB.
+         * @description Export a book / chapter / scene as Markdown, DOCX, EPUB or PDF.
          *
          *     `scope` selects the export tartomány; `target_id` identifies the chapter or
          *     scene and is REQUIRED for the chapter/scene scopes. `format` selects the
-         *     output: `md` is the native-Python Markdown path; `docx`/`epub` generate the
-         *     same Markdown then convert it via the pandoc CLI (503 if pandoc is missing,
-         *     502 if the conversion fails — never a silent empty download).
+         *     output: `md` is the native-Python Markdown path; `docx`/`epub`/`pdf` generate
+         *     the same Markdown then convert it via the pandoc CLI (PDF via pandoc's
+         *     `--pdf-engine`). Conversion is robust: 503 if pandoc OR the PDF engine is
+         *     missing, 502 if the conversion fails — never a silent empty download.
          *
          *     Ownership is validated for EVERY format: the target chapter must belong to
          *     the book, and the target scene must belong to a chapter of the book (404
@@ -2404,7 +2405,7 @@ export interface operations {
             query?: {
                 scope?: "book" | "chapter" | "scene";
                 target_id?: string | null;
-                format?: "md" | "docx" | "epub";
+                format?: "md" | "docx" | "epub" | "pdf";
             };
             header?: never;
             path: {

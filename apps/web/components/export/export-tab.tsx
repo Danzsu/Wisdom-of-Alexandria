@@ -30,6 +30,7 @@ const FORMAT_TO_API: Partial<Record<ExportFormat, ExportFormatId>> = {
   markdown: "md",
   docx: "docx",
   epub: "epub",
+  pdf: "pdf",
 };
 
 /** The file extension shown in the filename preview, per UI format. */

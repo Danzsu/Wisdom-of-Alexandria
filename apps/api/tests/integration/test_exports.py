@@ -6,6 +6,7 @@ DOCX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 EPUB_MEDIA_TYPE = "application/epub+zip"
+PDF_MEDIA_TYPE = "application/pdf"
 
 
 async def _build_book(client, auth_headers):
@@ -302,6 +303,74 @@ async def test_export_format_epub_media_type_and_filename(
     assert resp.headers["content-type"] == EPUB_MEDIA_TYPE
     assert ".epub" in resp.headers.get("content-disposition", "")
     assert resp.content == b"PKfake-epub"
+
+
+async def test_export_format_pdf_media_type_and_filename(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """format=pdf -> application/pdf media type + .pdf filename; pandoc gets MD."""
+    seen = {}
+
+    def fake_convert(markdown, target, *, title=None):
+        seen["markdown"] = markdown
+        seen["target"] = target
+        seen["title"] = title
+        return b"%PDF-1.7 fake"
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", fake_convert)
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=pdf", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == PDF_MEDIA_TYPE
+    assert ".pdf" in resp.headers.get("content-disposition", "")
+    assert resp.content == b"%PDF-1.7 fake"
+    # The endpoint reused the native Markdown generator + passed the book title.
+    assert seen["target"] == "pdf"
+    assert "Az elveszett királyság" in seen["markdown"]
+    assert seen["title"] == "Az elveszett királyság"
+
+
+async def test_export_pdf_engine_missing_is_503(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """PDF engine not installed -> 503 actionable error (not 500, not empty)."""
+    from app.services.pandoc import PdfEngineUnavailableError
+
+    def boom(markdown, target, *, title=None):
+        raise PdfEngineUnavailableError(
+            "PDF export requires the 'weasyprint' engine; not available."
+        )
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", boom)
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=pdf", headers=auth_headers
+    )
+    assert resp.status_code == 503
+    assert "weasyprint" in resp.json()["detail"].lower()
+
+
+async def test_export_pdf_pandoc_failure_is_502_sanitized(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """A pandoc PDF conversion failure -> 502 with a sanitized message."""
+    from app.services.pandoc import PandocConversionError
+
+    def boom(markdown, target, *, title=None):
+        raise PandocConversionError("pandoc failed to produce PDF: <path> bad")
+
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", boom)
+
+    book_id, _, _ = await _build_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=pdf", headers=auth_headers
+    )
+    assert resp.status_code == 502
+    assert "pandoc" in resp.json()["detail"].lower()
 
 
 async def test_export_docx_chapter_scope_uses_chapter_title(

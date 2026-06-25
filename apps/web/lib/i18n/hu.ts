@@ -1010,7 +1010,7 @@ export const hu = {
     /** Toasts. */
     exportSuccess: (filename: string) => `Exportálva: ${filename}`,
     exportError: "Az exportálás sikertelen",
-    /** Format-not-real toast (DOCX/EPUB/PDF/TXT). */
+    /** Format-not-real toast (only TXT remains a stub; md/docx/epub/pdf are wired). */
     formatStubToast: (format: string) => `A(z) ${format} export a V1-ben érkezik`,
     /** IMPORT tab (V1 stub). */
     importIntroBefore: "Hozz be egy meglévő kéziratot — a tartalom fejezetekre/jelenetekre bomlik és ",

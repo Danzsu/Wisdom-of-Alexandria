@@ -2,15 +2,16 @@
  * Typed endpoint function for the book/chapter/scene export (M8 Export + #2a).
  *
  * Backend contract (`apps/api/app/api/v1/exports.py`):
- *   POST /books/{book_id}/exports?scope=<book|chapter|scene>&target_id=<uuid>&format=<md|docx|epub>
+ *   POST /books/{book_id}/exports?scope=<book|chapter|scene>&target_id=<uuid>&format=<md|docx|epub|pdf>
  *     → 200 text/markdown; charset=utf-8                      (format=md, default)
  *       200 application/vnd.openxmlformats-…wordprocessingml.document (format=docx)
  *       200 application/epub+zip                              (format=epub)
+ *       200 application/pdf                                   (format=pdf)
  *       Content-Disposition: attachment; filename="<ascii>.<ext>"; filename*=UTF-8''<utf8>
  *     → 404 { detail: "Book/Chapter/Scene not found" }
  *     → 422 when scope≠book and target_id is missing
- *     → 503 { detail } when pandoc is not installed (docx/epub)
- *     → 502 { detail } when the pandoc conversion fails (docx/epub)
+ *     → 503 { detail } when pandoc OR the PDF engine is not installed (docx/epub/pdf)
+ *     → 502 { detail } when the pandoc conversion fails (docx/epub/pdf)
  *
  * The endpoint exports the WHOLE book (scope=book, the default) OR a single
  * chapter / scene (scope=chapter|scene + the chapter/scene `target_id`), in
@@ -35,13 +36,14 @@ const API_PREFIX = "/api/v1";
 export type ExportScope = "book" | "chapter" | "scene";
 
 /** Export format — mirrors the backend `format` query param. */
-export type ExportFormatId = "md" | "docx" | "epub";
+export type ExportFormatId = "md" | "docx" | "epub" | "pdf";
 
 /** The blob MIME type the browser download should use, per format. */
 export const FORMAT_MIME: Record<ExportFormatId, string> = {
   md: "text/markdown;charset=utf-8",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   epub: "application/epub+zip",
+  pdf: "application/pdf",
 };
 
 /** The result of an export: the file data (Blob) + the resolved filename. */
