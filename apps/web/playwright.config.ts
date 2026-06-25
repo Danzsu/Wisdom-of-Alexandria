@@ -26,4 +26,18 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
+  // Local convenience only: when not in CI, Playwright boots (or reuses) the web
+  // dev server itself so `playwright test` works without a manually pre-started
+  // stack. In CI this is `undefined` — the `e2e` job boots web + api + ai as
+  // separate processes itself (each resolves its own local `app` package, so the
+  // shared package name never collides). The smoke spec is backend-DATA-
+  // independent, so the web server alone is enough to drive it locally.
+  webServer: process.env.CI
+    ? undefined
+    : {
+        command: "pnpm dev",
+        url: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+        reuseExistingServer: true,
+        timeout: 120_000,
+      },
 });
