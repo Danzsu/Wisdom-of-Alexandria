@@ -19,6 +19,7 @@ import {
   type SlashMenuCallbacks,
 } from "@/components/editor";
 import { useAutosave } from "@/components/editor";
+import { RevisionHistoryPanel } from "@/components/revisions/revision-history-panel";
 import {
   useBookTree,
   findSceneLocation,
@@ -64,6 +65,8 @@ export default function IrasPage() {
   const activeModelName = inspectorModels.value || hu.inspector.metaUnknown;
 
   const [editor, setEditor] = useState<Editor | null>(null);
+  // Verzióelőzmények (revision history) right-slide panel open state.
+  const [revOpen, setRevOpen] = useState(false);
 
   const location = useMemo(
     () =>
@@ -143,7 +146,7 @@ export default function IrasPage() {
           break;
         case "version-history":
         case "history":
-          toast(hu.write.toastHistory);
+          setRevOpen(true);
           break;
         case "thesaurus":
           toast(hu.write.toastThesaurus);
@@ -170,7 +173,7 @@ export default function IrasPage() {
           break;
       }
     },
-    [editor, bookId, navTo, triggerAi, setInspectorTab, setBeatState],
+    [editor, bookId, navTo, triggerAi, setInspectorTab, setBeatState, setRevOpen],
   );
 
   const handleBubbleAction = useCallback(
@@ -261,22 +264,31 @@ export default function IrasPage() {
   }
 
   return (
-    <WriteViewBody
-      scene={location.scene}
-      chapter={location.chapter}
-      allScenes={tree.chapters}
-      activeSceneId={sceneId}
-      aiFreeOn={aiFreeOn}
-      editor={editor}
-      modelName={activeModelName}
-      onEditorReady={setEditor}
-      onChange={handleChange}
-      onToolbarAction={handleToolbarAction}
-      onBubbleAction={handleBubbleAction}
-      onOpenCodex={handleOpenCodex}
-      slashCallbacks={slashCallbacks}
-      onTimelineSelect={(id) => bookId && navTo(routes.scene(bookId, id))}
-    />
+    <>
+      <WriteViewBody
+        scene={location.scene}
+        chapter={location.chapter}
+        allScenes={tree.chapters}
+        activeSceneId={sceneId}
+        aiFreeOn={aiFreeOn}
+        editor={editor}
+        modelName={activeModelName}
+        onEditorReady={setEditor}
+        onChange={handleChange}
+        onToolbarAction={handleToolbarAction}
+        onBubbleAction={handleBubbleAction}
+        onOpenCodex={handleOpenCodex}
+        slashCallbacks={slashCallbacks}
+        onTimelineSelect={(id) => bookId && navTo(routes.scene(bookId, id))}
+      />
+      <RevisionHistoryPanel
+        open={revOpen}
+        onOpenChange={setRevOpen}
+        sceneId={sceneId}
+        sceneContent={location.scene.content ?? ""}
+        bookId={bookId}
+      />
+    </>
   );
 }
 

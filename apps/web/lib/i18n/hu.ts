@@ -1533,6 +1533,29 @@ export const hu = {
     restoredToast: "A revízió visszaállítva a jelenetbe.",
     rejectedToast: "A revízió elvetve.",
   },
+  /** Verzióelőzmények (revision history) right-slide panel. */
+  revisionHistory: {
+    title: "Verzióelőzmények",
+    closeAria: "Bezárás",
+    versionsLabel: "Verziók",
+    changesLabel: "Változások · jelenlegi ↔ verzió",
+    /** Friendly label for one version row (rank from newest). */
+    versionLabel: (rank: number) => `${rank}. verzió`,
+    currentDot: "Jelenlegi",
+    approvedDot: "Jóváhagyott",
+    draftDot: "Piszkozat",
+    selectAria: (rank: number) => `${rank}. verzió kiválasztása`,
+    restore: "Visszaállítás erre a verzióra",
+    restoring: "Visszaállítás…",
+    restoredToast: "A jelenet visszaállítva erre a verzióra.",
+    selectPrompt: "Válassz egy verziót a változások megtekintéséhez.",
+    summaryNote: "Ez egy összefoglaló-revízió — a kézirat szövege nem változik.",
+    loading: "Verziók betöltése",
+    error: "A verziók betöltése nem sikerült.",
+    noScene: "Nyiss meg egy jelenetet a verziók megtekintéséhez.",
+    emptyTitle: "Még nincs verzió",
+    emptyDesc: "Ehhez a jelenethez még nem készült AI-revízió.",
+  },
   /** Kutatás (Codex/manuscript RAG Q&A) screen. */
   research: {
     title: "Kutatás",
