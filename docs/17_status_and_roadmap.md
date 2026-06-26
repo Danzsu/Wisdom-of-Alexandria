@@ -14,7 +14,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 |---|---|---|
 | `apps/api` | **536** | CI-ban (Postgres) futnak; a pandoc/weasyprint-igényes tesztek lokálisan skippelnek |
 | `apps/ai` | **422** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
-| `apps/web` | **830** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight + fejezet-automatizáció tesztjeivel) |
+| `apps/web` | **~887** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight + fejezet-automatizáció + **design-delta** tesztjeivel) |
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
@@ -91,6 +91,29 @@ Ez a kör a korábbi „V1-rések" többségét leszállította (a roadmap c) sz
   - DB-migráció nincs. Tesztek: **web 830 / api 536 / ai 422 zöld**; a nagy tétű utak mutation-checkkel ellenőrizve.
   - Scope: **fejezet-szint** (a könyv-szint későbbi bővítés); writer-only default a folytonossággal mint opt-in. Fast-follow-ok: jelenetenkénti modell-override + gazdagabb batch-review panel (lásd c) Halasztott / V2).
 
+### Új a legutóbbi frissítés óta (2026-06-26 — Design-delta kör)
+
+A user **Claude Design** canvasa frissült és **újra-importálva** lett (forrásfájl
+**161KB → 261KB**), majd összevetve (reconcile) az appal. **5 net-új képernyő** épült
++ **4 meglévő** igazítva (mind commitolva + pusholva a `feat/alexandria-ui` ágon).
+Részletek: `docs/18` g) szakasz.
+
+- **Net-új képernyők (5, KÉSZ):** **Áttekintés** (könyv-dashboard — a `/attekintes`
+  placeholder kitöltve, commit `32486eb`) · **Stíluskalauz** (Style Guide — net-új
+  `/stiluskalauz` route a `StyleGuide` backendhez kötve, `1056e2f`) ·
+  **Verzióelőzmények** (Revision History jobbról-csúszó panel diffel + restore-ral, a
+  Write inspektorba kötve, `06633e6`) · **Scene Metadata modal** (terv-board
+  jelenet-kártya „Info" gomb, `b9461c5`) · **Codex Image Lightbox** (`d316528`).
+- **Igazított meglévő képernyők (4, KÉSZ):** **Write** (folytonosság-toolbar badge +
+  `::selection` styling, `5567069`) · **Onboarding** (scroll-narratíva →
+  lépés-karusszel, `1231540`) · **Import dialógus** (dropzone + fájl-infó kártya,
+  `63bf38d`) · **Új könyv wizard** (arany fejléc + recap kártya, `10bb71b`).
+- **Hatás a réseken:** az **Áttekintés** ezzel **megépült** — már nem V1-rés; a
+  `hangok` (Hangkönyvtár) maradt az **egyetlen** placeholder-képernyő.
+- **3 tétel tudatosan elhalasztva** (backend vagy kockázatos restrukturálás kell) —
+  lásd a c) Roadmap design-delta sorait.
+- Web teszt-szám **~887 zöld**; tsc + lint tiszta.
+
 ### Minőség + CI + biztonság
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
 - `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
@@ -104,7 +127,7 @@ Ez a kör a korábbi „V1-rések" többségét leszállította (a roadmap c) sz
 
 > **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB/**PDF** export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C) + delight (celestial)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)** · **Prompt Library backend (`PromptTemplate` + CRUD)** · **Profil `me` endpoint + `scene_count` aggregátum** · **Ollama in-app modell-letöltés (pull)** · **CodexProgression „állapot az N. jelenetnél" RAG-szűrés** · **DB-keményítés migráció `a8c4e1f2b3d4` (FK-indexek + hnsw)** · **fejezet-automatizáció (V2 első szelet — a halasztott MVP #11)**. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
 
-A maradék két csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **Halasztott / V2**. (A **DESIGN-C** net-új design-képernyők leszállítva — lásd b) + `docs/18`.)
+A maradék két csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **Halasztott / V2**. (A **DESIGN-C** net-új design-képernyők leszállítva — lásd b) + `docs/18`. A **2026-06-26 design-delta kör** további 5 net-új képernyőt szállított — köztük az **Áttekintést**, ami ezzel **megépült** és kikerült a V1-résekből; a `hangok` az egyetlen megmaradt placeholder. A delta 3 elhalasztott tétele alább, a Halasztott / V2 listában.)
 
 ### V1-rések
 
@@ -117,7 +140,6 @@ nem szerepelnek.)
 | **Prompt-template inline szerkesztő-UI** | A `PromptTemplate` backend (PATCH + DELETE) **kész**, és a frontendből a **létrehozás + törlés** is megy; ami hátra van: a meglévő (nem-builtin) sablonok **inline szerkesztése** a UI-ból | FE |
 | CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg (az AI-kontextus-szűrés már él — lásd b); projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
 | Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
-| Áttekintés-képernyő kitöltése | Az **Áttekintés** (`/attekintes`) valódi tartalma — **nincs a design-canvasban**, ma `ScreenPlaceholder` (V1-rés, nem design-képernyő; lásd `docs/18`) | FE |
 | E2E mélyítése | A Playwright **smoke fut/zöld** (commit `78c6d88`; a CI-gated lokális `webServer` a configban). Az `app` csomagnév-ütközés **non-issue** — a CI `e2e` job a web + api + ai szolgáltatásokat **külön processzként** indítja (`uv run --directory apps/api\|apps/ai uvicorn app.main:app`), így mindegyik a SAJÁT `app` csomagját oldja fel; web Dockerfile sem kell (`next start`). Hátralevő munka: mélyebb journey-k + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele | infra/FE |
 
 ### Halasztott / V2
@@ -131,6 +153,9 @@ nem szerepelnek.)
 | NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |
 | Marketplace / launch | Launch-kit, marketplace | termék |
 | Design delight: embers canvas | Hangulati parázs-canvas háttér-effekt (opcionális; a visszafogott „celestial" delight-pass már landolt — lásd b) + `docs/18`) | FE |
+| Design-delta: Write fókusz-mód lebegő toolbarok | A 2026-06-26 delta-körben elhalasztva — a működő fókusz mód (Esc-kilépés / chrome-rejtés contract) restrukturálását igényelné; külön tervezett task | FE |
+| Design-delta: Import „felismert struktúra" előnézet | Fejezet-lista + darabszámok az import *előtt* — hiányzó backend parse-preview endpointot igényel (a darabszámok már megjelennek import *után*) | BE (`apps/api`) + FE |
+| Design-delta: Új könyv wizard premise / tónus-pillek / „start-mode" 4. lépés | Backendet igényel + módosítaná a create payloadot | BE + FE |
 
 ---
 
@@ -141,4 +166,4 @@ nem szerepelnek.)
 1. **E2E mélyítése + a kapu kötelezővé tétele** — a Playwright smoke már zöld (commit `78c6d88`; az `app` csomagnév non-issue a per-process `uv run --directory` alatt). Következő lépés: mélyebb journey-k (auth → projekt → generálás → jóváhagyás) + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele.
 2. **Prompt-template inline szerkesztő-UI** — a backend (PATCH + DELETE) és a létrehozás/törlés-UI kész; a meglévő sablonok inline szerkesztése zárja a Prompt Library rést.
 3. **CodexProgression editor + timeline-overlay** — az AI-kontextus-szűrés már él (commit `f8036e1`); ami hátra van: a progresszió-szerkesztő UI + idősor progresszió-réteg (+ projekt-scope progresszió-lista endpoint).
-4. **Áttekintés-képernyő** + **Plotline lane-vizualizáció** — a maradék két FE-rés.
+4. **Plotline lane-vizualizáció** — a maradék FE-rés (az Áttekintés-képernyő a 2026-06-26 design-delta körben megépült).

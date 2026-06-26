@@ -195,7 +195,7 @@ Jelölések:
 | Ismétlésdetektor | V1 | Szavak, mondatszerkezetek, képek ismétlése |
 | Párbeszéd természetesség | V1 | Magyar beszélt nyelvhez igazítás |
 | Karakterhang magyarul | V2 | Karakterenként eltérő szóhasználat |
-| Stíluslap | MVP | Hangnem, tiltott fordulatok, preferált stílus |
+| Stíluslap | MVP | Hangnem, tiltott fordulatok, preferált stílus — **megépült** (Stíluskalauz képernyő, `/stiluskalauz`, a StyleGuide backendhez kötve). Lásd `docs/17` |
 | Magyar proofread pass | V2 | Végső nyelvi ellenőrzés |
 
 ---

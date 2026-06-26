@@ -1,10 +1,12 @@
 # 18 — Design rollout és ami hátra van (élő)
 
 Ez a dokumentum a **Claude Design** re-skin kigördülését írja le. A re-skin
-mostanra **teljes** (DESIGN-A + B + C **és a delight-pass** mind kész) —
-design-felület nincs több hátra; ami marad, az kizárólag opcionális
-konszolidáció. A token- és betű-referencia a `docs/09`-ben él; ez a fájl a „mi
-készült el / mi van hátra" nézet a design felől.
+mostanra **teljes** (DESIGN-A + B + C **és a delight-pass** mind kész); a
+**2026-06-26 design-delta kör** (frissített canvas: 5 net-új képernyő + 4 igazítás,
+lásd g) szakasz) tovább szűkítette a hátralevőt — design-felületből csak a 3
+elhalasztott delta-tétel marad (backend / kockázatos restrukturálás kell), plusz
+opcionális konszolidáció. A token- és betű-referencia a `docs/09`-ben él; ez a fájl a
+„mi készült el / mi van hátra" nézet a design felől.
 
 > **LIVE VERIFIED 2026-06-26 — Lighthouse a11y 100, 0 contrast failures both
 > themes.** DESIGN-A + B + C + delight mind kész; a `PageHero` cím a design 40px-én
@@ -91,10 +93,10 @@ Követő finomítás (commit **`b6768a6`**): a `PageHero` címek a design 40px-�
 emelve (`text-[clamp(32px,5vw,40px)]`), favicon hozzáadva, kisebb mobil-reszponzív
 javítások.
 
-> **Áttekintés** (`/konyv/[bookId]/attekintes`): **nincs a design-canvasban**, és
-> továbbra is `ScreenPlaceholder` marad — ez **V1-rés**, nem design-képernyő (lásd
-> `docs/17` V1-rések). A `attekintes` route valódi fájl, de placeholdert renderel a
-> `hu.placeholders.*` szöveggel.
+> **Áttekintés** (`/konyv/[bookId]/attekintes`): a DESIGN-C körben még nem volt a
+> canvasban (akkori V1-rés). A **2026-06-26 design-delta körben** a frissített canvas
+> immár tartalmazza, és a képernyő **megépült** (a placeholder kitöltve, commit
+> `32486eb`) — részletek a g) szakaszban.
 
 ---
 
@@ -128,7 +130,53 @@ kizárólag opcionális konszolidáció (javasolt, nem kötelező):
 
 ---
 
-## g) Hogyan iteráljunk tovább (design → kód)
+## g) Design-delta kör (2026-06-26)
+
+A user **Claude Design** canvasa **frissült és újra-importálva** lett (a forrásfájl
+**161KB → 261KB**-ra nőtt), majd **összevetve** (reconcile) a jelenlegi appal. A
+delta két fázisban szállt le a `feat/alexandria-ui` ágon (mind commitolva +
+pusholva):
+
+### Fázis 1 — net-új képernyők (5, KÉSZ)
+
+| Felület | Állapot ma | Commit |
+|---|---|---|
+| **Áttekintés** (könyv-dashboard) | **KÉSZ** — a `/attekintes` placeholder kitöltve | **`32486eb`** |
+| **Stíluskalauz** (Style Guide) | **KÉSZ** — net-új `/stiluskalauz` route, a StyleGuide backendhez kötve | **`1056e2f`** |
+| **Verzióelőzmények** (Revision History) | **KÉSZ** — jobbról-csúszó panel diffel + restore-ral, a Write inspektorba kötve | **`06633e6`** |
+| **Scene Metadata modal** | **KÉSZ** — a terv-board jelenet-kártya „Info" gombja | **`b9461c5`** |
+| **Codex Image Lightbox** | **KÉSZ** — Codex képnagyító | **`d316528`** |
+
+> Az **Áttekintés** ezzel **már nem V1-rés** (lásd a korábbi callout a d) szakaszban
+> — mostantól épített képernyő, nem `ScreenPlaceholder`).
+
+### Fázis 2 — meglévő képernyők igazítása (4, KÉSZ)
+
+| Felület | Igazítás | Commit |
+|---|---|---|
+| **Write** | folytonosság-toolbar badge + `::selection` styling | **`5567069`** |
+| **Onboarding** | scroll-narratíva → lépés-karusszel | **`1231540`** |
+| **Import dialógus** | dropzone + fájl-infó kártya | **`63bf38d`** |
+| **Új könyv wizard** | arany fejléc + recap kártya | **`10bb71b`** |
+
+Teljes web suite **~887 zöld**; tsc + lint tiszta.
+
+### Hátralevő design-delta munka (3, HALASZTVA — backend vagy kockázatos restrukturálás kell)
+
+A canvas-reconcile három tételét tudatosan **elhalasztottuk**, mert vagy nem létező
+backendet, vagy a működő contract kockázatos átalakítását igényelné:
+
+1. **Write fókusz-mód lebegő toolbarok** — a működő fókusz mód (Esc-kilépés /
+   chrome-rejtés contract) restrukturálását igényelné; külön tervezett task.
+2. **Import „felismert struktúra" előnézet** (fejezet-lista + darabszámok az import
+   *előtt*) — hiányzó backend parse-preview endpointot igényel (a darabszámok már
+   megjelennek import *után*).
+3. **Új könyv wizard premise-mező / tónus-pillek / „start-mode" 4. lépés** —
+   backendet igényel + módosítaná a create payloadot.
+
+---
+
+## h) Hogyan iteráljunk tovább (design → kód)
 
 A design→kód kézfogás az **artifact / DesignSync URL**-en megy: a Claude Design
 fájl (`Alexandria.dc.html`) frissül a design-projektben, onnan a `claude_design`

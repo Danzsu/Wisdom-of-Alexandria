@@ -64,16 +64,20 @@ A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/k
 | `/konyv/[bookId]/chat` | Kutatás (RAG) | chat-screen | Grounded RAG Q&A a Codex + kézirat felett, idézet-chipekkel | **KÉSZ** |
 | `/konyv/[bookId]/export` | Export / Import | `components/export/ExportScreen` | Manuscript-export; **Markdown / DOCX / EPUB / PDF mind valódi** (letöltés), csak **TXT stub**, Import V1-stub | **MD/DOCX/EPUB/PDF KÉSZ** (TXT stub) |
 | `/konyv/[bookId]/beallitasok` | Beállítások | `BookTab` + `components/settings/SettingsScreen` | 2-tabos: **Könyv** (cím/műfaj/szerző) + **AI / Szolgáltatók** (Local/Ollama, Cloud/API-kulcs hub, MCP, generálási paraméterek, RAG-index) | **KÉSZ** — provider-hub megőrizve |
-| `/konyv/[bookId]/attekintes` | Áttekintés | `ScreenPlaceholder` | Projekt/könyv áttekintő-nézet | **PLACEHOLDER (V1, M10)** |
+| `/konyv/[bookId]/attekintes` | Áttekintés | route → áttekintés-screen | Könyv-dashboard áttekintő-nézet (a design-delta körben megépült, placeholder kitöltve) | **KÉSZ** (design-delta, `32486eb`) |
+| `/konyv/[bookId]/stiluskalauz` | Stíluskalauz | route → stíluskalauz-screen | Style Guide szerkesztő, a `StyleGuide` backendhez kötve (net-új design-delta route) | **KÉSZ** (design-delta, `1056e2f`) |
 | `/konyv/[bookId]/promptok` | Prompt-tár | `components/prompts/PromptLibraryScreen` | Prompt Library — **teljes CRUD** (létrehozás / szerkesztés / törlés UI), nem placeholder többé | **KÉSZ** (full CRUD) |
-| `/konyv/[bookId]/hangok` | Hangkönyvtár | `ScreenPlaceholder` | Audio domain | **PLACEHOLDER (V2, M11)** |
+| `/konyv/[bookId]/hangok` | Hangkönyvtár | `ScreenPlaceholder` | Audio domain — **az egyetlen megmaradt placeholder** | **PLACEHOLDER (V2, M11)** |
 | `/kitchen-sink` | Kit-galéria | `app/kitchen-sink/page.tsx` | Komponens-kit fejlesztői galéria | **dev-only** (production buildből kizárva) |
 
-### Két kiemelt panel
+### Kiemelt panelek és overlay-ek
 
 - **Codex „Képek" panel** (`components/codex/image-panel.tsx`) — karakter/helyszín képgenerálás (Nano Banana / Gemini image), RQ async job, kanonikus referencia-kép kijelölése (human-in-the-loop). Forrás: `CodexEntry` (entry_type + id).
 - **Könyv-borító panel** (`components/book/cover-panel.tsx`) — borító-generálás (Phase 2): art-generálás + app-oldali tipográfia-kompozit.
 - **GenerateChapterDialog** (`components/plan/generate-chapter-dialog.tsx`) — a terv-boardról indított fejezet-generálás dialógusa; AI fejezet-jobot indít, amelynek progressze + emberi review-ja a feladatok-képernyőn fut le (HITL).
+- **Verzióelőzmények panel** (Revision History, design-delta `06633e6`) — jobbról-csúszó panel diffel + restore-ral, a Write inspektorba kötve.
+- **Scene Metadata modal** (design-delta `b9461c5`) — a terv-board jelenet-kártya „Info" gombjáról nyíló jelenet-metaadat modal.
+- **Codex Image Lightbox** (design-delta `d316528`) — a Codex „Képek" panel képeit teljes méretben nyitó képnagyító overlay.
 
 ---
 
