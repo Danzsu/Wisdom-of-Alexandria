@@ -273,6 +273,42 @@ async def test_generate_scene_injects_beat_text_into_prompt(db_session):
 
 
 @pytest.mark.integration
+async def test_generate_scene_revision_injects_beat_text_into_prompt(db_session):
+    """The reusable core renders the real {beats} template too — the actual beat
+    text must reach the rendered user prompt (mirrors the generate_scene case).
+    Blanking the beats path in the source fails this assertion."""
+    scene_id, _ = await _make_scene(db_session)
+    job = await revision_service.create_job(
+        db_session, job_type="generate_scene", scene_id=scene_id
+    )
+    router = _capturing_router()
+    svc = AIService(
+        router=router,
+        loader=prompt_loader,
+        svc=revision_service,
+        embeddings=_embeddings_returning(SNIPPET),
+    )
+    beat = "BEAT-JELZO: a hős átlépi a küszöböt és megdermed."
+    revision, _context_entities = await svc.generate_scene_revision(
+        db_session,
+        scene=scene_id,
+        beats=[beat],
+        job_id=job.id,
+        model="ollama/llama3.2",
+    )
+    user_msg = router.complete.call_args.kwargs["messages"][1]["content"]
+    assert beat in user_msg
+    # The retrieved snippet (scene-scoped RAG) is injected too.
+    assert SNIPPET in user_msg
+    # The Revision is unapproved and linked to the PASSED parent job (not a new
+    # per-scene job) and the scene.
+    assert revision.approved is False
+    assert revision.job_id == job.id
+    assert revision.scene_id == scene_id
+    assert revision.revision_type == "generate_scene"
+
+
+@pytest.mark.integration
 async def test_generate_scene_injects_style_notes_into_prompt(db_session):
     """Style-guide notes passed to generate_scene must appear in the rendered
     user prompt (real PromptLoader renders {style_notes}). Dropping the

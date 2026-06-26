@@ -1,8 +1,10 @@
+import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from alexandria_core.models.generation_job import GenerationJob, JobStatus
 from alexandria_core.models.revision import Revision
+from alexandria_core.models.scene import Scene
 
 from app.services.ai_service import DESCRIBE_CHANNELS, AIService
 from app.services.model_router import ModelResponse, ModelRouter
@@ -318,3 +320,97 @@ async def test_summarize_override_temperature_only(mock_db):
     # temperature overridden, max_tokens falls back to per-action default 512.
     assert kwargs["temperature"] == 0.1
     assert kwargs["max_tokens"] == 512
+
+
+# ── generate_scene_revision (chapter-automation reusable core) ─────────────────
+# The reusable per-scene generation unit. It does RAG + model + save_revision and
+# returns the Revision — it does NOT create or complete a GenerationJob (the job
+# is owned by the caller: the single-scene endpoint, or a parent chapter job).
+
+
+def _make_scene_orm(scene_id):
+    """A minimal Scene-like ORM stub exposing .id (what RAG keys off)."""
+    scene = MagicMock(spec=Scene)
+    scene.id = scene_id
+    return scene
+
+
+def _service_with_stubbed_rag(svc):
+    """An AIService whose RAG layer is stubbed to no-context, so these unit tests
+    exercise the job/revision wiring against a bare AsyncMock db without touching
+    the embedding/progression DB path (covered by the rag-integration suite)."""
+    service = AIService(router=_make_mock_router(), loader=_make_mock_loader(), svc=svc)
+    service._rag_context = AsyncMock(return_value=("", []))
+    return service
+
+
+async def test_generate_scene_revision_returns_unapproved_linked_revision(mock_db):
+    """The returned Revision is approved=False and carries the passed job_id +
+    the scene's id + revision_type='generate_scene'."""
+    scene_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    captured = {}
+
+    svc = _make_mock_svc()
+
+    async def _capture_save_revision(db, **kwargs):
+        captured.update(kwargs)
+        return Revision(
+            scene_id=kwargs.get("scene_id"),
+            job_id=kwargs.get("job_id"),
+            content="text",
+            revision_type=kwargs.get("revision_type"),
+            approved=False,
+        )
+
+    svc.save_revision.side_effect = _capture_save_revision
+
+    service = _service_with_stubbed_rag(svc)
+    revision, _context_entities = await service.generate_scene_revision(
+        mock_db,
+        scene=_make_scene_orm(scene_id),
+        beats=["A hős belép"],
+        job_id=job_id,
+    )
+
+    assert revision.approved is False
+    # The Revision is linked to the PASSED job_id (mutation-check: breaking the
+    # job_id link — e.g. passing None — fails here).
+    assert captured["job_id"] == job_id
+    assert captured["scene_id"] == scene_id
+    assert captured["revision_type"] == "generate_scene"
+
+
+async def test_generate_scene_revision_does_not_create_or_complete_a_job(mock_db):
+    """The reusable core MUST NOT own a job: no create_job / complete_job /
+    fail_job calls — the caller (endpoint or parent chapter job) owns it."""
+    svc = _make_mock_svc()
+    service = _service_with_stubbed_rag(svc)
+
+    await service.generate_scene_revision(
+        mock_db,
+        scene=_make_scene_orm(uuid.uuid4()),
+        beats=["a", "b"],
+        job_id=uuid.uuid4(),
+    )
+
+    svc.create_job.assert_not_called()
+    svc.complete_job.assert_not_called()
+    svc.fail_job.assert_not_called()
+    svc.save_revision.assert_called_once()
+
+
+async def test_generate_scene_revision_accepts_scene_id_directly(mock_db):
+    """`scene` may be a bare UUID (not an ORM object) — the scene's id still
+    reaches save_revision."""
+    scene_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    svc = _make_mock_svc()
+    service = _service_with_stubbed_rag(svc)
+
+    await service.generate_scene_revision(
+        mock_db, scene=scene_id, beats=["a"], job_id=job_id
+    )
+    kwargs = svc.save_revision.call_args.kwargs
+    assert kwargs["scene_id"] == scene_id
+    assert kwargs["job_id"] == job_id

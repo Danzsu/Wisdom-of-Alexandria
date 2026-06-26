@@ -558,6 +558,70 @@ class AIService:
             await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
+    async def generate_scene_revision(
+        self,
+        db: AsyncSession,
+        *,
+        scene: "Scene | uuid.UUID | None",
+        beats: list[str],
+        characters: str = "",
+        location: str = "",
+        style_notes: str = "",
+        job_id: uuid.UUID | None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[Revision, list[dict[str, str]]]:
+        """Generate one scene's draft as an unapproved Revision linked to ``job_id``.
+
+        This is the REUSABLE per-scene generation core: RAG (progression-aware,
+        scene-scoped) → prompt assembly → ``ModelRouter.complete`` →
+        ``save_revision(approved=False, …, job_id=job_id)``. It RETURNS the
+        Revision plus the retrieved ``context_entities`` (a ``(Revision, list)``
+        tuple, so the single-scene endpoint keeps its grounding contract without a
+        second RAG pass; a chapter job just unpacks the Revision) and deliberately
+        does
+        NOT create, complete, or fail any ``GenerationJob`` — the owning job is
+        the caller's responsibility, so a parent chapter job can link many scenes'
+        revisions to a single job.
+
+        ``scene`` may be a ``Scene`` ORM object, a bare scene ``uuid.UUID``, or
+        ``None``; its id (when present) drives the progression-aware, scene-scoped
+        RAG context exactly as the single-scene path does.
+        """
+        scene_id = getattr(scene, "id", scene)
+        beats_text = "\n".join(f"- {b}" for b in beats)
+        # Query = beats + named characters + location (what the scene is about).
+        rag_query = "\n".join(p for p in (beats_text, characters, location) if p.strip())
+        context, retrieved = await self._rag_context(
+            db, scene_id=scene_id, query=rag_query
+        )
+        system = self.loader.load_system("generate_scene")
+        user = self.loader.load_user(
+            "generate_scene",
+            beats=beats_text,
+            characters=characters,
+            location=location,
+            style_notes=style_notes,
+            context=context,
+        )
+        response = await self.router.complete(
+            messages=self.router.build_messages(system, user),
+            model=model,
+            db=db,
+            **_gen_overrides(temperature, max_tokens, default_max_tokens=4096),
+        )
+        revision = await self.svc.save_revision(
+            db,
+            content=response.content,
+            revision_type="generate_scene",
+            scene_id=scene_id,
+            job_id=job_id,
+            model_name=response.model,
+            prompt_version=PROMPT_VERSION,
+        )
+        return revision, _context_entities(retrieved)
+
     async def generate_scene(
         self,
         db: AsyncSession,
@@ -571,12 +635,6 @@ class AIService:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> tuple[Revision, GenerationJob, list[dict[str, str]]]:
-        beats_text = "\n".join(f"- {b}" for b in beats)
-        # Query = beats + named characters + location (what the scene is about).
-        rag_query = "\n".join(p for p in (beats_text, characters, location) if p.strip())
-        context, retrieved = await self._rag_context(
-            db, scene_id=scene_id, query=rag_query
-        )
         job = await self.svc.create_job(
             db,
             job_type="generate_scene",
@@ -586,32 +644,20 @@ class AIService:
             input_data={"beats": beats, "characters": characters, "location": location},
         )
         try:
-            system = self.loader.load_system("generate_scene")
-            user = self.loader.load_user(
-                "generate_scene",
-                beats=beats_text,
+            revision, context_entities = await self.generate_scene_revision(
+                db,
+                scene=scene_id,
+                beats=beats,
                 characters=characters,
                 location=location,
                 style_notes=style_notes,
-                context=context,
-            )
-            response = await self.router.complete(
-                messages=self.router.build_messages(system, user),
-                model=model,
-                db=db,
-                **_gen_overrides(temperature, max_tokens, default_max_tokens=4096),
-            )
-            revision = await self.svc.save_revision(
-                db,
-                content=response.content,
-                revision_type="generate_scene",
-                scene_id=scene_id,
                 job_id=job.id,
-                model_name=response.model,
-                prompt_version=PROMPT_VERSION,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
-            return revision, job, _context_entities(retrieved)
+            return revision, job, context_entities
         except Exception as e:
             # Roll back any partial / failed transaction so fail_job's commit
             # runs on a clean session (avoids PendingRollbackError masking the
