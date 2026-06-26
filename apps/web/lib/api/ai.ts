@@ -42,6 +42,7 @@ import {
   snippetReadSchema,
   type AIDescribeResult,
   type AIResult,
+  type ChapterGenerateRequest,
   type ContinuityResult,
   type DescribeRequest,
   type GenerateSceneRequest,
@@ -199,6 +200,30 @@ export async function indexProjectAsync(
   const data = await apiFetch<unknown>(
     `/ai/index/async?project_id=${encodeURIComponent(projectId)}`,
     { method: "POST", baseUrl: AI_BASE_URL },
+  );
+  return generationJobReadSchema.parse(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * Chapter automation (T4) — enqueue a scene-by-scene chapter generation
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Enqueue a chapter-generation job: generate each selected scene from its beats
+ * as ONE background job. Returns the queued parent `GenerationJob` (status
+ * `pending`) immediately (HTTP 202); poll {@link getJob} for live per-scene
+ * progress. Every generated scene becomes a `Revision(approved=false)` linked to
+ * THIS parent job — HITL preserved, nothing auto-overwrites. The AI-service route
+ * (:8001), so `AI_BASE_URL`. Generation params are attached like the other AI
+ * bodies. The result is validated before reaching the UI.
+ */
+export async function generateChapter(
+  chapterId: string,
+  input: ChapterGenerateRequest,
+): Promise<GenerationJobRead> {
+  const data = await apiFetch<unknown>(
+    `/ai/chapters/${chapterId}/generate`,
+    { method: "POST", body: withGenerationParams(input), baseUrl: AI_BASE_URL },
   );
   return generationJobReadSchema.parse(data);
 }

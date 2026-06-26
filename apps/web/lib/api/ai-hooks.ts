@@ -10,9 +10,10 @@
  * logic lives here + in `lib/api/ai.ts`; components only render state and fire
  * callbacks.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useMutation,
+  useQueries,
   useQuery,
   type UseMutationResult,
   type UseQueryResult,
@@ -22,6 +23,7 @@ import {
   checkContinuity,
   createSnippet,
   describe,
+  generateChapter,
   generateScene,
   indexProjectAsync,
   listModels,
@@ -32,9 +34,13 @@ import {
   type ResearchInput,
 } from "./ai";
 import { getJob, listJobs } from "./jobs";
+import { listScenes } from "./scenes";
+import { listBeats } from "./beats";
+import { queryKeys } from "./hooks";
 import type {
   AIDescribeResult,
   AIResult,
+  ChapterGenerateRequest,
   ContinuityResult,
   DescribeRequest,
   GenerateSceneRequest,
@@ -267,6 +273,130 @@ export function useWriteContinue(): UseMutationResult<
 > {
   return useMutation({
     mutationFn: (input: WriteContinueRequest) => writeContinue(input),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Chapter automation (T4) — selection data + the generate mutation.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * One row of the "Fejezet generálása" selection list: a scene with the two facts
+ * the modal's default-selection rules need — whether it is EMPTY (no manuscript
+ * text) and how many beats it has. `selectableByDefault` collapses the rule
+ * (empty AND has beats) so the component stays a pure renderer.
+ */
+export interface ChapterGenScene {
+  id: string;
+  title: string;
+  /** True when the scene has no manuscript text (word_count 0 / empty content). */
+  isEmpty: boolean;
+  /** Word count (shown on a non-empty row). */
+  wordCount: number;
+  /** Number of beats — a scene with 0 beats cannot be generated. */
+  beatCount: number;
+  /** Pre-checked iff empty AND beatCount > 0 (the modal's default rule). */
+  selectableByDefault: boolean;
+}
+
+/** What {@link useChapterScenesForGeneration} returns to the dialog. */
+export interface ChapterScenesForGeneration {
+  scenes: ChapterGenScene[];
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+}
+
+/** A scene is EMPTY when it has no manuscript text (word_count 0 / blank content). */
+function sceneIsEmpty(content: string | null, wordCount: number): boolean {
+  return wordCount === 0 || (content ?? "").trim().length === 0;
+}
+
+/**
+ * Load a chapter's scenes plus each scene's beat-count + empty-state, the data
+ * the GenerateChapterDialog needs. Reuses the existing endpoints (`listScenes` +
+ * `listBeats`) — no new backend shape: the scenes come from one query, then a
+ * `useQueries` fan-out fetches each scene's beats (same pattern as
+ * {@link useBookTree}). Beat lists are cached under the shared `sceneBeats` key,
+ * so this shares cache with anywhere else that loads them. Disabled (no fetch)
+ * until both a chapter id is supplied AND `enabled` is true, so the dialog only
+ * fetches while open. Errors surface via `error`/`isError` (never swallowed).
+ */
+export function useChapterScenesForGeneration(
+  chapterId: string | undefined,
+  enabled: boolean,
+): ChapterScenesForGeneration {
+  const active = Boolean(chapterId) && enabled;
+
+  const scenesQuery = useQuery({
+    queryKey: queryKeys.chapterScenes(chapterId ?? "__none__"),
+    queryFn: () => listScenes(chapterId as string),
+    enabled: active,
+  });
+
+  const scenes = scenesQuery.data ?? [];
+
+  const beatQueries = useQueries({
+    queries: scenes.map((scene) => ({
+      queryKey: queryKeys.sceneBeats(scene.id),
+      queryFn: () => listBeats(scene.id),
+      enabled: active,
+    })),
+  });
+
+  const beatsLoading = beatQueries.some((q) => q.isLoading);
+  const beatsError = beatQueries.find((q) => q.error)?.error ?? null;
+
+  const rows = useMemo<ChapterGenScene[]>(
+    () =>
+      scenes.map((scene, index) => {
+        const beatCount = beatQueries[index]?.data?.length ?? 0;
+        const isEmpty = sceneIsEmpty(scene.content, scene.word_count);
+        return {
+          id: scene.id,
+          title: scene.title,
+          isEmpty,
+          wordCount: scene.word_count,
+          beatCount,
+          selectableByDefault: isEmpty && beatCount > 0,
+        };
+      }),
+    // beatQueries is a fresh array each render; key the memo on the resolved
+    // beat-count signature so it only recomputes when the data actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scenes, beatQueries.map((q) => q.data?.length ?? -1).join(",")],
+  );
+
+  return {
+    scenes: rows,
+    isLoading:
+      scenesQuery.isLoading || (scenes.length > 0 && active && beatsLoading),
+    isError: scenesQuery.isError || beatQueries.some((q) => q.isError),
+    error: (scenesQuery.error as Error | null) ?? (beatsError as Error | null),
+  };
+}
+
+/** Input for the chapter-generation mutation (the chapter + the request body). */
+export interface GenerateChapterInput {
+  chapterId: string;
+  body: ChapterGenerateRequest;
+}
+
+/**
+ * Enqueue a chapter-generation job (T4). Resolves to the queued parent
+ * `GenerationJob` (status `pending`); the caller toasts + closes the modal and
+ * the job then surfaces live in the AI feladatok screen. Every generated scene
+ * is a `Revision(approved=false)` — the manuscript only changes on an explicit
+ * approve (HITL). Errors surface via the mutation's `error` (never swallowed).
+ */
+export function useGenerateChapter(): UseMutationResult<
+  GenerationJobRead,
+  Error,
+  GenerateChapterInput
+> {
+  return useMutation({
+    mutationFn: ({ chapterId, body }: GenerateChapterInput) =>
+      generateChapter(chapterId, body),
   });
 }
 

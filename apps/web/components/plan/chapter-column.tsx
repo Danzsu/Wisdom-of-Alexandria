@@ -1,15 +1,18 @@
 "use client";
 
-import { GripVertical, Plus } from "lucide-react";
+import { useState } from "react";
+import { GripVertical, Plus, Sparkles } from "lucide-react";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Icon } from "@/components/kit/icon";
+import { IconButton } from "@/components/kit/icon-button";
 import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { SceneCard } from "./scene-card";
+import { GenerateChapterDialog } from "./generate-chapter-dialog";
 import { dndTransformToCss } from "./dnd-transform";
 import type { PlanChapter, PlanDensity } from "./types";
 
@@ -42,6 +45,7 @@ export function ChapterColumn({
   onArchiveScene,
   onDeleteScene,
 }: ChapterColumnProps) {
+  const [genOpen, setGenOpen] = useState(false);
   const {
     attributes,
     listeners,
@@ -80,10 +84,29 @@ export function ChapterColumn({
         <span className="flex-1 truncate text-[14px] font-semibold text-text">
           {chapter.title}
         </span>
+        <IconButton
+          size={24}
+          aria-label={hu.chapterGen.triggerAria(chapter.title)}
+          onClick={() => setGenOpen(true)}
+        >
+          <Icon icon={Sparkles} size={13} className="text-ai" />
+        </IconButton>
         <span className="flex h-[18px] items-center rounded-full bg-surface-muted px-2 text-[11px] tabular-nums text-text-muted">
           {chapter.scenes.length}
         </span>
       </div>
+
+      {/* Mount the dialog (and its data hooks) only while open, so the closed
+          board never fires the scene/beats queries and a board rendered without
+          a QueryClient in tests stays inert. */}
+      {genOpen ? (
+        <GenerateChapterDialog
+          chapterId={chapter.id}
+          chapterTitle={chapter.title}
+          open
+          onOpenChange={setGenOpen}
+        />
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <SortableContext

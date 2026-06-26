@@ -4,6 +4,44 @@
  */
 
 export interface paths {
+    "/api/v1/ai/chapters/{chapter_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Chapter
+         * @description Enqueue a chapter-generation job: generate each selected scene from its
+         *     beats, scene-by-scene, as ONE background job (T2 / deferred MVP #11).
+         *
+         *     Returns the queued parent ``GenerationJob`` (status ``pending``) immediately;
+         *     poll ``GET /jobs/{id}`` for live per-scene progress (the worker flips it
+         *     running → done, writes ``output_data`` after each scene, and links every
+         *     generated ``Revision(approved=False)`` to THIS parent job — HITL preserved,
+         *     nothing auto-overwrites).
+         *
+         *     Validation (all BEFORE the job is created, so a bad request never leaves a
+         *     dangling job):
+         *       - the chapter must exist (404);
+         *       - every ``scene_id`` must belong to that chapter (422 — cross-chapter or
+         *         nonexistent scenes are rejected);
+         *       - every selected scene must have at least one beat (422 — a guard; the UI
+         *         disables beat-less scenes, this enforces it server-side).
+         *
+         *     If the queue cannot be reached, the job is marked failed (so it never dangles
+         *     as forever-pending) and a sanitized 502 is returned.
+         */
+        post: operations["generate_chapter_api_v1_ai_chapters__chapter_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/chapters/{chapter_id}/summarize": {
         parameters: {
             query?: never;
@@ -600,6 +638,31 @@ export interface components {
             revision: components["schemas"]["RevisionRead"];
         };
         /**
+         * ChapterGenerateRequest
+         * @description Request to generate a chapter scene-by-scene as one background job (T2).
+         *
+         *     ``scene_ids`` is the user-selected subset of the chapter's scenes to
+         *     generate (bounded: at least one, at most ~200 — a whole chapter is well under
+         *     this, but the cap blocks a pathological payload). ``run_continuity`` opts into
+         *     a per-scene continuity pass on each generated draft. ``model`` / ``temperature``
+         *     / ``max_tokens`` mirror the single-scene generate bounds.
+         */
+        ChapterGenerateRequest: {
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Run Continuity
+             * @default false
+             */
+            run_continuity: boolean;
+            /** Scene Ids */
+            scene_ids: string[];
+            /** Temperature */
+            temperature?: number | null;
+        };
+        /**
          * ContextEntity
          * @description A Codex/manuscript entry that RAG injected into the generation context.
          *
@@ -1176,6 +1239,41 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    generate_chapter_api_v1_ai_chapters__chapter_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChapterGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     summarize_chapter_api_v1_ai_chapters__chapter_id__summarize_post: {
         parameters: {
             query?: never;

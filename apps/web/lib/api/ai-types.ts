@@ -302,6 +302,20 @@ export interface WriteContinueRequest extends GenerationParams {
 }
 
 /**
+ * Body for `POST /ai/chapters/{chapter_id}/generate` (chapter automation, T4).
+ * `scene_ids` is the user-selected subset of the chapter's scenes to generate
+ * (at least one — the UI disables the Generálás button otherwise);
+ * `run_continuity` opts into a per-scene continuity pass on each draft. The
+ * generation params (`temperature` / `max_tokens`) are attached client-side like
+ * the other AI bodies. Mirrors the backend `ChapterGenerateRequest`.
+ */
+export interface ChapterGenerateRequest extends GenerationParams {
+  scene_ids: string[];
+  run_continuity: boolean;
+  model?: string | null;
+}
+
+/**
  * The six sensory Describe channels, verbatim from the backend
  * (`AIService.DESCRIBE_CHANNELS`). The prototype labels the last one "Metafora";
  * the backend channel id is "Metaforák" — we keep the id exact and label

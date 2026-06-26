@@ -1878,6 +1878,41 @@ export const hu = {
     updateError: "Nem sikerült módosítani a promptot.",
     updateSuccess: "Prompt módosítva",
   },
+  /**
+   * Chapter automation (V2) — the "Fejezet generálása" selection modal that
+   * enqueues a scene-by-scene chapter-generation job. Copy ONLY; no literal
+   * strings in the components.
+   */
+  chapterGen: {
+    /** Trigger button on the chapter column header. */
+    trigger: "Fejezet generálása",
+    triggerAria: (chapterTitle: string) =>
+      `Fejezet generálása: ${chapterTitle}`,
+    /** Modal title + intro. */
+    title: "Fejezet generálása",
+    subtitle:
+      "Válaszd ki, mely jeleneteket generálja az AI a beat-jeikből. Minden generált jelenet jóváhagyásra váró revízió lesz — semmi sem íródik felül automatikusan.",
+    /** Loading / empty / error states for the scene list. */
+    loading: "Jelenetek betöltése…",
+    error: "Nem sikerült betölteni a jeleneteket",
+    /** No scene in the chapter can be generated (none has beats). */
+    emptyNoScenes: "Ennek a fejezetnek nincs generálható jelenete.",
+    /** Per-row hints. */
+    hintEmpty: "üres — generálásra vár",
+    hintHasText: "már van szövege — újragenerálás revízióként",
+    hintNoBeats: "nincs beat",
+    /** Word-count badge on a non-empty row. */
+    wordCount: (n: number) => `${n} szó`,
+    /** The continuity toggle. */
+    continuityLabel: "folytonosság-ellenőrzéssel",
+    /** Submit button + its loading caption. */
+    submit: "Generálás",
+    submitting: "Indítás…",
+    /** Success / error toasts. */
+    toastStarted: (n: number) =>
+      `Fejezet generálása elindítva — ${n} jelenet`,
+    toastError: "Nem sikerült elindítani a fejezet generálását.",
+  },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
     "történelmi fantasy",
