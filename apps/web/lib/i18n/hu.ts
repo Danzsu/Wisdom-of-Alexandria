@@ -1728,6 +1728,13 @@ export const hu = {
       "Tölts fel egy .docx fájlt — az Alexandria fejezetekre és jelenetekre bontja, és új könyvet hoz létre belőle.",
     fileLabel: "Word dokumentum (.docx)",
     filePickerCta: "Fájl kiválasztása",
+    /** Drag-drop zone primary CTA + sub-hint. */
+    dropzoneCta: "Húzd ide a .docx fájlt, vagy kattints a tallózáshoz",
+    dropzoneHint: "A fájl a gépeden marad — semmi nem töltődik felhőbe.",
+    /** Accepted-format chip shown under the dropzone. */
+    acceptedFormat: ".docx",
+    /** Badge on the file-info card once a file is selected. */
+    fileReadyBadge: "Kiválasztva",
     titleLabel: "Könyv címe (opcionális)",
     titlePlaceholder: "Ha üres, a fájlnévből vagy a dokumentum első sorából derül ki",
     submit: "Importálás",

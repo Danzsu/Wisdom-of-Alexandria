@@ -37,6 +37,34 @@ describe("ImportDocxDialog", () => {
     expect(submit).toBeEnabled();
   });
 
+  it("shows the dropzone CTA + accepted-format chip before a file is chosen", () => {
+    renderDialog();
+    expect(screen.getByText(hu.importDialog.dropzoneCta)).toBeInTheDocument();
+    expect(
+      screen.getByText(hu.importDialog.acceptedFormat),
+    ).toBeInTheDocument();
+    // No file-info card yet.
+    expect(
+      screen.queryByText(hu.importDialog.fileReadyBadge),
+    ).not.toBeInTheDocument();
+  });
+
+  it("swaps the dropzone for a file-info card once a .docx is selected", async () => {
+    renderDialog();
+    await userEvent.upload(
+      screen.getByLabelText(hu.importDialog.fileLabel),
+      docxFile("kalandok.docx"),
+    );
+    // The chosen file name + "ready" badge appear; the dropzone CTA is gone.
+    expect(screen.getByText("kalandok.docx")).toBeInTheDocument();
+    expect(
+      screen.getByText(hu.importDialog.fileReadyBadge),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(hu.importDialog.dropzoneCta),
+    ).not.toBeInTheDocument();
+  });
+
   it("rejects a non-.docx file client-side", async () => {
     renderDialog();
     const input = screen.getByLabelText(hu.importDialog.fileLabel);
