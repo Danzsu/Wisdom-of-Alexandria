@@ -6,7 +6,7 @@ Product name: **Wisdom of Alexandria** (in-app wordmark "Wisdom of Alexandria" s
 
 Alternative product description: **local-first, agentic AI novel-writing workspace inspired by NovelCrafter-style story organization, Sudowrite-style creative assistance, and BookNova-style chapter automation.**
 
-> **Current state:** MVP + much of V1 are shipped, and the UI has been re-skinned to the Claude Design system. For the live status + roadmap see [docs/17](docs/17_status_and_roadmap.md); for the current design system see [docs/09](docs/09_design_system_novelcrafter_inspired.md); for the UI/screen inventory [docs/07](docs/07_ui_ux_routes_and_components.md); for the design rollout + remaining design screens [docs/18](docs/18_design_rollout_and_remaining.md).
+> **Current state:** MVP + V1 are essentially complete and the first **V2** slice (chapter automation) has shipped; the UI is on the Claude Design system. Highlights since the MVP: DESIGN-C net-new screens (Landing, Profil, Prompt Library) + a celestial "delight" pass; PDF export (WeasyPrint); a real Prompt Library (CRUD + seeded builtins); `scene_count` + `/auth/me`; in-app Ollama model pull; CodexProgression now filters the AI context ("state as of scene N"); a DB-hardening migration; and **chapter automation** (`POST /ai/chapters/{id}/generate` → an RQ job producing one human-approved Revision per scene). Two screens remain placeholders (Áttekintés, Hangok). Several "must not include yet" items below have since shipped — the **authoritative live status is [docs/17](docs/17_status_and_roadmap.md)** (it overrides anything stale here). See also the design system [docs/09](docs/09_design_system_novelcrafter_inspired.md), the UI/screen inventory [docs/07](docs/07_ui_ux_routes_and_components.md), and the design rollout [docs/18](docs/18_design_rollout_and_remaining.md).
 
 ## Core goal
 
@@ -150,7 +150,7 @@ Export:
 - Markdown: native Python string generation (MVP)
 - DOCX: Pandoc via subprocess (V1)
 - EPUB: Pandoc via subprocess (V1)
-- PDF: Pandoc + LaTeX or Playwright HTML→PDF (V2)
+- PDF: Pandoc + WeasyPrint (`--pdf-engine=weasyprint`) — **shipped (V1)**; graceful 503 if the engine is absent
 
 Auth (MVP):
 
@@ -236,7 +236,7 @@ The MVP must include:
 - Character `aliases` field (name detection in manuscript)
 - `ai_visible` boolean on all Codex entities (hide entry from AI context)
 - CodexRelation table — CRUD only, no UI yet (V1)
-- CodexProgression table — CRUD only, AI does not filter yet (V1)
+- CodexProgression table — CRUD only, AI does not filter yet (V1) — *(V1: now SHIPPED — the AI context filters codex progression "state as of scene N")*
 - Snippet entity — basic CRUD
 - StyleGuide entity
 - basic Tiptap editor with autosave
@@ -264,6 +264,8 @@ The MVP must not include yet:
 - public SaaS deployment
 - complex permissions
 - real-time multiplayer editing
+
+> **Since shipped (V1/V2 — this list is the original MVP scope):** **image generation** (Codex/character + book-cover generation, Phase 1–2), **PDF export** (WeasyPrint), and the first slice of **full-book automatic generation** — **chapter automation** (chapter-level, scene-by-scene from beats as an RQ job, one human-approved Revision per scene; book-level is a later extension). The rest (collaboration, payments, teams, mobile, advanced KDP, public SaaS, complex permissions, multiplayer) remain out of scope. Live status: [docs/17](docs/17_status_and_roadmap.md).
 
 ## Coding rules
 

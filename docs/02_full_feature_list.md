@@ -152,7 +152,7 @@ Jelölések:
 | Chapterből scene lista | V1 | Fejezetcélból jelenetlista |
 | Scene beat generation | MVP | Jelenetcélból beat lista |
 | Beatből scene draft | MVP | Beat-ekből jelenet első draftja |
-| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása — **megvalósítva (fejezet-szint)** (jelenetenként a beat-ekből, egyetlen RQ háttér-job, jelenetenként egy jóvá nem hagyott Revision = HITL, opcionális folytonosság-ellenőrzés; a könyv-szint későbbi bővítés). Lásd `docs/17` |
+| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása — **megvalósítva (V2 első szelet, fejezet-szint)** (`POST /ai/chapters/{id}/generate` + `run_chapter_generation_job` RQ worker: jelenetenként a beat-ekből, egyetlen RQ háttér-job, jelenetenként egy jóvá nem hagyott Revision = HITL, opcionális folytonosság-ellenőrzés; a könyv-szint későbbi bővítés). Lásd `docs/17` |
 | Chapter opening variation | V2 | Nyitási technikák rotálása |
 | Chapter ending awareness | V2 | Következő chapter előkészítése |
 | Setup/payoff tracking | V2 | Elültetés és későbbi kifizetés követése |
@@ -260,7 +260,7 @@ Jelölések:
 |---|---:|---|
 | Model provider settings | MVP | Ollama, OpenAI-compatible, Gemini, OpenRouter stb. |
 | Model collection | V1 | Feladatokhoz modellek csoportosítása |
-| Prompt preset editor | V1 | Promptok szerkesztése UI-ból — **részben kész** (`PromptTemplate` backend + CRUD API + létrehozó/törlő UI; inline szerkesztő-UI még hátra). Lásd `docs/17` |
+| Prompt preset editor | V1 | Promptok szerkesztése UI-ból — **megvalósítva** (valódi `PromptTemplate` DB-entitás + migráció `b3c5d7e9f1a2` + 6 beépített seed + teljes CRUD API (builtin = immutable) + létrehozó/szerkesztő/törlő UI). Lásd `docs/17` |
 | Temperature / max tokens | MVP | Modellparaméterek beállítása |
 | Local model health check | MVP | Ollama elérhetőség tesztelése |
 | Cloud API key storage | V1 | Biztonságos API kulcs kezelés |
@@ -279,7 +279,7 @@ Jelölések:
 | Cloud sync | Later | Desktop/local-first szinkron |
 | Plugin rendszer | Later | Külső AI tools / promptok |
 | Marketplace | Later | Promptok, sablonok, export template-ek |
-| Cover generation | Later | Borító és karakterkép generálás |
+| Cover generation | Later | Borító és karakterkép generálás — **megvalósítva** (Phase 1: Codex karakter/helyszín képgenerálás `MediaAsset` + RQ job + Codex „Képek" panel, HITL; Phase 2: könyv-borító-generátor art + app-oldali tipográfia-kompozit a KDP-biztonsági zónán belül + borító-panel). Lásd `docs/17` |
 | Launch kit | Later | Fülszöveg, marketing copy, KDP metadata |
 
 ---

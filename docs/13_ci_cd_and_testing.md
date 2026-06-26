@@ -20,6 +20,9 @@ Minden feature egy failing teszttel kezdődik. Kód nem kerül production-be an�
 6. git push → pre-push hook → CI → deploy
 ```
 
+> **Teszt-darabszám (2026-06-26):** frontend (`apps/web`) **830**, backend
+> (`apps/api`) **536**, AI-réteg **422**.
+
 ---
 
 ## Deployment stack
@@ -216,6 +219,13 @@ export default defineConfig({
   },
 })
 ```
+
+> **E2E-állapot (2026-06-26): UNBLOCKED.** Az E2E már fut: a
+> `playwright.config.ts` egy **CI-gated lokális `webServer`**-t indít (CI-n a CI
+> bootolja a szolgáltatásokat, lokálisan a config maga). A korábban gyanított
+> `app` package-név „ütközés" **non-issue** volt — minden szolgáltatás a saját
+> processzeként fut, így nincs valódi névütközés (commit **`78c6d88`**); a
+> smoke-suite **zöld**.
 
 E2E tesztek helye: `apps/web/playwright/e2e/`
 

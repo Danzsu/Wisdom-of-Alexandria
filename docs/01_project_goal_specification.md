@@ -1,6 +1,10 @@
 # 01 — Projekt célja és specifikáció
 
 > Termék: Wisdom of Alexandria (korábbi munkanevek elavultak)
+>
+> **ℹ️ EREDETI VÍZIÓ / SPECIFIKÁCIÓ.**
+> Ez a dokumentum a projekt **eredeti** célkitűzését és termékvízióját rögzíti. Az MVP és a V1 számos itt leírt tétele **azóta leszállítva** (CRUD, Codex, manuscript editor, AI rewrite/describe/generate/continue, RAG, continuity, sorozat/plotline/timeline, export, design-rendszer). A szöveg innentől terv-kontextus, nem élő állapotleírás.
+> **Az élő, autoritatív állapot és roadmap: [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md).**
 
 ## Projekt neve
 

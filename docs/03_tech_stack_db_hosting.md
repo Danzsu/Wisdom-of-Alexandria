@@ -43,6 +43,8 @@ Docker Compose local stack
 
 > **Változás:** Qdrant kivéve — pgvector váltja MVP-ben és V1-ben.
 > Qdrant opcionális V2-ben ha a retrieval teljesítmény szűknek bizonyul.
+>
+> **Deployment-valóság (megvalósítva):** a pgvector **használatban van** (MVP/V1), a Qdrant **sehol nincs deployolva** — kizárólag opcionális V2 upgrade-útvonal. A tényleges deployolt stack: `postgres` / `redis` / `ollama` / `api` / `ai` / `worker` / `web`.
 
 Későbbi deployment:
 
@@ -648,12 +650,14 @@ Approved scenes
 | Markdown | MVP | natív generálás |
 | DOCX | MVP | Pandoc vagy python-docx |
 | EPUB | V1 | Pandoc |
-| PDF | V1 | Pandoc vagy HTML/CSS + Playwright |
+| PDF | V1 | Pandoc + weasyprint (V1, megvalósítva) — `pandoc --pdf-engine=weasyprint`; motor hiányában kecses 503 |
 | KDP-ready PDF | Later | külön template és trim size logika |
 
 ---
 
 ## 12. Docker Compose MVP
+
+> **Megjegyzés (megvalósítva):** az alábbi YAML korai, illusztratív vázlat — a `qdrant` service és a `QDRANT_URL` env-ek **NEM** szerepelnek a tényleges deployolt compose-ban. A valós stack: `postgres` / `redis` / `ollama` / `api` / `ai` / `worker` / `web` (a vektor-keresést pgvector adja, külön Qdrant nélkül). A `qdrant` blokk csak az opcionális V2 upgrade-útvonalat jelzi.
 
 ```yaml
 version: "3.9"

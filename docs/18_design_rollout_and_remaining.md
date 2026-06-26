@@ -6,6 +6,10 @@ design-felület nincs több hátra; ami marad, az kizárólag opcionális
 konszolidáció. A token- és betű-referencia a `docs/09`-ben él; ez a fájl a „mi
 készült el / mi van hátra" nézet a design felől.
 
+> **LIVE VERIFIED 2026-06-26 — Lighthouse a11y 100, 0 contrast failures both
+> themes.** DESIGN-A + B + C + delight mind kész; a `PageHero` cím a design 40px-én
+> (`text-[clamp(32px,5vw,40px)]`, lásd d).
+
 ---
 
 ## a) A design-forrás

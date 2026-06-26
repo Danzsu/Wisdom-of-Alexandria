@@ -76,7 +76,7 @@ User
         └── AIComment
 ```
 
-> **Megvalósítási megjegyzés (frissítve 2026-06-25):** az élő állapot- és roadmap-leírás a [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md). Az alábbi tábla-definíciók közül a `Provider`, `Embedding`, `Series` (+ `Book.series_id`), `Plotline`, `PlotlineScene` és a `CodexEntry` `aliases`/`role`/`series_id` oszlopai **megvalósultak** (`packages/db` / `alexandria_core`). A `CodexProgression` immár **nem csak CRUD**: az AI-réteg join-alapú „állapot az N. jelenetnél" linearizációval szűri a progresszió-jegyzeteket az AI-kontextusba (horgony nélkül projekt-globális baseline, horgonyzott = könyv+pozíció-scope). Külön, **workspace-globális** `PromptTemplate` entitás is megvalósult (modell + migráció `b3c5d7e9f1a2` + builtin seedek + CRUD API; lásd `docs/17`).
+> **Megvalósítási megjegyzés (frissítve 2026-06-25):** az élő állapot- és roadmap-leírás a [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md). Az alábbi tábla-definíciók közül a `Provider`, `Embedding`, `Series` (+ `Book.series_id`), `Plotline`, `PlotlineScene` és a `CodexEntry` `aliases`/`role`/`series_id` oszlopai **megvalósultak** (`packages/db` / `alexandria_core`). A `CodexProgression` immár **nem csak CRUD**: az AI-réteg join-alapú „állapot az N. jelenetnél" linearizációval szűri a progresszió-jegyzeteket az AI-kontextusba (horgony nélkül projekt-globális baseline, horgonyzott = könyv+pozíció-scope). Külön, **workspace-globális** `PromptTemplate` entitás is megvalósult — ez a **felhasználói prompt-könyvtár** (modell + migráció `b3c5d7e9f1a2` + 6 beépített seed + teljes CRUD API, builtin = immutable + létrehozó/szerkesztő/törlő UI). **Megkülönböztetendő** a belső `packages/prompts` rendszer-sablonoktól (a kód által betöltött, verziózott prompt-fájloktól) — a `PromptTemplate` user-facing, DB-ben tárolt, UI-ból szerkeszthető. Lásd `docs/17`.
 
 ## Tables
 
@@ -678,7 +678,7 @@ Egy RAG-indexelhető entitás eltárolt embedding-vektora (codex / character / l
 
 **Scope:** a RAG **PROJEKT-szinten** működik — `project_id` a NEM-null elsődleges retrieval-scope minden soron. A `book_id` NULLABLE, csak kézirat-entitásoknál (scene/chapter) van kitöltve (provenance + jövőbeli per-könyv szűrő); projekt-globális entitásoknál (codex/character/location/worldbuilding/styleguide) NULL. A `series_id` NULLABLE (B3b sorozat-tudatosság): NULL = projekt-globális (minden könyv látja), kitöltve = sorozat-scope (csak az adott sorozat könyvei húzzák be); `ON DELETE SET NULL`. A retrieval `series_id IS NULL OR series_id == <aktív sorozat>` szerint szűr, így más sorozat codexe/kézirata sosem szivárog be.
 
-**Dialektus-tudatos `Vector` típus:** PostgreSQL-en valódi `vector(1536)` oszlop (cosine-distance ANN), a SQLite teszt-DB-n `JSON` tömb — így a modell mindkét backenden betöltődik `Base.metadata.create_all` alatt. `EMBEDDING_DIM = 1536`.
+**Dialektus-tudatos `Vector` típus:** PostgreSQL-en valódi `vector(1536)` oszlop **hnsw** ANN-indexszel (cosine-distance), a SQLite teszt-DB-n `JSON` tömb — így a modell mindkét backenden betöltődik `Base.metadata.create_all` alatt. `EMBEDDING_DIM = 1536`.
 
 ### Fields
 

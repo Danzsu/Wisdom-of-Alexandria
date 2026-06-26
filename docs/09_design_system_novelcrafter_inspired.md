@@ -162,6 +162,10 @@ elhalasztva (a radius-nevek ütköznének a Tailwind defaultokkal).
 | `--text-display` | 24px | 1.2 |
 | `--text-hero` | 26px | 1.25 |
 
+> **PageHero-cím:** a megosztott `PageHero` primitív címe a Claude Design 40px-ére
+> emelve — `text-[clamp(32px,5vw,40px)]` (mobilon 32px-ről skálázódik, desktopon
+> 40px).
+
 ---
 
 ## d) Betűk
@@ -226,6 +230,18 @@ A shell méretei `@theme inline`-on `--spacing-*` utility-ként is elérhetők:
 - **Reduced-motion-safe:** `@media (prefers-reduced-motion: reduce)` minden
   animációt/transition-t ~0.01ms-re húz le és elrejti a `.woa-sparkfield`-et.
 
+### Celestial delight (KÉSZ)
+
+A re-skin záró delight-rétege — **HSR-ihletésű, de visszafogott** „celestial calm",
+tisztán esztétikai ráadás, mind token-alapú és **reduced-motion-safe**:
+
+- **`CelestialBackdrop`** (`apps/web/components/kit/celestial-backdrop.tsx`) — finom
+  égi háttér-hangulat a dashboard-heron + az üres állapotokon.
+- **AI-reveal shimmer** — az AI-result-kártyák reveal-villanása (`woaReveal`/`woaShimmer`).
+- **Lágy kártya-aurák** az AI-result-kártyákon.
+
+Mind a reduced-motion ágon kikapcsol; a háttér dekoratív (`aria-hidden`).
+
 ---
 
 ## h) Dark téma
@@ -237,6 +253,9 @@ nem `.dark` osztályon. Teljes paletta-újradefiniálás a `[data-woa="dark"]` b
 ---
 
 ## i) Akadálymentesség
+
+> **LIVE VERIFIED 2026-06-26 — Lighthouse a11y 100, 0 contrast failures both
+> themes; token source of truth is `apps/web/app/globals.css`.**
 
 - **WCAG-AA kontraszt — 0 bukás mindkét témán.** A `--text-faint` AA-derived
   (lásd b), a CTA-gomb fill `--accent-strong` (5.86 / 6.51:1), a destruktív gomb

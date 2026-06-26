@@ -13,10 +13,14 @@ The app should be easy to run locally through Docker Compose.
 ```txt
 Next.js frontend    (Turborepo: apps/web)
 FastAPI backend     (Turborepo: apps/api)
+AI szolgáltatás     (Turborepo: apps/ai — külön FastAPI app, RAG/generálás)
+RQ worker           (háttér-jobok: export, embedding-frissítés)
 PostgreSQL + pgvector database
 Redis + RQ queue
 Ollama local LLM runtime
 ```
+
+> A Docker Compose szolgáltatások (lentebb): `postgres`, `redis`, `ollama`, `api`, `ai`, `worker`, `web`. **Qdrant nincs** — a vektor-keresést a pgvector adja.
 
 ## Required local tools
 
@@ -30,7 +34,8 @@ Install:
 - **Turborepo** (`pnpm add -g turbo`)
 - Git
 - Ollama
-- Pandoc (V1-ben export-hoz)
+- Pandoc (DOCX/EPUB/PDF exporthoz)
+- WeasyPrint (csak PDF-exporthoz; `apps/api` Python-függőség, pandoc `--pdf-engine`-je)
 
 Optional:
 
@@ -130,6 +135,17 @@ services:
     depends_on:
       - postgres
       - redis
+
+  ai:
+    build: ./apps/ai
+    ports:
+      - "8100:8100"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - ollama
 
   worker:
     build: ./apps/api
@@ -412,26 +428,24 @@ embedding: Vector(1536)
 
 ## Export pipeline dependencies
 
-Install Pandoc locally or in export worker container.
+A Markdown export natív Python (nincs külső függőség). A DOCX / EPUB / PDF a **pandoc** CLI-n keresztül megy — telepítsd lokálisan, vagy használd az `apps/api` Docker image-et (a Dockerfile telepíti). A PDF emellett **WeasyPrint** PDF-engine-t igényel (`pandoc --pdf-engine=weasyprint`); a WeasyPrint Python-függőségként szerepel az `apps/api/pyproject.toml`-ban, lokális PDF-hez tehát `pandoc` + `weasyprint` is kell.
 
-Markdown export first.
-
-DOCX later:
+DOCX:
 
 ```bash
 pandoc manuscript.md -o manuscript.docx
 ```
 
-EPUB later:
+EPUB:
 
 ```bash
 pandoc manuscript.md -o manuscript.epub
 ```
 
-PDF later:
+PDF (WeasyPrint engine-nel):
 
 ```bash
-pandoc manuscript.md -o manuscript.pdf
+pandoc manuscript.md -o manuscript.pdf --pdf-engine=weasyprint
 ```
 
 ## Useful local URLs

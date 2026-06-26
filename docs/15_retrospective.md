@@ -2,6 +2,8 @@
 
 Ez a dokumentum a Phase A (minőségi hardening) + Phase B (AI-mag: élő jobok, RAG, continuity) lezárása utáni őszinte visszatekintés: **mi ment jól, mi ment kevésbé jól, mi egyenesen nem jó, és hogyan lehetne jobb.** Tény-alapú (a repó állapotából + a fejlesztési menetből), nem marketing.
 
+> **ℹ️ Történeti Phase A + Phase B retrospektív** — egy adott pillanat visszatekintése, nem élő állapot. A friss állapotért és tanulságokért lásd [`docs/17_status_and_roadmap.md`](17_status_and_roadmap.md).
+
 **Állapot a review idején:** apps/api 382 · apps/ai 225 (+4 pgvector-skip) · apps/web 461 = **1068 teszt zöld**. Minden commitolva a `feat/alexandria-ui` ágon.
 
 ---

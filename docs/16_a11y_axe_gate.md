@@ -1,5 +1,10 @@
 # 16 — Accessibility (axe-core) test gate + Lighthouse follow-up (UX-4b)
 
+> **Current status (2026-06-26):** Lighthouse a11y = **100**, axe-core **0
+> failures** both themes. The gate is **passing** and has been **live-verified**
+> across the new DESIGN-C screens (Landing `/`, Profil `/profil`, Prompt Library
+> `/promptok`).
+
 ## What this is
 
 An automated accessibility quality gate that runs **inside the existing Vitest

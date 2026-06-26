@@ -13,7 +13,7 @@
 
 | # | Fájl | Cél |
 | --- | --- | --- |
-| 01 | [`01_project_goal_specification.md`](01_project_goal_specification.md) | Projekt célja, termékvízió, célfelhasználók, MVP/V1/V2 hatókör. |
+| 01 | [`01_project_goal_specification.md`](01_project_goal_specification.md) | Projekt célja, termékvízió, célfelhasználók, MVP/V1/V2 hatókör (**eredeti vízió** — sok tétel kész). |
 | 02 | [`02_full_feature_list.md`](02_full_feature_list.md) | Teljes funkciólista. |
 | 03 | [`03_tech_stack_db_hosting.md`](03_tech_stack_db_hosting.md) | Tech stack, adatbázis, AI layer és hosting terv. |
 | 04 | [`04_mvp_implementation_plan.md`](04_mvp_implementation_plan.md) | Eredeti MVP implementációs terv (**történeti** — az MVP leszállítva). |

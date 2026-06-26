@@ -51,20 +51,21 @@ A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/k
 
 | Route | Képernyő / belépő | Komponens | Cél | Polish-állapot |
 |---|---|---|---|---|
-| `/` | — | `app/page.tsx` | Redirect a `/projekt`-re (az M0 demo-home kivezetve) | — |
+| `/` | Landing (marketing) | `app/page.tsx` | Publikus marketing-landing: hero + features + filozófia-sáv + showcase + footer CTA (app-on kívüli, net-új route) | **KÉSZ** (DESIGN-C) |
+| `/profil` | Profil | `components/profile/ProfileScreen` | Dedikált felhasználói profil-képernyő; a `/me` végpontot + a `scene_count`-ot köti be; a user-menü „Profil" sora ide navigál | **KÉSZ** (DESIGN-C) |
 | `/projekt` | Projektek dashboard | `components/projects/ProjectsDashboard` | Könyvespolc / projektválasztó + új-könyv wizard, TanStack Query-vel | **KÉSZ** — Cormorant (`font-display`) hero, arany eyebrow + lebegő könyv-gerinc ikon, Daily-Spark kártya |
-| `/konyv/[bookId]/terv` | Terv-board | route → terv-screen | NovelCrafter-szerű fejezet/jelenet tervezőfelület, status-pillek, beat-előnézet, drag | **KÉSZ** |
+| `/konyv/[bookId]/terv` | Terv-board | route → terv-screen | NovelCrafter-szerű fejezet/jelenet tervezőfelület, status-pillek, beat-előnézet, drag; **fejezet-generálás-trigger** (`GenerateChapterDialog`) indít AI fejezet-jobot | **KÉSZ** |
 | `/konyv/[bookId]/iras/[sceneId]` | Írás nézet | route → Tiptap editor + inspektor | Fókuszált kézirat-szerkesztés, autosave, AI-bubble, jelenet-fa, jobb inspektor | **KÉSZ** |
 | `/konyv/[bookId]/codex` | Codex | route → Codex-screen + `CodexSidebar` | Story Bible: karakter/helyszín/worldbuilding, keresés, kártya/tábla/detail, **„Képek" panel** | **KÉSZ** |
 | `/konyv/[bookId]/kapcsolatok` | Kapcsolatok | relations-graph | Karakter-kapcsolat gráf — egyedi SVG force-graph (determinista d3-force, GSAP él-rajz) | **KÉSZ** |
 | `/konyv/[bookId]/cselekmenyszalak` | Cselekményszálak | plotlines-screen | Subplotok típus szerint csoportosítva, status-pillek, jelenet-chipek, attach/detach | **KÉSZ** |
 | `/konyv/[bookId]/idosor` | Idősor | timeline-screen | Fejezet/jelenet kronológia a könyv-fából (GSAP spine-draw) | **KÉSZ** |
-| `/konyv/[bookId]/feladatok` | AI feladatok | jobs-screen | Élő AI-job-képernyő (book-scope `GET /jobs` + polling, history + attention) | **KÉSZ** |
+| `/konyv/[bookId]/feladatok` | AI feladatok | jobs-screen | Élő AI-job-képernyő (book-scope `GET /jobs` + polling, history + attention); a **fejezet-job progressz + review** itt fut le (a tervről indított fejezet-generálás állapota + emberi jóváhagyása) | **KÉSZ** |
 | `/konyv/[bookId]/chat` | Kutatás (RAG) | chat-screen | Grounded RAG Q&A a Codex + kézirat felett, idézet-chipekkel | **KÉSZ** |
-| `/konyv/[bookId]/export` | Export / Import | `components/export/ExportScreen` | Manuscript-export; **Markdown valódi** (letöltés), **DOCX/EPUB KÉSZ**, **PDF hátra**, Import V1-stub | **Markdown/DOCX/EPUB KÉSZ, PDF hátra** |
+| `/konyv/[bookId]/export` | Export / Import | `components/export/ExportScreen` | Manuscript-export; **Markdown / DOCX / EPUB / PDF mind valódi** (letöltés), csak **TXT stub**, Import V1-stub | **MD/DOCX/EPUB/PDF KÉSZ** (TXT stub) |
 | `/konyv/[bookId]/beallitasok` | Beállítások | `BookTab` + `components/settings/SettingsScreen` | 2-tabos: **Könyv** (cím/műfaj/szerző) + **AI / Szolgáltatók** (Local/Ollama, Cloud/API-kulcs hub, MCP, generálási paraméterek, RAG-index) | **KÉSZ** — provider-hub megőrizve |
 | `/konyv/[bookId]/attekintes` | Áttekintés | `ScreenPlaceholder` | Projekt/könyv áttekintő-nézet | **PLACEHOLDER (V1, M10)** |
-| `/konyv/[bookId]/promptok` | Prompt-tár | `ScreenPlaceholder` | Prompt Library | **PLACEHOLDER (V1, M10)** |
+| `/konyv/[bookId]/promptok` | Prompt-tár | `components/prompts/PromptLibraryScreen` | Prompt Library — **teljes CRUD** (létrehozás / szerkesztés / törlés UI), nem placeholder többé | **KÉSZ** (full CRUD) |
 | `/konyv/[bookId]/hangok` | Hangkönyvtár | `ScreenPlaceholder` | Audio domain | **PLACEHOLDER (V2, M11)** |
 | `/kitchen-sink` | Kit-galéria | `app/kitchen-sink/page.tsx` | Komponens-kit fejlesztői galéria | **dev-only** (production buildből kizárva) |
 
@@ -72,6 +73,7 @@ A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/k
 
 - **Codex „Képek" panel** (`components/codex/image-panel.tsx`) — karakter/helyszín képgenerálás (Nano Banana / Gemini image), RQ async job, kanonikus referencia-kép kijelölése (human-in-the-loop). Forrás: `CodexEntry` (entry_type + id).
 - **Könyv-borító panel** (`components/book/cover-panel.tsx`) — borító-generálás (Phase 2): art-generálás + app-oldali tipográfia-kompozit.
+- **GenerateChapterDialog** (`components/plan/generate-chapter-dialog.tsx`) — a terv-boardról indított fejezet-generálás dialógusa; AI fejezet-jobot indít, amelynek progressze + emberi review-ja a feladatok-képernyőn fut le (HITL).
 
 ---
 
@@ -81,7 +83,7 @@ A képernyők innen importálnak primitíveket, nem nyúlnak az egyes fájlokba.
 
 ### Display
 
-`Badge` / `StatusPill` · `StatusDot` · `Avatar` · `Card` (+ accent-él) · `PageHero` / `SectionEyebrow` · `Spinner` · `Skeleton` + `SkeletonCard` / `SkeletonList` / `SkeletonTable` · `ProgressBar` · `AIResultCard` (RAG kontextus-chipekkel) · `ContextChips` · `DiffPane` (szó-szintű diff) · `QuoteBlock` · `BarChart` / `Sparkline` · `TimelineNode`/`Marker`/`Spine` · `BookSpineCard` / `CoverThumbnail` · `BrandStar` · `Icon`.
+`Badge` / `StatusPill` · `StatusDot` · `Avatar` · `Card` (+ accent-él) · `PageHero` / `SectionEyebrow` · `Spinner` · `Skeleton` + `SkeletonCard` / `SkeletonList` / `SkeletonTable` · `ProgressBar` · `AIResultCard` (RAG kontextus-chipekkel) · `ContextChips` · `DiffPane` (szó-szintű diff) · `QuoteBlock` · `BarChart` / `Sparkline` · `TimelineNode`/`Marker`/`Spine` · `BookSpineCard` / `CoverThumbnail` · `BrandStar` · `CelestialBackdrop` (finom égi delight-háttér, reduced-motion-safe) · `Icon`.
 
 ### Inputs / controls
 
