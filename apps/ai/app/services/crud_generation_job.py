@@ -30,6 +30,33 @@ async def create_index_job(db: AsyncSession, project_id: uuid.UUID) -> Generatio
     return job
 
 
+async def create_chapter_generation_job(
+    db: AsyncSession,
+    *,
+    chapter_id: uuid.UUID,
+    project_id: uuid.UUID,
+    input_data: dict,
+) -> GenerationJob:
+    """Create a PENDING chapter-generate job (the PARENT of every scene's revision).
+
+    Created by ``POST /ai/chapters/{chapter_id}/generate`` and enqueued for the RQ
+    worker, which flips it running → done/failed and writes per-scene progress into
+    ``output_data``. Committed + refreshed so the caller gets a server-populated
+    row (id, timestamps) and the worker can immediately load it by id.
+    """
+    job = GenerationJob(
+        chapter_id=chapter_id,
+        project_id=project_id,
+        job_type=JobType.CHAPTER_GENERATE,
+        status=JobStatus.PENDING,
+        input_data=input_data,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
 async def list_jobs(
     db: AsyncSession,
     scene_id: uuid.UUID | None = None,

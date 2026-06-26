@@ -754,11 +754,6 @@ class AIService:
             logger.debug("Continuity skipped: no scene/content for scene_id=%s", scene_id)
             return [], None, []
 
-        # Query the codex with the scene text itself (what the scene is about).
-        context, retrieved = await self._rag_context(
-            db, scene_id=scene_id, query=content
-        )
-
         job = await self.svc.create_job(
             db,
             job_type="continuity",
@@ -768,26 +763,74 @@ class AIService:
             input_data={"scene_id": str(scene_id)},
         )
         try:
-            system = self.loader.load_system("continuity_check")
-            user = self.loader.load_user(
-                "continuity_check",
-                codex_context=context,
+            warnings, retrieved = await self.analyze_continuity_text(
+                db,
+                scene_id=scene_id,
                 content=content,
-            )
-            response = await self.router.complete(
-                messages=self.router.build_messages(system, user),
                 model=model,
-                db=db,
-                **_gen_overrides(temperature, max_tokens),
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
         except Exception as e:
             # A REAL LLM/infra error — roll back for a clean fail_job commit, then
-            # re-raise. This must NOT be masked by the parse fallback below: only
-            # an unparseable *response* degrades; an infra failure stays loud.
+            # re-raise. This must NOT be masked by the parse fallback (which lives
+            # inside analyze_continuity_text): only an unparseable *response*
+            # degrades there; an infra failure propagates out and stays loud.
             await db.rollback()
             await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
 
+        # complete_job runs on its own; a parse-degradation is still a COMPLETED
+        # analysis (the call succeeded, the output was just unusable).
+        await self.svc.complete_job(
+            db, job, output_data={"warning_count": len(warnings)}
+        )
+        return warnings, job, _context_entities(retrieved)
+
+    async def analyze_continuity_text(
+        self,
+        db: AsyncSession,
+        *,
+        scene_id: uuid.UUID | None,
+        content: str,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[list[dict[str, Any]], list[RetrievedItem]]:
+        """Continuity-check ARBITRARY ``content`` against the project codex.
+
+        The REUSABLE continuity core: scene-scoped RAG (``scene_id`` drives the
+        project/series scope + progression annotation) → continuity prompt →
+        ``ModelRouter.complete`` → the robust two-tier parse. Returns
+        ``(warnings, retrieved)`` and deliberately creates NO ``GenerationJob`` —
+        the owning job (if any) is the caller's responsibility, so:
+
+        - the standalone ``check_continuity`` endpoint wraps it in its own
+          ``continuity`` job (checking the SAVED ``scene.content``), and
+        - a chapter-generation job can check the JUST-GENERATED revision text
+          (which is NOT yet in ``scene.content`` — HITL) WITHOUT spawning an
+          orphan child job per scene.
+
+        An unparseable model response DEGRADES to a single visible ``warning`` (+
+        a logged WARNING), never a crash, never a silently-swallowed empty list. A
+        real LLM/infra error PROPAGATES (the caller decides how to record it).
+        """
+        # Query the codex with the content itself (what the scene is about).
+        context, retrieved = await self._rag_context(
+            db, scene_id=scene_id, query=content
+        )
+        system = self.loader.load_system("continuity_check")
+        user = self.loader.load_user(
+            "continuity_check",
+            codex_context=context,
+            content=content,
+        )
+        response = await self.router.complete(
+            messages=self.router.build_messages(system, user),
+            model=model,
+            db=db,
+            **_gen_overrides(temperature, max_tokens),
+        )
         warnings = _parse_continuity(response.content)
         if warnings is None:
             # Tier-3 graceful degradation: the model answered, but we could not
@@ -809,13 +852,7 @@ class AIService:
                     "entity": None,
                 }
             ]
-
-        # complete_job runs on its own; a parse-degradation is still a COMPLETED
-        # analysis (the call succeeded, the output was just unusable).
-        await self.svc.complete_job(
-            db, job, output_data={"warning_count": len(warnings)}
-        )
-        return warnings, job, _context_entities(retrieved)
+        return warnings, retrieved
 
     async def research(
         self,

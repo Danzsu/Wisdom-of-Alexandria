@@ -5,16 +5,24 @@ from typing import Annotated
 from alexandria_core.core.config import settings
 from alexandria_core.core.deps import get_current_user, get_db
 from alexandria_core.core.errors import safe_error
+from alexandria_core.models.beat import Beat
+from alexandria_core.models.book import Book
+from alexandria_core.models.chapter import Chapter
 from alexandria_core.models.generation_job import JobStatus
 from alexandria_core.models.project import Project
+from alexandria_core.models.scene import Scene
 from alexandria_core.schemas.revision import RevisionRead
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
-from app.services.crud_generation_job import create_index_job
+from app.services.crud_generation_job import (
+    create_chapter_generation_job,
+    create_index_job,
+)
 from app.services.crud_provider import list_providers
 from app.services.embedding_service import (
     EmbeddingDimError,
@@ -22,7 +30,10 @@ from app.services.embedding_service import (
     SyncResult,
     embedding_service,
 )
-from app.services.job_queue import enqueue_index_job
+from app.services.job_queue import (
+    enqueue_chapter_generation_job,
+    enqueue_index_job,
+)
 from app.services.provider_service import list_provider_models
 
 logger = logging.getLogger(__name__)
@@ -145,6 +156,23 @@ class GenerateSceneRequest(BaseModel):
     location: str = ""
     style_notes: str = ""
     scene_id: uuid.UUID | None = None
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
+class ChapterGenerateRequest(BaseModel):
+    """Request to generate a chapter scene-by-scene as one background job (T2).
+
+    ``scene_ids`` is the user-selected subset of the chapter's scenes to
+    generate (bounded: at least one, at most ~200 — a whole chapter is well under
+    this, but the cap blocks a pathological payload). ``run_continuity`` opts into
+    a per-scene continuity pass on each generated draft. ``model`` / ``temperature``
+    / ``max_tokens`` mirror the single-scene generate bounds.
+    """
+
+    scene_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    run_continuity: bool = False
     model: str | None = None
     temperature: float | None = _TemperatureField
     max_tokens: int | None = _MaxTokensField
@@ -517,6 +545,108 @@ async def summarize_scene(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI generation failed: {safe_error(e)}",
         )
+
+
+@router.post(
+    "/chapters/{chapter_id}/generate",
+    response_model=GenerationJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_chapter(
+    chapter_id: uuid.UUID,
+    data: ChapterGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> GenerationJobRead:
+    """Enqueue a chapter-generation job: generate each selected scene from its
+    beats, scene-by-scene, as ONE background job (T2 / deferred MVP #11).
+
+    Returns the queued parent ``GenerationJob`` (status ``pending``) immediately;
+    poll ``GET /jobs/{id}`` for live per-scene progress (the worker flips it
+    running → done, writes ``output_data`` after each scene, and links every
+    generated ``Revision(approved=False)`` to THIS parent job — HITL preserved,
+    nothing auto-overwrites).
+
+    Validation (all BEFORE the job is created, so a bad request never leaves a
+    dangling job):
+      - the chapter must exist (404);
+      - every ``scene_id`` must belong to that chapter (422 — cross-chapter or
+        nonexistent scenes are rejected);
+      - every selected scene must have at least one beat (422 — a guard; the UI
+        disables beat-less scenes, this enforces it server-side).
+
+    If the queue cannot be reached, the job is marked failed (so it never dangles
+    as forever-pending) and a sanitized 502 is returned.
+    """
+    chapter = await db.get(Chapter, chapter_id)
+    if chapter is None:
+        raise HTTPException(status_code=404, detail="A fejezet nem található.")
+
+    # Resolve the selected scenes that ACTUALLY belong to this chapter, with their
+    # beat counts, in one query. Any selected id missing from this set is either a
+    # nonexistent scene or one in another chapter — both rejected as 422.
+    rows = (
+        await db.execute(
+            select(Scene.id, func.count(Beat.id))
+            .outerjoin(Beat, Beat.scene_id == Scene.id)
+            .where(Scene.chapter_id == chapter_id, Scene.id.in_(data.scene_ids))
+            .group_by(Scene.id)
+        )
+    ).all()
+    beat_counts = {scene_id: count for scene_id, count in rows}
+
+    missing = [s for s in data.scene_ids if s not in beat_counts]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail="Egy vagy több jelenet nem ehhez a fejezethez tartozik.",
+        )
+    beatless = [s for s in data.scene_ids if beat_counts.get(s, 0) == 0]
+    if beatless:
+        raise HTTPException(
+            status_code=422,
+            detail="Minden kijelölt jelenethez legalább egy beat szükséges.",
+        )
+
+    # Resolve the project from the chapter's book (chapter_id is a plain column on
+    # GenerationJob; project_id scopes the job for per-project polling/cleanup).
+    project_id = (
+        await db.execute(
+            select(Book.project_id).where(Book.id == chapter.book_id)
+        )
+    ).scalar_one()
+
+    input_data: dict = {
+        "scene_ids": [str(s) for s in data.scene_ids],
+        "run_continuity": data.run_continuity,
+    }
+    if data.model is not None:
+        input_data["model"] = data.model
+    if data.temperature is not None:
+        input_data["temperature"] = data.temperature
+    if data.max_tokens is not None:
+        input_data["max_tokens"] = data.max_tokens
+
+    job = await create_chapter_generation_job(
+        db, chapter_id=chapter_id, project_id=project_id, input_data=input_data
+    )
+    try:
+        enqueue_chapter_generation_job(job.id)
+    except Exception as e:
+        # The job row exists but could not be queued (e.g. Redis unreachable).
+        # Mark it failed so it is not stuck PENDING forever. The 502 detail is a
+        # FIXED message — the enqueue exception can carry the broker URL incl.
+        # credentials, and safe_error only bounds (does NOT strip secrets) — so we
+        # never echo it to the client. The cause is logged server-side (sanitized).
+        logger.warning("Chapter-generate job enqueue failed: %s", safe_error(e))
+        job.status = JobStatus.FAILED
+        job.error_message = "A feladat sorba állítása nem sikerült."
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not enqueue chapter generation job (queue unavailable).",
+        )
+    return GenerationJobRead.model_validate(job)
 
 
 @router.post("/index", response_model=IndexResult)

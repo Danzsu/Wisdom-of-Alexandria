@@ -20,6 +20,7 @@ class JobType:
 
     INDEX = "index"
     IMAGE = "image"
+    CHAPTER_GENERATE = "chapter_generate"
 
 
 class GenerationJob(UUIDPrimaryKey, Timestamps, Base):

@@ -20,6 +20,9 @@ from app.worker import QUEUE_NAME
 # Dotted path to the worker job function, resolved by RQ in the worker process.
 INDEX_JOB_PATH = "app.jobs.index_job.run_index_job"
 IMAGE_JOB_PATH = "app.jobs.image_job.run_image_job"
+CHAPTER_GENERATION_JOB_PATH = (
+    "app.jobs.chapter_generation_job.run_chapter_generation_job"
+)
 
 
 def get_queue() -> Queue:
@@ -38,6 +41,15 @@ def enqueue_index_job(job_id: uuid.UUID) -> None:
     RQ's serialization; the worker re-parses it to a UUID.
     """
     get_queue().enqueue(INDEX_JOB_PATH, str(job_id))
+
+
+def enqueue_chapter_generation_job(job_id: uuid.UUID) -> None:
+    """Enqueue the async chapter-generation job for ``job_id`` onto the AI queue.
+
+    The only argument is the parent GenerationJob id, passed as a ``str`` so it
+    survives RQ's serialization; the worker re-parses it to a UUID.
+    """
+    get_queue().enqueue(CHAPTER_GENERATION_JOB_PATH, str(job_id))
 
 
 def enqueue_image_job(job_id: uuid.UUID) -> None:
