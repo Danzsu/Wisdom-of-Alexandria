@@ -21,6 +21,7 @@ import { IconButton } from "@/components/kit/icon-button";
 import { DashedTile } from "@/components/kit/dashed-tile";
 import { Tooltip } from "@/components/kit/tooltip";
 import { ConfirmDialog } from "@/components/kit/alert-dialog";
+import { CodexImageLightbox } from "@/components/codex/codex-image-lightbox";
 import { SectionEyebrow } from "@/components/kit/section-eyebrow";
 import { toast } from "@/components/kit/toast";
 import { Select } from "@/components/kit/select";
@@ -235,10 +236,12 @@ function ImageTile({
   const setCanonical = useSetCanonical();
   const del = useDeleteImage();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const isGenerating = asset.status === "generating";
   const isFailed = asset.status === "failed";
   const isReady = !isGenerating && !isFailed;
+  const thumbAlt = hu.images.thumbAlt(entryTitle, styleLabel || (asset.style ?? ""));
 
   function handleSetCanonical() {
     setCanonical.mutate(
@@ -315,10 +318,15 @@ function ImageTile({
             </Button>
           </div>
         ) : (
-          <MediaThumb
-            assetId={asset.id}
-            alt={hu.images.thumbAlt(entryTitle, styleLabel || (asset.style ?? ""))}
-          />
+          // Clicking a ready thumbnail opens the full-screen lightbox.
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            aria-label={hu.images.openLightbox(thumbAlt)}
+            className="block h-full w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+          >
+            <MediaThumb assetId={asset.id} alt={thumbAlt} />
+          </button>
         )}
 
         {/* Hover/focus overlay actions on a ready tile. Kept in the DOM (opacity
@@ -361,6 +369,15 @@ function ImageTile({
         description={hu.images.deleteDescription}
         onConfirm={handleDelete}
       />
+
+      {isReady ? (
+        <CodexImageLightbox
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          name={entryTitle}
+          assetId={asset.id}
+        />
+      ) : null}
     </div>
   );
 }

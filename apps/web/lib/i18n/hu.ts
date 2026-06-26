@@ -668,6 +668,14 @@ export const hu = {
     modalCreate: "Bejegyzés létrehozása",
     createdToast: "Új Codex-bejegyzés létrehozva",
     createError: "Nem sikerült létrehozni a bejegyzést",
+    // Image lightbox (full-screen preview of a codex image).
+    lightboxClose: "Bezárás",
+    /** Accessible label for the lightbox dialog (entry name in context). */
+    lightboxLabel: (name: string) => `${name} – kép`,
+    /** Shown under the fallback icon when an entry has no image. */
+    lightboxNoImage: "Nincs kép ehhez a bejegyzéshez",
+    /** Surfaced if the image binary fails to load. */
+    lightboxLoadError: "A kép betöltése nem sikerült.",
   },
   /**
    * Képek — the AI image panel inside a Codex character/location detail
@@ -702,6 +710,8 @@ export const hu = {
     retry: "Újragenerálás",
     /** Caption shown on a generating tile (alongside the shimmer). */
     generatingCaption: "Generálás folyamatban",
+    /** Accessible label for a thumbnail button that opens the full-screen lightbox. */
+    openLightbox: (alt: string) => `${alt} – megnyitás teljes méretben`,
   },
   /**
    * Kapcsolatok — the relationship graph (UX-3a). The screen renders the
