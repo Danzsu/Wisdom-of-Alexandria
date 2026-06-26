@@ -1071,6 +1071,60 @@ export const hu = {
     bookError: "Nem sikerült betölteni a könyvet",
   },
   /**
+   * Áttekintés (Overview / book dashboard) screen — the book hero, aggregate
+   * stat cards, synopsis + per-chapter progress, a plotlines preview, quick
+   * actions and the style-guide callout. (`Alexandria.current.html` ~line 559.)
+   * Real data binds via useResolvedBook + useBookTree + usePlotlines; copy here.
+   */
+  overview: {
+    /** Hero eyebrow (gold rule + label above the book title). */
+    eyebrow: "A könyv",
+    /** "Continue writing" hero CTA → the plan board. */
+    continueWriting: "Tovább írok",
+    /** Aggregate stat-card labels (numbers are computed from real data). */
+    statWords: (target: number | null) =>
+      target ? `szó / ${target.toLocaleString("hu-HU")} cél` : "szó",
+    statChapters: "fejezet",
+    statScenes: "jelenet",
+    statProgress: "készültség",
+    /** Synopsis card. */
+    synopsisLabel: "Szinopszis",
+    synopsisEmpty: "Ehhez a könyvhöz még nincs szinopszis.",
+    /** Per-chapter progress section. */
+    chaptersLabel: "Fejezetek haladása",
+    /** Per-chapter status words (derived from completed/total scenes). */
+    chapterDone: "kész",
+    chapterInProgress: "folyamatban",
+    chapterDraft: "vázlat",
+    /** Per-chapter meta line: word count + a status word. */
+    chapterMeta: (words: number, status: string) =>
+      words > 0 ? `${words.toLocaleString("hu-HU")} szó · ${status}` : status,
+    /** Plotlines preview card. */
+    plotlinesLabel: "Cselekményszálak",
+    plotlinesEmpty: "Még nincs cselekményszál.",
+    /** Plotline kind chips (main vs everything-else = "mellék"). */
+    plotlineMain: "fő",
+    plotlineSub: "mellék",
+    /** Quick-actions group. */
+    quickActionsLabel: "Gyors műveletek",
+    actionAddCharacter: "Szereplő hozzáadása",
+    actionStyleGuide: "Stíluskalauz megnyitása",
+    /** Style-guide callout (gold wash). */
+    styleGuideTitle: "Stíluskalauz",
+    styleGuideDescription:
+      "Az elbeszélői hang és szókincs, amelyhez az AI minden generáláskor igazodik.",
+    styleGuideChips: ["Lírai", "Közeli E/3", "Múlt idő"],
+    styleGuideCalloutAria: "Stíluskalauz megnyitása — elbeszélői hang",
+    /** Load / error / empty states. */
+    loadingAria: "Áttekintés betöltése",
+    errorTitle: "Nem sikerült betölteni az áttekintést",
+    errorRetry: "Újra",
+    emptyTitle: "Ez a könyv még üres",
+    emptyDescription:
+      "Kezdj el fejezeteket és jeleneteket tervezni a Terv nézetben.",
+    emptyAction: "Tervezés megnyitása",
+  },
+  /**
    * Beállítások screen (`Alexandria App.dc.html` showsettings ~line 1556).
    * Hub + Local (Ollama, MVP real-ish) / Cloud (V1) / MCP (V2) subpages +
    * Generálás (Temperature / Max tokens — client-persisted) + Adatkezelés.

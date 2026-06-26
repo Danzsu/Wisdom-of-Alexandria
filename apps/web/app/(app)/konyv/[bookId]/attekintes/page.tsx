@@ -1,12 +1,10 @@
-import { ScreenPlaceholder } from "@/components/shell";
-import { hu } from "@/lib/i18n/hu";
+import { OverviewScreen } from "@/components/overview/overview-screen";
 
-/** Áttekintés (Review / overview) placeholder — filled in M10 (V1). */
+/**
+ * Áttekintés (Overview / book dashboard). Renders the book hero, aggregate
+ * stats, synopsis + per-chapter progress, a plotlines preview, quick actions,
+ * and the style-guide callout — all bound to the resolved book's real data.
+ */
 export default function AttekintesPage() {
-  return (
-    <ScreenPlaceholder
-      label={hu.placeholders.attekintesLabel}
-      hint={hu.placeholders.attekintesHint}
-    />
-  );
+  return <OverviewScreen />;
 }
