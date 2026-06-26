@@ -794,7 +794,55 @@ export const JOB_FAILED: GenerationJobRead = {
   updated_at: "2026-06-15T11:10:02Z",
 };
 
-/** Jobs newest-first, mirroring the backend `created_at desc` ordering. */
+/**
+ * A finished chapter-generation job (T5). Bound to a chapter (not a scene) and
+ * carrying the live per-scene progress in `output_data`: 3 of 5 done, 1 failed,
+ * 2 skipped, with a `scenes` array of `{scene_id, revision_id, status, ...}`.
+ * One scene `done` row (with a pending revision_id), one `failed` row (no
+ * revision). These exact counts drive the progress-line assertion.
+ */
+export const JOB_CHAPTER_GENERATE_DONE: GenerationJobRead = {
+  id: "job-chaptergen-1",
+  project_id: null,
+  scene_id: null,
+  chapter_id: CHAPTER_TWO.id,
+  job_type: "chapter_generate",
+  status: "done",
+  model_name: "ollama/llama3.2",
+  prompt_version: "1.0",
+  input_data: { scene_ids: [SCENE_ACTIVE.id, SCENE_FIRST.id], run_continuity: false },
+  output_data: {
+    total: 5,
+    completed: 3,
+    failed: 1,
+    skipped: ["5ce99999-9999-9999-9999-999999999999", "5ceaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+    scenes: [
+      {
+        scene_id: SCENE_ACTIVE.id,
+        revision_id: "rev-chaptergen-active",
+        status: "done",
+        warning_count: 0,
+      },
+      {
+        scene_id: SCENE_FIRST.id,
+        revision_id: null,
+        status: "failed",
+        warning_count: 0,
+        error: "A modell időtúllépés miatt nem válaszolt.",
+      },
+    ],
+  },
+  error_message: null,
+  created_at: "2026-06-15T11:20:00Z",
+  updated_at: "2026-06-15T11:20:30Z",
+};
+
+/**
+ * Jobs newest-first, mirroring the backend `created_at desc` ordering. Note the
+ * chapter-generation fixture ({@link JOB_CHAPTER_GENERATE_DONE}) is deliberately
+ * NOT in this default set — its presence would change the seeded row count the
+ * existing JobsScreen tests pin. T5 tests inject it via `server.use(...)`.
+ */
 export const JOBS_FIXTURE: GenerationJobRead[] = [
   JOB_FAILED,
   JOB_RUNNING,

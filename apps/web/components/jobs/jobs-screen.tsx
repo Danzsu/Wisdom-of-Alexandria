@@ -22,6 +22,7 @@ import { Icon } from "@/components/kit/icon";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/kit";
 import { useJobs } from "@/lib/api/ai-hooks";
 import { asJobStatus, type GenerationJobRead } from "@/lib/api/ai-types";
+import { ChapterJobBody } from "./chapter-job-row";
 import { hu } from "@/lib/i18n/hu";
 
 /** Map a known job status → Badge variant + label. */
@@ -42,6 +43,7 @@ const TYPE_LABEL: Record<string, string> = {
   generate_scene: hu.jobs.typeGenerateScene,
   write_continue: hu.jobs.typeWriteContinue,
   summarize: hu.jobs.typeSummarize,
+  chapter_generate: hu.jobs.typeChapterGenerate,
 };
 
 /** Localized job-type label, falling back to the raw value when unknown. */
@@ -74,9 +76,16 @@ function JobContext({ job }: { job: GenerationJobRead }) {
 }
 
 /** A single job row (card). Failed jobs expose an expandable error block. */
-function JobRow({ job }: { job: GenerationJobRead }) {
+function JobRow({
+  job,
+  bookId,
+}: {
+  job: GenerationJobRead;
+  bookId: string | undefined;
+}) {
   const [errorOpen, setErrorOpen] = useState(false);
   const isFailed = job.status === "failed";
+  const isChapterGenerate = job.job_type === "chapter_generate";
   const errorText = job.error_message?.trim() || hu.jobs.errorUnknown;
 
   return (
@@ -100,6 +109,8 @@ function JobRow({ job }: { job: GenerationJobRead }) {
             </span>
           ) : null}
         </div>
+
+        {isChapterGenerate ? <ChapterJobBody job={job} bookId={bookId} /> : null}
 
         {isFailed ? (
           <div className="mt-1">
@@ -172,7 +183,7 @@ export function JobsScreen({ bookId }: JobsScreenProps) {
       ) : (
         <div className="flex flex-col gap-3">
           {(jobs.data ?? []).map((job) => (
-            <JobRow key={job.id} job={job} />
+            <JobRow key={job.id} job={job} bookId={bookId} />
           ))}
         </div>
       )}

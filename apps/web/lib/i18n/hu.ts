@@ -95,6 +95,43 @@ export const hu = {
     typeGenerateScene: "Jelenet generálása",
     typeWriteContinue: "Folytatás",
     typeSummarize: "Összefoglalás",
+    typeChapterGenerate: "Fejezet generálása",
+    /* ---- Chapter-generate job: live progress + per-scene review (T5). ---- */
+    /**
+     * Compact progress line from `output_data`, e.g. "3/5 kész · 1 sikertelen ·
+     * 2 kihagyva". `completed`/`total`/`failed`/`skipped` are the live counts the
+     * worker commits after each scene.
+     */
+    chapterProgress: (
+      completed: number,
+      total: number,
+      failed: number,
+      skipped: number,
+    ): string =>
+      `${completed}/${total} kész · ${failed} sikertelen · ${skipped} kihagyva`,
+    /** Accessible name for the chapter-progress bar. */
+    chapterProgressAria: (completed: number, total: number): string =>
+      `Fejezet generálása: ${completed} / ${total} jelenet kész`,
+    /** Heading above the per-scene review list on a chapter job. */
+    chapterScenesHeading: "Generált jelenetek",
+    /** Per-scene status labels in the review list. */
+    chapterSceneDone: "Kész",
+    chapterSceneFailed: "Sikertelen",
+    /** A done scene whose revision has already been approved (no pending action). */
+    chapterSceneApproved: "Jóváhagyva",
+    /** Accept button (approves the scene's pending revision). */
+    chapterSceneAccept: "Elfogad",
+    chapterSceneAcceptAria: (sceneTitle: string): string =>
+      `Revízió elfogadása: ${sceneTitle}`,
+    /** Open-the-scene review link (falls back to the inspector approve flow). */
+    chapterSceneOpen: "Megnyitás",
+    chapterSceneOpenAria: (sceneTitle: string): string =>
+      `Jelenet megnyitása: ${sceneTitle}`,
+    /** Toast after an inline accept. */
+    chapterSceneAcceptedToast: "Revízió elfogadva.",
+    chapterSceneAcceptErrorToast: "Nem sikerült elfogadni a revíziót.",
+    /** Fallback title for a scene row when only the id is known. */
+    chapterSceneFallbackTitle: "Jelenet",
     /** Context line: which scene/chapter the job belongs to. */
     contextScene: "Jelenet",
     contextChapter: "Fejezet",
