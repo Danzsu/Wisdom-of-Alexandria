@@ -4,7 +4,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 ---
 
-## a) Jelenlegi állapot (2026-06-25)
+## a) Jelenlegi állapot (2026-06-26)
 
 **Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
 
@@ -12,9 +12,9 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 | Csomag | Tesztek | Megjegyzés |
 |---|---|---|
-| `apps/api` | **534** | CI-ban (Postgres) futnak; a pandoc/weasyprint-igényes tesztek lokálisan skippelnek |
-| `apps/ai` | **396** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
-| `apps/web` | **803** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight tesztjeivel) |
+| `apps/api` | **536** | CI-ban (Postgres) futnak; a pandoc/weasyprint-igényes tesztek lokálisan skippelnek |
+| `apps/ai` | **422** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
+| `apps/web` | **830** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight + fejezet-automatizáció tesztjeivel) |
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
@@ -81,6 +81,16 @@ Ez a kör a korábbi „V1-rések" többségét leszállította (a roadmap c) sz
 - **Delight — HSR-ihletésű, visszafogott „celestial calm" (commitok `6354035`, `1bd977a`):** `CelestialBackdrop` a dashboard-heron + üres állapotokon, **AI-result reveal shimmer** + lágy kártya-aurák. Tisztán token-alapú, **reduced-motion-safe**. (A design-rollout ezzel teljes — lásd `docs/18`.)
 - **Két adverszariális audit-kör** (frontend-live + backend-sweep, majd egy záró friss pass): minden **P1/P2** találat javítva — auth a prompt-GET-eken, streaming-pull teszt-lefedettség, **konstans-idejű login**, hollow tesztek keményítése stb. **Nincs P0.** Záró suite-ek: **web 803, api 534, ai 396 zöld; tsc + lint tiszta; egyetlen alembic head.**
 
+### Új a legutóbbi frissítés óta (2026-06-26 — Fejezet-automatizáció, V2 első szelet)
+
+- **Fejezet-automatizáció — V2 első szelet (commitok `6b29d7f`, `12846e0`, `7fe6dbb`, `a2aaf32`):** egy egész fejezet **jelenetenkénti** generálása az egyes jelenetek beat-jeiből, **egyetlen RQ háttér-jobként**, jelenetenként **egy jóvá nem hagyott `Revision`-t** produkálva — a HITL érintetlen, semmi nem ír felül automatikusan. Ezzel leszállt a korábban **halasztott MVP #11** (chapter automation). Részletek:
+  - `AIService.generate_scene_revision` (job nélküli, újrahasználható jelenet-szintű mag) + `analyze_continuity_text` (job nélküli folytonosság-mag, amely a **generált** revízió-szöveget ellenőrzi);
+  - `POST /ai/chapters/{id}/generate` (auth, **202**) — validálja a fejezet/jelenet-tagságot + hogy minden kiválasztott jelenetnek van beatje; létrehoz egy szülő `GenerationJob(chapter_generate)`-et + enqueue-ol;
+  - `run_chapter_generation_job` (RQ worker, az `index_job`-mintát követve): a kiválasztott jeleneteket sorrendben végigjárja, jelenetenként egy `Revision(approved=false)` a szülő jobhoz kötve, **jelenetenként izolált hiba** (a job DONE-nal zár részleges eredménnyel), élő progress az `output_data`-ban, opcionális `run_continuity`;
+  - Frontend: `GenerateChapterDialog` (jelenetenkénti checkboxok — üres+beat-es előre pipálva, nem-üres+beat-es opt-in, beat nélküli letiltva), trigger a plan-board fejezet-fejlécén; az AI-jobs képernyő élő fejezet-job progresszt + inline jelenetenkénti review-t mutat (a meglévő revízió-jóváhagyást újrahasználva).
+  - DB-migráció nincs. Tesztek: **web 830 / api 536 / ai 422 zöld**; a nagy tétű utak mutation-checkkel ellenőrizve.
+  - Scope: **fejezet-szint** (a könyv-szint későbbi bővítés); writer-only default a folytonossággal mint opt-in. Fast-follow-ok: jelenetenkénti modell-override + gazdagabb batch-review panel (lásd c) Halasztott / V2).
+
 ### Minőség + CI + biztonság
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
 - `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
@@ -92,7 +102,7 @@ Ez a kör a korábbi „V1-rések" többségét leszállította (a roadmap c) sz
 
 ## c) Roadmap — mi van hátra (konszolidált)
 
-> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB/**PDF** export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C) + delight (celestial)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)** · **Prompt Library backend (`PromptTemplate` + CRUD)** · **Profil `me` endpoint + `scene_count` aggregátum** · **Ollama in-app modell-letöltés (pull)** · **CodexProgression „állapot az N. jelenetnél" RAG-szűrés** · **DB-keményítés migráció `a8c4e1f2b3d4` (FK-indexek + hnsw)**. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
+> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB/**PDF** export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C) + delight (celestial)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)** · **Prompt Library backend (`PromptTemplate` + CRUD)** · **Profil `me` endpoint + `scene_count` aggregátum** · **Ollama in-app modell-letöltés (pull)** · **CodexProgression „állapot az N. jelenetnél" RAG-szűrés** · **DB-keményítés migráció `a8c4e1f2b3d4` (FK-indexek + hnsw)** · **fejezet-automatizáció (V2 első szelet — a halasztott MVP #11)**. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
 
 A maradék két csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **Halasztott / V2**. (A **DESIGN-C** net-új design-képernyők leszállítva — lásd b) + `docs/18`.)
 
@@ -114,6 +124,7 @@ nem szerepelnek.)
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
+| Fejezet-automatizáció fast-follow-ok | A fejezet-szintű első szelet KÉSZ (lásd b); hátra: **könyv-szintű** batch-generálás, **jelenetenkénti modell-override**, gazdagabb **batch-review panel** | BE (`apps/ai`) + FE |
 | Audio domain + EPUB-3 media-overlay (SMIL) | Hang-szövegrész horgony-modell + SMIL exporter; saját spec kell | BE + FE + infra |
 | Kollaboráció / megosztás | Több-felhasználós, szerepkörök, presence, realtime — Auth.js átalakítás kell | BE + FE + infra |
 | MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |

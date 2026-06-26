@@ -152,7 +152,7 @@ Jelölések:
 | Chapterből scene lista | V1 | Fejezetcélból jelenetlista |
 | Scene beat generation | MVP | Jelenetcélból beat lista |
 | Beatből scene draft | MVP | Beat-ekből jelenet első draftja |
-| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása |
+| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása — **megvalósítva (fejezet-szint)** (jelenetenként a beat-ekből, egyetlen RQ háttér-job, jelenetenként egy jóvá nem hagyott Revision = HITL, opcionális folytonosság-ellenőrzés; a könyv-szint későbbi bővítés). Lásd `docs/17` |
 | Chapter opening variation | V2 | Nyitási technikák rotálása |
 | Chapter ending awareness | V2 | Következő chapter előkészítése |
 | Setup/payoff tracking | V2 | Elültetés és későbbi kifizetés követése |

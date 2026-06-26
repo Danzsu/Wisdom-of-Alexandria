@@ -594,6 +594,8 @@ Review a chapter or scene for narrative quality.
 
 Generate and review a chapter through multiple controlled steps.
 
+> **Shipped (V2 first slice):** chapter automation orchestrates `generate_scene` over a chapter's scenes as a single RQ background job, producing one unapproved Revision per scene (HITL preserved). Scope is chapter-level with writer-only generation by default (continuity is opt-in); book-level batching is a later extension. See `docs/17`.
+
 ### Graph
 
 ```txt
