@@ -19,6 +19,8 @@ import type { PlanChapter, PlanDensity } from "./types";
 export interface ChapterColumnProps {
   chapter: PlanChapter;
   density: PlanDensity;
+  /** The owning book id — threaded to scene cards for the metadata modal. */
+  bookId: string | undefined;
   /** Disable the "+ Új jelenet" tile while a create is in flight (collision guard). */
   isCreating?: boolean;
   onOpenScene: (sceneId: string) => void;
@@ -37,6 +39,7 @@ export interface ChapterColumnProps {
 export function ChapterColumn({
   chapter,
   density,
+  bookId,
   isCreating,
   onOpenScene,
   onCreateScene,
@@ -44,7 +47,7 @@ export function ChapterColumn({
   onDuplicateScene,
   onArchiveScene,
   onDeleteScene,
-}: ChapterColumnProps) {
+}: Readonly<ChapterColumnProps>) {
   const [genOpen, setGenOpen] = useState(false);
   const {
     attributes,
@@ -119,6 +122,7 @@ export function ChapterColumn({
               scene={scene}
               index={index}
               density={density}
+              bookId={bookId}
               onOpen={() => onOpenScene(scene.id)}
               onChangePov={onChangePov}
               onDuplicate={() => onDuplicateScene(scene.id)}

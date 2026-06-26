@@ -51,6 +51,7 @@ function renderCard(scene: PlanScene, index = 0) {
       scene={scene}
       index={index}
       density="default"
+      bookId={undefined}
       onOpen={noop}
       onChangePov={noop}
       onDuplicate={noop}

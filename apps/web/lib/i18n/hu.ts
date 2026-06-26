@@ -979,6 +979,34 @@ export const hu = {
     errorReorder: "Az átrendezés sikertelen",
     /** Drag handle accessible name (the grip on cards/columns). */
     dragHandleAria: "Áthelyezés húzással",
+    /** SceneCard "info" affordance — opens the scene-metadata modal. */
+    sceneMetaAria: "Jelenet részletei",
+  },
+  /**
+   * Scene Metadata modal (`Alexandria.current.html` ~line 1706). A centred modal
+   * showing a scene's metadata (POV / location / word count / beats) with
+   * mark-done, open-in-editor and beats actions.
+   */
+  sceneMeta: {
+    /** Accessible dialog name (visually-hidden — the visible title is the scene name). */
+    dialogTitle: "Jelenet részletei",
+    closeAria: "Bezárás",
+    /** Metadata grid field labels (verbatim from the prototype). */
+    labelPov: "Nézőpont",
+    labelLocation: "Helyszín",
+    labelWordCount: "Szószám",
+    labelBeats: "Beatek",
+    /** Shown in a grid field when the value is unknown / not set. */
+    valueNone: "—",
+    /** Empty summary placeholder. */
+    summaryPlaceholder: "Nincs összefoglaló ehhez a jelenethez.",
+    /** Action buttons. */
+    markDone: "Késznek jelölöm",
+    openInEditor: "Megnyitás a szerkesztőben",
+    beats: "Beatek",
+    /** Toasts. */
+    toastMarkedDone: "Jelenet késznek jelölve",
+    errorMarkDone: "Nem sikerült késznek jelölni a jelenetet",
   },
   /**
    * Import / Export screen (`Alexandria App.dc.html` showexport ~line 1449).

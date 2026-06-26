@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { GripVertical, Pencil } from "lucide-react";
+import { GripVertical, Info, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { Icon } from "@/components/kit/icon";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ import { useCalmMotion } from "@/lib/motion";
 import { hu } from "@/lib/i18n/hu";
 import { sceneStatusPresentation } from "@/lib/scene-status";
 import { SceneKebab } from "./scene-kebab";
+import { SceneMetadataModal } from "./scene-metadata-modal";
 import { povBadgeClass } from "./pov-badge-class";
 import { dndTransformToCss } from "./dnd-transform";
 import type { PlanDensity, PlanScene } from "./types";
@@ -23,6 +25,8 @@ const DENSITY_PADDING: Record<PlanDensity, string> = {
 export interface SceneCardProps {
   scene: PlanScene;
   density: PlanDensity;
+  /** The owning book id — needed by the scene-metadata modal's Write route. */
+  bookId: string | undefined;
   /** Position within its chapter column — drives the capped mount stagger. */
   index?: number;
   onOpen: () => void;
@@ -43,14 +47,16 @@ export interface SceneCardProps {
 export function SceneCard({
   scene,
   density,
+  bookId,
   index = 0,
   onOpen,
   onChangePov,
   onDuplicate,
   onArchive,
   onDelete,
-}: SceneCardProps) {
+}: Readonly<SceneCardProps>) {
   const motionConf = useCalmMotion();
+  const [metaOpen, setMetaOpen] = useState(false);
   const {
     attributes,
     listeners,
@@ -75,13 +81,16 @@ export function SceneCard({
   const padding = DENSITY_PADDING[density];
 
   return (
-    // Outer wrapper owns the SHORT mount fade-up (transform/opacity only); the
-    // inner dnd-kit node owns the drag transform — kept on separate elements so
-    // FM and dnd-kit never write `transform` to the same node (which would fight
-    // and break dragging). No FM `layout` here for the same reason. The mount
-    // animation is suppressed (`initial={false}`) while dragging so a reorder
-    // never replays the entrance. Reduced motion → zero delay / instant.
-    <motion.div
+    <>
+      {/*
+        Outer wrapper owns the SHORT mount fade-up (transform/opacity only); the
+        inner dnd-kit node owns the drag transform — kept on separate elements so
+        FM and dnd-kit never write `transform` to the same node (which would fight
+        and break dragging). No FM `layout` here for the same reason. The mount
+        animation is suppressed (`initial={false}`) while dragging so a reorder
+        never replays the entrance. Reduced motion → zero delay / instant.
+      */}
+      <motion.div
       initial={
         isDragging ? false : { opacity: 0, transform: "translateY(8px)" }
       }
@@ -128,6 +137,17 @@ export function SceneCard({
           />
           {status.label}
         </span>
+
+        {bookId ? (
+          <button
+            type="button"
+            onClick={() => setMetaOpen(true)}
+            aria-label={hu.plan.sceneMetaAria}
+            className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-text-faint hover:bg-surface-muted hover:text-accent-text"
+          >
+            <Icon icon={Info} size={12} />
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -176,5 +196,17 @@ export function SceneCard({
         ) : null}
       </div>
     </motion.div>
+
+      {/* Mount the metadata modal (and its beats query) only while open, so a
+          closed card never fires the per-scene beats query. */}
+      {bookId && metaOpen ? (
+        <SceneMetadataModal
+          scene={scene}
+          bookId={bookId}
+          open
+          onOpenChange={setMetaOpen}
+        />
+      ) : null}
+    </>
   );
 }

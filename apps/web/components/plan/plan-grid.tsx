@@ -108,6 +108,7 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
                 key={chapter.id}
                 chapter={chapter}
                 density={density}
+                bookId={controller.bookId}
                 isCreating={controller.isCreating}
                 onOpenScene={controller.openScene}
                 onCreateScene={controller.createScene}
