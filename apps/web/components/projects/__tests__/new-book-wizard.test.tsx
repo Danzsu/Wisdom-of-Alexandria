@@ -22,6 +22,40 @@ function renderWizard() {
 }
 
 describe("NewBookWizard", () => {
+  it("renders the gold header band with title, subtitle and labelled icon", () => {
+    renderWizard();
+    // Visible dialog title + new subtitle in the header band.
+    expect(
+      screen.getByRole("heading", { name: hu.wizard.dialogTitle }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(hu.wizard.headerSubtitle)).toBeInTheDocument();
+    // Decorative gold icon tile carries an accessible label.
+    expect(
+      screen.getByLabelText(hu.wizard.headerIconAria),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the recap card with a display title and metadata chips on the summary step", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.type(
+      screen.getByLabelText(hu.wizard.titleLabel),
+      "Az alexandriai hajnal",
+    );
+    await user.click(screen.getByRole("button", { name: hu.wizard.next }));
+    await user.click(screen.getByRole("button", { name: hu.wizard.next }));
+    expect(await screen.findByText(hu.wizard.step3Eyebrow)).toBeInTheDocument();
+
+    // The recap shows the title prominently and the default metadata as chips.
+    expect(screen.getByText("Az alexandriai hajnal")).toBeInTheDocument();
+    expect(screen.getByText(hu.wizard.povThirdLimited)).toBeInTheDocument();
+    expect(screen.getByText(hu.wizard.length80)).toBeInTheDocument();
+    expect(screen.getByText(hu.wizard.audienceAdult)).toBeInTheDocument();
+    // The "not yet persisted" note is still surfaced.
+    expect(screen.getByText(hu.wizard.summaryNote)).toBeInTheDocument();
+  });
+
   it("blocks advancing past step 1 without a title", async () => {
     const user = userEvent.setup();
     renderWizard();

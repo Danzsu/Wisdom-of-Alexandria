@@ -117,6 +117,7 @@ export {
   ModalClose,
   ModalFooter,
   ModalBody,
+  useMarkModalTitled,
   type ModalShellProps,
   type ModalHeaderProps,
 } from "./modal-shell";

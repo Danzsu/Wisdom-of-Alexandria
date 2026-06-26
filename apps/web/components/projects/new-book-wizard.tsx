@@ -18,9 +18,11 @@ import {
   Icon,
   Modal,
   ModalBody,
+  ModalClose,
   ModalFooter,
-  ModalHeader,
   ModalShell,
+  ModalTitle,
+  useMarkModalTitled,
   PopoverMenu,
   PopoverMenuContent,
   PopoverMenuTrigger,
@@ -80,6 +82,17 @@ type Step = (typeof STEPS)[number];
 export interface NewBookWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/**
+ * Registers our custom visible `ModalTitle` (in the gold header band) as the
+ * shell's single `Dialog.Title`, so the shell suppresses its sr-only fallback
+ * and we never render two colliding titles. Must live inside `ModalShell` to
+ * read its context.
+ */
+function TitleMarker() {
+  useMarkModalTitled();
+  return null;
 }
 
 export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
@@ -181,10 +194,34 @@ export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
   return (
     <Modal open={open} onOpenChange={handleOpenChange}>
       <ModalShell maxWidth={540} description={hu.wizard.dialogDescription}>
-        <ModalHeader
-          title={hu.wizard.dialogTitle}
-          leadingIcon={<BrandStar size={17} />}
-        />
+        {/* Gold header band — gradient + dotted-grid backdrop + gold icon tile.
+            Mirrors the onboarding hero treatment (token-only; the lone
+            decorative gradient uses var(--gold)/var(--gold-deep)). */}
+        <TitleMarker />
+        <div className="relative flex-none overflow-hidden border-b border-border bg-gradient-to-br from-gold-soft to-surface px-5 py-[18px]">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(var(--gold-line)_1px,transparent_1px)] [background-size:22px_22px]"
+          />
+          <div className="relative flex items-center gap-3">
+            <span
+              aria-label={hu.wizard.headerIconAria}
+              role="img"
+              className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-[11px] text-white shadow-[0_4px_14px_color-mix(in_srgb,var(--gold)_40%,transparent)] [background:linear-gradient(145deg,var(--gold)_0%,var(--gold-deep)_100%)]"
+            >
+              <BrandStar size={18} style={{ fill: "currentColor" }} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <ModalTitle className="m-0 font-display text-[23px] font-semibold leading-[1.1] text-text">
+                {hu.wizard.dialogTitle}
+              </ModalTitle>
+              <p className="m-0 mt-[3px] text-[12.5px] text-text-muted">
+                {hu.wizard.headerSubtitle}
+              </p>
+            </div>
+            <ModalClose />
+          </div>
+        </div>
 
         {/* 3-segment progress bar (active = accent). */}
         <div className="flex flex-none gap-1.5 px-5 pt-3.5">
@@ -236,8 +273,13 @@ export function NewBookWizard({ open, onOpenChange }: NewBookWizardProps) {
               variant="cta"
               size={34}
               disabled={createBook.isPending}
-              leadingIcon={<BrandStar size={14} />}
+              leadingIcon={
+                <BrandStar size={14} style={{ fill: "currentColor" }} />
+              }
               onClick={form.handleSubmit(handleCreate)}
+              // Gold-gradient primary (the design's "open the workshop" CTA);
+              // the lone decorative gradient, via var(--gold)/var(--gold-deep).
+              className="border-none text-white shadow-[0_4px_16px_color-mix(in_srgb,var(--gold)_42%,transparent)] [background:linear-gradient(145deg,var(--gold)_0%,var(--gold-deep)_100%)] hover:brightness-[1.04]"
             >
               {hu.wizard.create}
             </Button>
@@ -462,23 +504,17 @@ const AUDIENCE_LABEL: Record<Audience, string> = {
 };
 
 function StepSummary({ values }: { values: WizardValues }) {
-  // `notSaved` rows are collected for V1 but NOT persisted by the MVP create
-  // (see handleCreate) — we tag them so the user is never told they were saved.
-  const rows: { label: string; value: string; notSaved?: boolean }[] = [
-    { label: hu.wizard.summaryTitle, value: values.title },
-    { label: hu.wizard.summaryAuthor, value: values.author, notSaved: true },
-    { label: hu.wizard.summaryGenre, value: values.genre },
+  // `notSaved` chips are collected for V1 but NOT persisted by the MVP create
+  // (see handleCreate) — they carry the "(later / V1)" suffix so the user is
+  // never told they were saved.
+  const chips: { value: string; notSaved?: boolean }[] = [
+    { value: values.genre },
     {
-      label: hu.wizard.summaryLanguage,
       value: values.language === "hu" ? hu.wizard.languageHu : hu.wizard.languageEn,
     },
-    { label: hu.wizard.summaryPov, value: POV_LABEL[values.pov], notSaved: true },
-    {
-      label: hu.wizard.summaryAudience,
-      value: AUDIENCE_LABEL[values.audience],
-      notSaved: true,
-    },
-    { label: hu.wizard.summaryLength, value: LENGTH_LABEL[values.length] },
+    { value: POV_LABEL[values.pov], notSaved: true },
+    { value: AUDIENCE_LABEL[values.audience], notSaved: true },
+    { value: LENGTH_LABEL[values.length] },
   ];
 
   return (
@@ -486,28 +522,33 @@ function StepSummary({ values }: { values: WizardValues }) {
       <p className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
         {hu.wizard.step3Eyebrow}
       </p>
-      <div className="overflow-hidden rounded-xl border border-border">
-        {rows.map((row, i) => (
-          <div
-            key={row.label}
-            className={
-              "flex gap-2.5 px-3.5 py-2.5 text-[13px]" +
-              (i < rows.length - 1 ? " border-b border-border" : "")
-            }
-          >
-            <span className="w-[130px] flex-none text-text-muted">
-              {row.label}
-            </span>
-            <span className="text-text">
-              {row.value}
-              {row.notSaved ? (
-                <span className="ml-1.5 text-[11px] text-text-faint">
+      {/* Recap card — display title + author, then a metadata chip row
+          (design: the step-3 "Összegzés" card). */}
+      <div className="rounded-xl border border-border bg-surface-soft px-[18px] py-4">
+        <div className="mb-[3px] font-display text-[23px] font-semibold leading-[1.15] text-text">
+          {values.title}
+        </div>
+        <div className="mb-3 text-[12.5px] text-text-muted">
+          {values.author}
+          <span className="ml-1.5 text-[11px] text-text-faint">
+            {hu.wizard.summaryNotSavedTag}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-[7px]">
+          {chips.map((chip) => (
+            <span
+              key={chip.value}
+              className="rounded-full bg-surface-muted px-[11px] py-[3px] text-[11.5px] text-text-soft"
+            >
+              {chip.value}
+              {chip.notSaved ? (
+                <span className="ml-1 text-text-faint">
                   {hu.wizard.summaryNotSavedTag}
                 </span>
               ) : null}
             </span>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       <p className="mt-2.5 text-[12px] text-text-muted">
         {hu.wizard.summaryNote}

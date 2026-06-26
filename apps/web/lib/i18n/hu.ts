@@ -1782,6 +1782,10 @@ export const hu = {
     dialogTitle: "Új könyv létrehozása",
     dialogDescription:
       "Add meg a könyv alapadatait, stílusát és nézőpontját három lépésben.",
+    /** Subtitle under the dialog title in the gold header band. */
+    headerSubtitle: "Három lépés, és a műhely megnyitja a kapuit.",
+    /** Aria-label on the decorative gold header icon tile. */
+    headerIconAria: "Új könyv",
     step1Eyebrow: "1. lépés — Alapadatok",
     step2Eyebrow: "2. lépés — Stílus és AI",
     step3Eyebrow: "3. lépés — Összegzés",
