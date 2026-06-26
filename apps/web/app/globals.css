@@ -723,6 +723,14 @@ select:focus-visible,
   border-radius: 3px;
   padding: 0 2px;
 }
+/* Text-selection highlight inside the manuscript (design WRITE pass): a soft
+   accent wash instead of the OS default, so the selection bubble menu reads as
+   part of the writing surface. Cosmetic only — it does not affect the selection
+   range the editor / AI rewrite flow capture. */
+.woa-manuscript-prose ::selection {
+  background: var(--accent-muted);
+  color: var(--text);
+}
 /* Transient flash on freshly-inserted accepted AI text (woaFlash, ~1.1s fade).
    Applied as a ProseMirror decoration on the inserted range, then cleared. */
 .woa-manuscript-prose .woa-ai-flash {

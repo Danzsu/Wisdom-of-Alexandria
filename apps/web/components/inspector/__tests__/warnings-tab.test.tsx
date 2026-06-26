@@ -7,6 +7,7 @@ import { AI_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
 import { hu } from "@/lib/i18n/hu";
 import { FAROSZ_BOOK, SCENE_ACTIVE } from "@/test/msw/fixtures";
+import { useEditorStore } from "@/lib/stores/editor-store";
 import { WarningsTab } from "../warnings-tab";
 
 const aiBase = `${AI_BASE_URL}/api/v1`;
@@ -33,6 +34,7 @@ function renderWarningsTab() {
 describe("WarningsTab — continuity check (B3)", () => {
   beforeEach(() => {
     mockParams = { bookId: FAROSZ_BOOK.id, sceneId: SCENE_ACTIVE.id };
+    useEditorStore.setState({ continuityWarningCount: null });
   });
   afterEach(() => {
     server.resetHandlers();
@@ -80,6 +82,28 @@ describe("WarningsTab — continuity check (B3)", () => {
 
     // Result heading shows the count.
     expect(screen.getByText(hu.inspector.warningsFound(2))).toBeInTheDocument();
+
+    // The warning count is mirrored into the editor store so the manuscript
+    // toolbar's continuity badge reflects it (the data driving the badge, not
+    // its presence).
+    expect(useEditorStore.getState().continuityWarningCount).toBe(2);
+  });
+
+  it("records a zero count into the store on a clean check", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${aiBase}/ai/continuity`, () =>
+        HttpResponse.json({ warnings: [], context_entities: [] }),
+      ),
+    );
+    renderWarningsTab();
+
+    await user.click(
+      screen.getByRole("button", { name: hu.inspector.warningsCheck }),
+    );
+
+    await screen.findByText(hu.inspector.warningsNoIssuesTitle);
+    expect(useEditorStore.getState().continuityWarningCount).toBe(0);
   });
 
   it("shows the positive no-issues state when warnings is empty", async () => {

@@ -95,6 +95,12 @@ interface EditorState {
   /* ---- Transient editor signals (mirrored into the StatusBar) ---- */
   saveState: SaveState;
   wordCount: number;
+  /**
+   * Number of warnings from the most recent continuity check on the active
+   * scene (`null` = not checked yet this scene). Drives the toolbar continuity
+   * badge. Written by the Warnings tab on a successful check; reset per scene.
+   */
+  continuityWarningCount: number | null;
 
   /* ---- Inline scene-beat card ---- */
   beatState: BeatState;
@@ -135,6 +141,8 @@ interface EditorState {
   /* ---- Signal actions ---- */
   setSaveState: (state: SaveState) => void;
   setWordCount: (count: number) => void;
+  /** Record the warning count from the latest continuity check (or clear it). */
+  setContinuityWarningCount: (count: number | null) => void;
 
   /* ---- Beat actions ---- */
   setBeatState: (state: BeatState) => void;
@@ -180,6 +188,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   saveState: "saved",
   wordCount: 0,
+  continuityWarningCount: null,
 
   beatState: "hidden",
   beatWords: "400",
@@ -204,6 +213,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setSaveState: (state) => set({ saveState: state }),
   setWordCount: (count) => set({ wordCount: count }),
+  setContinuityWarningCount: (count) => set({ continuityWarningCount: count }),
 
   setBeatState: (state) => set({ beatState: state }),
   setBeatWords: (words) => set({ beatWords: words }),
@@ -219,5 +229,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       wordCount: 0,
       beatState: "hidden",
       aiSelection: null,
+      // A continuity result is scene-specific; clear it so the toolbar badge
+      // never carries a stale count into a different scene.
+      continuityWarningCount: null,
     }),
 }));

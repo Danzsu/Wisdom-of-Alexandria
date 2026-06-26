@@ -17,6 +17,7 @@ import {
   Pilcrow,
   MoreHorizontal,
   Check,
+  ShieldCheck,
 } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { IconButton } from "@/components/kit/icon-button";
@@ -78,6 +79,12 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
   const toggleFocusPara = useEditorStore((s) => s.toggleFocusPara);
   const wordCount = useEditorStore((s) => s.wordCount);
   const saveState = useEditorStore((s) => s.saveState);
+  const setInspectorTab = useEditorStore((s) => s.setInspectorTab);
+  const continuityWarningCount = useEditorStore(
+    (s) => s.continuityWarningCount,
+  );
+  const hasContinuityWarnings =
+    continuityWarningCount != null && continuityWarningCount > 0;
 
   const writeItems: SplitMenuItem[] = [
     {
@@ -163,6 +170,28 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
       <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
       <FormatMenu />
+
+      {/* Continuity-checker shortcut. Opens the Figyelmeztetések inspector tab
+          (the real RAG continuity checker lives there — this never runs a check
+          itself or touches the manuscript). When the last check on this scene
+          found warnings, a danger count badge appears (design: shield + count). */}
+      <button
+        type="button"
+        aria-label={hu.write.continuityAria}
+        title={hu.write.continuityTitle}
+        onClick={() => setInspectorTab("warnings")}
+        className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-transparent text-text-muted transition-colors hover:border-accent hover:bg-accent-muted hover:text-accent-text"
+      >
+        <Icon icon={ShieldCheck} size={15} />
+        {hasContinuityWarnings ? (
+          <span
+            aria-label={hu.write.continuityCountAria(continuityWarningCount)}
+            className="absolute -right-0.5 -top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-danger-solid px-[3px] text-[9px] font-bold leading-none text-danger-solid-fg"
+          >
+            {continuityWarningCount}
+          </span>
+        ) : null}
+      </button>
 
       <button
         type="button"

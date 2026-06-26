@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -156,7 +157,20 @@ export function WarningsTab() {
   const params = useParams<{ sceneId?: string }>();
   const sceneId = params?.sceneId;
   const activeModel = useEditorStore((s) => s.activeModel);
+  const setContinuityWarningCount = useEditorStore(
+    (s) => s.setContinuityWarningCount,
+  );
   const mutation = useCheckContinuity();
+
+  // Mirror the latest check's warning count into the store so the manuscript
+  // toolbar's continuity badge reflects it. Analysis-only — never writes the
+  // manuscript; the badge is a passive indicator the writer can clear by
+  // re-checking. The data object is referentially stable per result, so this
+  // fires once per completed check.
+  const resultData = mutation.data;
+  useEffect(() => {
+    if (resultData) setContinuityWarningCount(resultData.warnings.length);
+  }, [resultData, setContinuityWarningCount]);
 
   const header = (
     <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">

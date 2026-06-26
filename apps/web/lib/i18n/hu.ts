@@ -251,6 +251,11 @@ export const hu = {
     // Toolbar icon buttons.
     focusAria: "Fókusz mód",
     focusTitle: "Fókusz mód (zavarmentes írás)",
+    // Continuity-checker shortcut (opens the Figyelmeztetések inspector tab).
+    continuityAria: "Folytonosság-ellenőrzés",
+    continuityTitle: "Folytonosság-ellenőrzés (Figyelmeztetések panel)",
+    /** aria-label for the severity count badge: "{n} folytonossági figyelmeztetés". */
+    continuityCountAria: (n: number) => `${n} folytonossági figyelmeztetés`,
     focusParaAria: "Bekezdés-fókusz",
     focusParaTitle: "Bekezdés-fókusz (a környező szöveg elhalványul)",
     commentAria: "Megjegyzés",
