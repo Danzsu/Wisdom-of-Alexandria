@@ -1,29 +1,35 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Library, LayoutList, Sparkles, CheckCheck, X } from "lucide-react";
+import {
+  Library,
+  LayoutList,
+  Sparkles,
+  CheckCheck,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { useUIStore } from "@/lib/stores/ui-store";
-import { canAnimateGsap } from "@/lib/gsap-gate";
 import { hu } from "@/lib/i18n/hu";
 
 /**
- * localStorage key for the first-run "Hogyan működik" narrative. Mirrors the
+ * localStorage key for the first-run "Hogyan működik" tour. Mirrors the
  * dashboard onboarding-banner key style (`woa-…-dismissed`). Set to "1" once the
- * user skips/closes, so the narrative never auto-opens again.
+ * user skips/closes/finishes, so the tour never auto-opens again.
  */
 export const HOW_IT_WORKS_KEY = "woa-how-it-works-dismissed";
 
-/** One Lucide glyph per panel (a tasteful diagram cue, not stock art). */
-const PANEL_ICONS: LucideIcon[] = [Library, LayoutList, Sparkles, CheckCheck];
+/** One Lucide glyph per step (a tasteful diagram cue, not stock art). */
+const STEP_ICONS: LucideIcon[] = [Library, LayoutList, Sparkles, CheckCheck];
 
 /**
  * True when the user prefers reduced motion. Read at call time (not cached) so
- * the GSAP path is gated freshly on each open. SSR / jsdom-safe: returns `false`
- * when `matchMedia` is unavailable, which keeps the static fallback as the
- * default (see {@link useScrollNarrative}, which never registers GSAP in tests).
+ * the motion gate is fresh on each render. SSR / jsdom-safe: returns `false`
+ * when `matchMedia` is unavailable.
  */
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -33,126 +39,39 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Whether the scroll-driven GSAP enhancement may run at all. It is suppressed
- * under reduced motion AND under test (jsdom has no layout/scroll, so
- * ScrollTrigger would be a meaningless no-op — we skip registration entirely so
- * the static markup is what tests assert). Anything but a real, motion-allowing
- * browser falls back to the plain scrollable stack.
- */
-function canRunScrollNarrative(): boolean {
-  const hasWindow = typeof window !== "undefined";
-  return canAnimateGsap(
-    hasWindow,
-    // Vitest sets this; never register GSAP under test.
-    process.env.NODE_ENV === "test",
-    hasWindow && typeof window.matchMedia === "function"
-      ? window.matchMedia.bind(window)
-      : undefined,
-  );
-}
-
-/**
- * Registers GSAP ScrollTrigger to pin + fade each panel in sequence, scoped to
- * `containerRef` via `gsap.context` so teardown is a single `ctx.revert()` —
- * killing every ScrollTrigger and tween this component created, with no leak
- * across route changes or re-opens. Does NOTHING under reduced motion / test
- * (the static stack already renders the panels). GSAP is imported dynamically
- * so it never lands in the SSR bundle and never runs server-side.
- */
-function useScrollNarrative(
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  open: boolean,
-) {
-  useLayoutEffect(() => {
-    if (!open) return;
-    if (!canRunScrollNarrative()) return;
-    const root = containerRef.current;
-    if (!root) return;
-
-    let ctx: { revert: () => void } | null = null;
-    let cancelled = false;
-
-    // Dynamic import keeps GSAP client-only and out of the SSR/test path.
-    void (async () => {
-      try {
-        const gsapMod = await import("gsap");
-        const stMod = await import("gsap/ScrollTrigger");
-        if (cancelled) return;
-        const gsap = gsapMod.gsap ?? gsapMod.default;
-        const ScrollTrigger = stMod.ScrollTrigger ?? stMod.default;
-        gsap.registerPlugin(ScrollTrigger);
-
-        ctx = gsap.context((self) => {
-          const select = self.selector as
-            | ((q: string) => Element[])
-            | undefined;
-          const panels = select
-            ? (select("[data-hiw-panel]") as HTMLElement[])
-            : [];
-          panels.forEach((panel) => {
-            // Calm, restrained: opacity + small upward translate only, ease-out,
-            // no bounce. Scrubbed to the panel's own scroll position.
-            gsap.fromTo(
-              panel,
-              { opacity: 0.15, y: 24 },
-              {
-                opacity: 1,
-                y: 0,
-                ease: "power2.out",
-                scrollTrigger: {
-                  trigger: panel,
-                  scroller: root,
-                  start: "top 80%",
-                  end: "top 40%",
-                  scrub: true,
-                },
-              },
-            );
-          });
-        }, root);
-      } catch {
-        // GSAP failed to load (offline chunk, etc.): the static stack already
-        // rendered the panels, so the narrative remains fully readable. We log
-        // rather than swallow silently so the degradation is observable.
-        if (!cancelled) {
-          console.warn(
-            "[how-it-works] GSAP scroll narrative unavailable; static fallback in use.",
-          );
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (ctx) ctx.revert();
-    };
-  }, [containerRef, open]);
-}
-
-/**
- * The first-run "Hogyan működik" scroll-narrative. A SKIPPABLE, modal overlay
+ * The first-run "Hogyan működik" tour — a SKIPPABLE, modal step carousel
  * (Radix Dialog: focus-trapped, Esc-to-close, titled + described) that teaches
- * the product's core loop in four calm panels: Codex → Tervezés → AI-javaslat →
- * Jóváhagyás.
+ * the product's core loop in four calm steps: Codex → Tervezés → AI-javaslat →
+ * Jóváhagyás. One step is visible at a time, centered, on a dotted-grid hero
+ * band with a large per-step icon.
  *
- * Motion: GSAP ScrollTrigger pins/fades each panel as the user scrolls — the
- * justified GSAP beachhead (Framer Motion doesn't do scroll-pinning cleanly).
- * It is registered client-side, scoped to the scroll container via `gsap.context`,
- * and fully reverted on close/unmount (no ScrollTrigger leak). Under
- * `prefers-reduced-motion` (and under test) GSAP never registers — the four
- * panels render as a plain, static, scrollable stack, which IS the a11y baseline.
+ * Navigation: a gold-gradient Next (becomes "Kezdjük" / finish on the last
+ * step), a Back that appears after the first step, a clickable dot-nav, and a
+ * "N / M" step counter. An always-visible inline skip and the corner X both
+ * dismiss permanently.
  *
- * Open state lives in the shared UI store (`howItWorksOpen`). Skip / close both
- * write the `localStorage` flag so the narrative never auto-opens again; it stays
- * reachable from the command palette ("Hogyan működik"). The user can dismiss it
- * immediately without scrolling — it never traps them.
+ * Motion: the step content fades/lifts in on each change via the shared
+ * `woaReveal` keyframe (keyed on the step index). Under `prefers-reduced-motion`
+ * the animation is dropped — the step simply swaps, which IS the a11y baseline.
+ *
+ * Open state lives in the shared UI store (`howItWorksOpen`). Skip / close /
+ * finish all write the `localStorage` flag so the tour never auto-opens again;
+ * it stays reachable from the TopBar help button and the command palette
+ * ("Hogyan működik"). The user can dismiss it immediately — it never traps them.
  */
 export function HowItWorks() {
   const open = useUIStore((s) => s.howItWorksOpen);
   const close = useUIStore((s) => s.closeHowItWorks);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [step, setStep] = useState(0);
 
-  useScrollNarrative(scrollRef, open);
+  const panels = hu.howItWorks.panels;
+  const total = panels.length;
+
+  // Always (re)start the tour on its first step whenever it opens, so a prior
+  // session's position never leaks into a fresh open.
+  useEffect(() => {
+    if (open) setStep(0);
+  }, [open]);
 
   /** Persist the dismissal (best-effort) and close the overlay. */
   function dismiss() {
@@ -164,90 +83,139 @@ export function HowItWorks() {
     close();
   }
 
+  /** Next on a middle step advances; on the last step it finishes the tour. */
+  function handleNext() {
+    if (step >= total - 1) {
+      dismiss();
+      return;
+    }
+    setStep((s) => Math.min(s + 1, total - 1));
+  }
+
+  function handleBack() {
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
   const reduced = prefersReducedMotion();
+  const panel = panels[step];
+  const glyph = STEP_ICONS[step] ?? Library;
+  const isFirst = step === 0;
+  const isLast = step === total - 1;
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && dismiss()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[55] bg-[rgba(24,18,9,.45)] [animation:woaFade_.16s_ease-out]" />
+        <Dialog.Overlay className="fixed inset-0 z-[55] bg-[rgba(24,18,9,.45)] backdrop-blur-[8px] [animation:woaFade_.16s_ease-out]" />
         <Dialog.Content
           aria-label={hu.howItWorks.title}
-          className="fixed left-1/2 top-1/2 z-[56] flex max-h-[min(640px,calc(100dvh-48px))] w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[18px] border border-border bg-bg shadow-popover [animation:woaReveal_.18s_cubic-bezier(.22,1,.36,1)]"
+          className="fixed left-1/2 top-1/2 z-[56] flex max-h-[calc(100dvh-48px)] w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[20px] border border-border bg-surface shadow-modal [animation:woaReveal_.26s_cubic-bezier(.22,1,.36,1)]"
         >
-          {/* Header: eyebrow + title + a close that works without scrolling. */}
-          <div className="flex items-start gap-3 border-b border-border bg-surface px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-accent-text">
-                {hu.howItWorks.eyebrow}
-              </p>
-              <Dialog.Title className="m-0 font-serif text-[19px] font-semibold text-text">
-                {hu.howItWorks.title}
-              </Dialog.Title>
-            </div>
-            <button
-              type="button"
-              onClick={dismiss}
-              aria-label={hu.howItWorks.closeAria}
-              className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          {/* Corner skip — works without touching the carousel. */}
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label={hu.howItWorks.closeAria}
+            className="absolute right-3.5 top-3.5 z-[3] flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface/60 text-text-muted transition-colors hover:bg-surface hover:text-text"
+          >
+            <Icon icon={X} size={15} />
+          </button>
+
+          {/* Hero band: dotted-grid backdrop + large per-step icon. */}
+          <div className="relative flex h-[136px] items-center justify-center bg-gold-soft/45">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(var(--gold-line)_1px,transparent_1px)] [background-size:22px_22px]"
+            />
+            <span
+              key={`icon-${step}`}
+              aria-hidden="true"
+              className="relative flex h-[60px] w-[60px] items-center justify-center rounded-2xl border border-gold-line bg-surface text-gold-text shadow-card"
+              style={
+                reduced
+                  ? undefined
+                  : { animation: "woaReveal .3s cubic-bezier(.22,1,.36,1)" }
+              }
             >
-              <Icon icon={X} size={15} />
-            </button>
+              <Icon icon={glyph} size={28} strokeWidth={1.6} />
+            </span>
+          </div>
+
+          {/* Step body: eyebrow + display title + body. */}
+          <div
+            key={`body-${step}`}
+            className="px-[30px] pb-2 pt-[26px] text-center"
+            style={
+              reduced
+                ? undefined
+                : { animation: "woaReveal .3s cubic-bezier(.22,1,.36,1)" }
+            }
+          >
+            <p className="m-0 mb-[9px] text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-text">
+              {panel.kicker}
+            </p>
+            <Dialog.Title className="m-0 mb-2.5 font-display text-[30px] font-semibold leading-[1.08] text-text">
+              {panel.title}
+            </Dialog.Title>
+            <p className="m-0 mx-auto max-w-[400px] font-serif text-[15px] leading-[1.7] text-text-muted [text-wrap:pretty]">
+              {panel.body}
+            </p>
           </div>
           <Dialog.Description className="sr-only">
             {hu.howItWorks.description}
           </Dialog.Description>
 
-          {/* Scroll container — the ScrollTrigger scroller. Under reduced motion
-              / test it's just a readable, scrollable stack. */}
-          <div
-            ref={scrollRef}
-            data-testid="how-it-works-scroll"
-            className="min-h-0 flex-1 overflow-y-auto px-5 py-5"
-          >
-            <ol className="m-0 flex list-none flex-col gap-3.5 p-0">
-              {hu.howItWorks.panels.map((panel, i) => {
-                const glyph = PANEL_ICONS[i] ?? Library;
-                return (
-                  <li
-                    key={panel.title}
-                    data-hiw-panel=""
-                    className="flex gap-3.5 rounded-2xl border border-border bg-surface p-[18px] shadow-card"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-accent-muted text-accent-text"
-                    >
-                      <Icon icon={glyph} size={18} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.07em] text-text-faint">
-                        {panel.kicker}
-                      </p>
-                      <p className="m-0 mt-0.5 font-serif text-[17px] font-semibold text-text">
-                        {panel.title}
-                      </p>
-                      <p className="m-0 mt-1.5 text-[13px] leading-[1.55] text-text-muted">
-                        {panel.body}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
+          {/* Dot-nav: jump to any step. */}
+          <div className="flex items-center justify-center gap-2 pb-[18px] pt-[22px]">
+            {panels.map((p, i) => {
+              const active = i === step;
+              return (
+                <button
+                  key={p.title}
+                  type="button"
+                  onClick={() => setStep(i)}
+                  aria-label={hu.howItWorks.dotAria(i + 1)}
+                  aria-current={active ? "step" : undefined}
+                  className={
+                    active
+                      ? "h-2 w-5 rounded-full bg-gold transition-all"
+                      : "h-2 w-2 rounded-full bg-border-strong transition-all hover:bg-gold-text"
+                  }
+                />
+              );
+            })}
           </div>
 
-          {/* Footer: always-visible skip that works without scrolling. */}
-          <div className="flex items-center justify-between gap-3 border-t border-border bg-surface px-5 py-3.5">
-            <span className="text-[11px] text-text-faint">
-              {reduced ? "" : hu.howItWorks.scrollHint}
-            </span>
+          {/* Footer: Back (after step 1) · inline skip · counter · gold Next. */}
+          <div className="flex items-center gap-2.5 px-6 pb-[22px]">
+            {!isFirst && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="inline-flex h-[42px] items-center gap-1.5 rounded-[11px] border border-border bg-surface px-4 text-[13.5px] font-semibold text-text transition-colors hover:border-border-strong"
+              >
+                <Icon icon={ChevronLeft} size={15} />
+                {hu.howItWorks.back}
+              </button>
+            )}
             <button
               type="button"
               onClick={dismiss}
               aria-label={hu.howItWorks.skipAria}
-              className="flex h-9 items-center rounded-lg border border-accent bg-accent-muted px-4 text-[13px] font-semibold text-accent-text transition-colors hover:bg-accent-strong hover:text-accent-fg"
+              className="h-[42px] rounded-[11px] px-3.5 text-[13px] font-semibold text-text-muted transition-colors hover:text-text"
             >
-              {hu.howItWorks.skip}
+              {hu.howItWorks.skipInline}
+            </button>
+            <div className="flex-1" />
+            <span className="text-[12px] tabular-nums text-text-faint">
+              {hu.howItWorks.stepCounter(step + 1, total)}
+            </span>
+            <button
+              type="button"
+              onClick={handleNext}
+              className="inline-flex h-[42px] items-center gap-[7px] rounded-[11px] bg-[linear-gradient(145deg,var(--gold)_0%,var(--gold-deep)_100%)] px-[22px] text-[13.5px] font-semibold text-white shadow-[0_4px_14px_color-mix(in_srgb,var(--gold)_38%,transparent)]"
+            >
+              {isLast ? hu.howItWorks.finish : hu.howItWorks.next}
+              {!isLast && <Icon icon={ChevronRight} size={15} />}
             </button>
           </div>
         </Dialog.Content>
@@ -258,9 +226,9 @@ export function HowItWorks() {
 
 /**
  * Retained for backwards compatibility — previously auto-opened the "Hogyan
- * működik" narrative on first run, which caused two onboarding patterns to stack
- * on the dashboard (modal on top of the inline "Három lépés" banner). The
- * auto-open has been removed: the narrative is now an on-demand affordance only
+ * működik" tour on first run, which caused two onboarding patterns to stack on
+ * the dashboard (modal on top of the inline "Három lépés" banner). The
+ * auto-open has been removed: the tour is now an on-demand affordance only
  * (the "Hogyan működik?" button in the TopBar). This component renders nothing
  * and can be safely removed in a future cleanup pass once all call-sites are
  * updated.

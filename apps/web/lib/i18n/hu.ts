@@ -1451,8 +1451,18 @@ export const hu = {
     close: "Bezárás",
     /** Aria for the close button. */
     closeAria: "Bezárás",
-    /** Hint that scrolling advances the panels (hidden under reduced motion). */
-    scrollHint: "Görgess a folytatáshoz",
+    /** Carousel: go to the previous step. */
+    back: "Vissza",
+    /** Carousel: advance to the next step. */
+    next: "Tovább",
+    /** Carousel: final step's primary button (closes the tour). */
+    finish: "Kezdjük",
+    /** Carousel: secondary skip label inside the footer. */
+    skipInline: "Kihagyom",
+    /** Step counter, e.g. "1 / 4" — `current` is 1-based. */
+    stepCounter: (current: number, total: number) => `${current} / ${total}`,
+    /** Aria for a dot-nav button jumping to step `n` (1-based). */
+    dotAria: (n: number) => `${n}. lépés`,
     /** Step counter prefix, e.g. "1 / 4". */
     panels: [
       {
