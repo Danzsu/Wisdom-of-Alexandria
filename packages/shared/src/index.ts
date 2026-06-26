@@ -46,6 +46,7 @@ export type SnippetRead = ApiSchemas["SnippetRead"];
 export type PromptTemplateRead = ApiSchemas["PromptTemplateRead"];
 export type PromptTemplateCreate = ApiSchemas["PromptTemplateCreate"];
 export type PromptTemplateUpdate = ApiSchemas["PromptTemplateUpdate"];
+export type StyleGuideRead = ApiSchemas["StyleGuideRead"];
 
 /* ---------------------------------------------------------------------------
  * apps/ai (`ai.json`) — AI generation, providers, continuity.

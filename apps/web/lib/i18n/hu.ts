@@ -70,6 +70,7 @@ export const hu = {
     relations: "Kapcsolatok",
     subplots: "Cselekményszálak",
     jobs: "AI feladatok",
+    styleGuide: "Stíluskalauz",
     prompts: "Prompt Library",
     audio: "Hangkönyvtár",
     /** Aria-label on the Tools button's failed-job badge (n = count). */
@@ -1069,6 +1070,46 @@ export const hu = {
     /** Loading / error state for the book (title) resolution. */
     bookLoading: "Könyv betöltése…",
     bookError: "Nem sikerült betölteni a könyvet",
+  },
+  /**
+   * Stíluskalauz (Style Guide) screen — the narrator-voice header + voice chips,
+   * the four pillar cards, the Kövesd / Kerüld lists, the banned-words list and
+   * the etalon-passzus sample with its AI-context note. Maps onto the backend
+   * StyleGuide (`tone`/`pov`/`tense` typed columns + `rules`/`examples` JSON).
+   * (`Alexandria.current.html` ~line 1400.)
+   */
+  styleGuide: {
+    /** Screen hero. */
+    eyebrow: "A kézirat hangja",
+    title: "Stíluskalauz",
+    heroSubtitle:
+      "Az elbeszélői hang, igeidő és szókincs egy helyen — az AI minden generáláskor ehhez igazodik.",
+    /** Header edit button (editing arrives as a follow-up — honest stub). */
+    editCta: "Szerkesztés",
+    editStubToast: "A stíluskalauz szerkesztése hamarosan érkezik.",
+    /** Narrator-voice strip. */
+    voiceLabel: "Elbeszélői hang",
+    /** Pillars grid. */
+    pillarsAria: "Stílus-pillérek",
+    /** Do / Don't lists. */
+    doTitle: "Kövesd",
+    dontTitle: "Kerüld",
+    /** Banned words. */
+    bannedLabel: "Tiltott szavak · az AI ezeket kerüli",
+    /** Sample passage. */
+    sampleLabel: "Etalon-passzus",
+    sampleAiNote:
+      "Az AI ehhez a ritmushoz és sűrűséghez igazítja a generált szöveget.",
+    /** Loading. */
+    loading: "Stíluskalauz betöltése…",
+    /** Error. */
+    errorTitle: "Nem sikerült betölteni a stíluskalauzt",
+    /** Empty (no style guide yet) — 404 from the API. */
+    emptyTitle: "Még nincs stíluskalauz",
+    emptyBody:
+      "Rögzítsd a kézirat hangját, igeidejét és szókincsét, hogy az AI mindig hozzá igazodjon.",
+    emptyCta: "Stíluskalauz létrehozása",
+    emptyStubToast: "A stíluskalauz létrehozása hamarosan érkezik.",
   },
   /**
    * Áttekintés (Overview / book dashboard) screen — the book hero, aggregate

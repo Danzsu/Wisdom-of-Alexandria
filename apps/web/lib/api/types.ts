@@ -26,6 +26,7 @@ import type {
   PromptTemplateRead as GenPromptTemplateRead,
   SceneRead as GenSceneRead,
   SeriesRead as GenSeriesRead,
+  StyleGuideRead as GenStyleGuideRead,
 } from "@alexandria/shared";
 
 /* ---------------------------------------------------------------------------
@@ -577,6 +578,33 @@ export type BeatCreate = z.infer<typeof beatCreateSchema>;
 
 export const beatListSchema = z.array(beatReadSchema);
 
+/* ---------------------------------------------------------------------------
+ * StyleGuide — mirrors app/schemas/style_guide.py (one per project).
+ *
+ * `rules` + `examples` are freeform JSON dicts server-side (`dict | None`). The
+ * Stíluskalauz screen reads structured sub-shapes out of them (pillars, do/dont,
+ * banned words, sample) but the contract stays a permissive record so the
+ * backend schema is NOT invented here.
+ * ------------------------------------------------------------------------- */
+
+/** Permissive JSON-object record (the backend `dict | None` columns). */
+const jsonRecordSchema = z.record(z.string(), z.unknown());
+
+/** A StyleGuide as returned by the API (`StyleGuideRead`). */
+export const styleGuideReadSchema = z.object({
+  id: idString,
+  project_id: idString,
+  tone: z.string().nullable(),
+  pov: z.string().nullable(),
+  tense: z.string().nullable(),
+  rules: jsonRecordSchema.nullable(),
+  examples: jsonRecordSchema.nullable(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type StyleGuideRead = z.infer<typeof styleGuideReadSchema>;
+
 /** Array schemas used by list endpoints. */
 export const projectListSchema = z.array(projectReadSchema);
 export const bookListSchema = z.array(bookReadSchema);
@@ -627,5 +655,8 @@ export type CoreContractTies = [
       z.infer<typeof plotlineSceneReadSchema>,
       GenPlotlineSceneRead
     >
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof styleGuideReadSchema>, GenStyleGuideRead>
   >,
 ];

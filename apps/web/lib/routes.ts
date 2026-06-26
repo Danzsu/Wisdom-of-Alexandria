@@ -21,6 +21,7 @@ export const BOOK_SEGMENTS = [
   "cselekmenyszalak",
   "feladatok",
   "promptok",
+  "stiluskalauz",
   "hangok",
   "export",
   "beallitasok",
@@ -41,6 +42,8 @@ export const routes = {
   profile: () => "/profil",
   /** Book-scoped destination by segment. */
   book: (bookId: string, segment: BookSegment) => `/konyv/${bookId}/${segment}`,
+  /** Stíluskalauz (style guide) for a book. */
+  styleGuide: (bookId: string) => `/konyv/${bookId}/stiluskalauz`,
   /** Write view for a specific scene. */
   scene: (bookId: string, sceneId: string) =>
     `/konyv/${bookId}/iras/${sceneId}`,

@@ -16,6 +16,7 @@ import {
   ListChecks,
   Sparkles,
   AudioLines,
+  ScrollText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ const TOOLS_SEGMENTS: BookSegment[] = [
   "cselekmenyszalak",
   "feladatok",
   "promptok",
+  "stiluskalauz",
   "hangok",
 ];
 
@@ -267,6 +269,12 @@ export function IconRail({ bookId, activeSegment }: IconRailProps) {
           </MenuRow>
           <MenuSeparator />
           <MenuSection label={hu.tools.sectionStores} />
+          <MenuRow
+            leadingIcon={<Icon icon={ScrollText} size={15} />}
+            onSelect={() => navTo(routes.styleGuide(bookId))}
+          >
+            {hu.tools.styleGuide}
+          </MenuRow>
           <MenuRow
             leadingIcon={<Icon icon={Sparkles} size={15} />}
             onSelect={() => navTo(routes.book(bookId, "promptok"))}
