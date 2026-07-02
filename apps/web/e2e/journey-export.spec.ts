@@ -24,8 +24,14 @@ test("export: the Markdown export triggers a real .md download", async ({
   const editor = await createFirstChapterIntoEditor(page);
   await editor.click();
   await editor.pressSequentially("Az apály aznap egy órával korábban jött.", { delay: 15 });
+  // Scoped to the contentinfo landmark (the StatusBar <footer>): the editor
+  // area renders a second role="status" with the same text inside <main>, so
+  // an unscoped getByRole("status") is a strict-mode violation.
   await expect(
-    page.getByRole("status").filter({ hasText: "Mentve" }),
+    page
+      .getByRole("contentinfo")
+      .getByRole("status")
+      .filter({ hasText: "Mentve" }),
   ).toBeVisible({ timeout: 15_000 });
 
   // --- Export screen via the icon rail. ---

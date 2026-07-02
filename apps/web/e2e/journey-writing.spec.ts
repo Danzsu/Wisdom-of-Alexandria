@@ -34,11 +34,17 @@ test("core writing loop: wizard → plan board → editor → autosave 'Mentve'"
   await expect(editor).toContainText(manuscript);
 
   // --- Autosave: the StatusBar's live region must reach "Mentve". ---
+  // Scoped to the contentinfo landmark (the StatusBar <footer>): the editor
+  // area renders a second role="status" with the same text inside <main>, so
+  // an unscoped getByRole("status") is a strict-mode violation.
   // (Debounce is 800ms + a PATCH round-trip; the default expect timeout
   // comfortably covers it. "Mentve" does not substring-match the error state
   // "Mentés sikertelen", so this cannot false-positive on a failed save.)
   await expect(
-    page.getByRole("status").filter({ hasText: "Mentve" }),
+    page
+      .getByRole("contentinfo")
+      .getByRole("status")
+      .filter({ hasText: "Mentve" }),
   ).toBeVisible({ timeout: 15_000 });
 
   // --- Persistence proof: the content survives a full reload. ---

@@ -26,13 +26,27 @@ test("codex: create an entry via the modal, then add an alias in the detail", as
   await page.getByRole("button", { name: "Codex", exact: true }).click();
   await page.waitForURL(new RegExp(`/konyv/${bookId}/codex`));
 
-  // --- Open the create modal. A fresh book's Codex is empty, so either the
-  // empty-state CTA ("Új bejegyzés") or the sidebar add button ("Új") works —
-  // take whichever renders first. ---
-  await page
-    .getByRole("button", { name: /^(Új bejegyzés|Új)$/ })
-    .first()
-    .click();
+  // --- Wait for the Codex screen to settle. A fresh book's codex is empty,
+  // so the MAIN area shows the (CTA-less) empty state; asserting it first
+  // guarantees the route transition finished and the codex query resolved
+  // before we click anything (an eager click here used to be intercepted by
+  // the main-area empty-state container mid-transition). ---
+  await expect(
+    page.getByRole("main").getByText("Még üres a Codex"),
+  ).toBeVisible();
+
+  // --- Open the create modal from the Codex SIDEBAR (the only navigation
+  // landmark named "Codex"; the main empty state has no CTA, so the sidebar
+  // is the only create path). With an empty list the sidebar renders an
+  // EmptyState whose "Új bejegyzés" CTA only mounts after its own list query
+  // resolves — waiting for it doubles as a sidebar-readiness gate. ---
+  const codexSidebar = page.getByRole("navigation", { name: "Codex" });
+  const createCta = codexSidebar.getByRole("button", {
+    name: "Új bejegyzés",
+    exact: true,
+  });
+  await expect(createCta).toBeVisible();
+  await createCta.click();
 
   // --- Step 1: type picker → Karakter. ---
   // The card's accessible name is its label + hint text, so anchor on the
