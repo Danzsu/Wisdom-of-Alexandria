@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.generation_job import GenerationJobRead
 from app.services.ai_service import AIService, ai_service
 from app.services.crud_generation_job import (
+    create_book_generation_job,
     create_chapter_generation_job,
     create_index_job,
 )
@@ -31,6 +32,7 @@ from app.services.embedding_service import (
     embedding_service,
 )
 from app.services.job_queue import (
+    enqueue_book_generation_job,
     enqueue_chapter_generation_job,
     enqueue_index_job,
 )
@@ -178,6 +180,28 @@ class ChapterGenerateRequest(BaseModel):
     max_tokens: int | None = _MaxTokensField
 
 
+class BookGenerateRequest(BaseModel):
+    """Request to generate ALL (selected) chapters of a book as one background
+    job (V2: book-level chapter automation).
+
+    ``chapter_ids`` is an OPTIONAL subset of the book's chapters; ``None`` (or
+    omitted) selects ALL chapters. An explicit empty list is rejected — the
+    "everything" selection is expressed by omission, not ``[]``. Per chapter the
+    job auto-selects the SAFE default scenes (EMPTY content + at least one
+    beat); the fine-grained per-scene opt-in stays a chapter-level feature.
+    ``run_continuity`` / ``model`` / ``temperature`` / ``max_tokens`` mirror the
+    chapter-generate request.
+    """
+
+    chapter_ids: list[uuid.UUID] | None = Field(
+        default=None, min_length=1, max_length=500
+    )
+    run_continuity: bool = False
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
 class SummarizeRequest(BaseModel):
     content: str = Field(max_length=_TEXT_MAX_CHARS)
     content_type: str = "jelenet"
@@ -198,6 +222,46 @@ class ContinuityRequest(BaseModel):
 class IndexRequest(BaseModel):
     # Optional body form of project_id; the query param takes precedence.
     project_id: uuid.UUID | None = None
+
+
+class BrainstormRequest(BaseModel):
+    """Sudowrite-style ötletelés: brainstorm story ideas for a topic/question,
+    grounded via scene-scoped RAG when a ``scene_id`` is given."""
+
+    # Bounded like ResearchRequest.question: generous for a real prompt, but a
+    # pathological payload is a 422, not a ballooned LLM/embedding cost.
+    topic: str = Field(min_length=1, max_length=8000)
+    # How many ideas to ask for. Small hard cap — brainstorming returns a
+    # scannable shortlist, not a firehose.
+    count: int = Field(default=5, ge=1, le=10)
+    scene_id: uuid.UUID | None = None
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
+class ExpandRequest(BaseModel):
+    """Expand a selection: add sensory detail / interiority, keep the voice."""
+
+    selected_text: str = Field(max_length=_TEXT_MAX_CHARS)
+    # Optional steering ("more interiority", "focus on smell") — bounded like a
+    # research question; it is guidance, not manuscript text.
+    guidance: str = Field(default="", max_length=8000)
+    scene_id: uuid.UUID | None = None
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
+
+
+class CompressRequest(BaseModel):
+    """Tighten a selection: cut filler, keep meaning + voice."""
+
+    selected_text: str = Field(max_length=_TEXT_MAX_CHARS)
+    guidance: str = Field(default="", max_length=8000)
+    scene_id: uuid.UUID | None = None
+    model: str | None = None
+    temperature: float | None = _TemperatureField
+    max_tokens: int | None = _MaxTokensField
 
 
 class ResearchRequest(BaseModel):
@@ -283,6 +347,22 @@ class ContinuityResult(BaseModel):
     context_entities: list[ContextEntity] = Field(default_factory=list)
 
 
+class BrainstormResult(BaseModel):
+    """Brainstorm response. NO revision — ideas are not manuscript text.
+
+    ``ideas`` is the parsed idea list (at most the requested ``count``; a single
+    fallback idea when the model's output was unusable). ``job`` is the
+    ``brainstorm`` GenerationJob provenance record (``null`` only for the
+    whitespace-topic short-circuit). ``context_entities`` lists the Codex/
+    manuscript entries RAG grounded the ideas on (empty when RAG was skipped /
+    unconfigured).
+    """
+
+    ideas: list[str] = Field(default_factory=list)
+    job: GenerationJobRead | None = None
+    context_entities: list[ContextEntity] = Field(default_factory=list)
+
+
 class ResearchResult(BaseModel):
     """Codex/manuscript Q&A response (P2). NO revision — this is analysis.
 
@@ -323,6 +403,107 @@ async def rewrite(
             db,
             selected_text=data.selected_text,
             instruction=data.instruction,
+            scene_id=data.scene_id,
+            model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/brainstorm", response_model=BrainstormResult)
+async def brainstorm(
+    data: BrainstormRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: AIService = Depends(get_ai_service),
+) -> BrainstormResult:
+    """Brainstorm story ideas (ötletelés) for a topic, grounded via RAG when a
+    ``scene_id`` gives a book/scene context. Ideas are NOT manuscript text —
+    there is NO revision; the ``brainstorm`` GenerationJob is the provenance.
+
+    Degradation contract (no 500 for either case):
+    - RAG/embeddings unconfigured → the model still brainstorms from the topic
+      alone (empty ``context_entities``).
+    - an unusable model response → a single visible fallback idea, never a
+      crash.
+    """
+    try:
+        ideas, job, context_entities = await svc.brainstorm(
+            db,
+            topic=data.topic,
+            scene_id=data.scene_id,
+            count=data.count,
+            model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        return BrainstormResult(
+            ideas=ideas,
+            job=GenerationJobRead.model_validate(job) if job is not None else None,
+            context_entities=[ContextEntity(**c) for c in context_entities],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/expand", response_model=AIResult)
+async def expand(
+    data: ExpandRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: AIService = Depends(get_ai_service),
+) -> AIResult:
+    """Expand the selection (sensory detail / interiority, voice preserved).
+    HITL like rewrite: returns an unapproved ``Revision(revision_type="expand")``."""
+    try:
+        revision, job, context_entities = await svc.expand(
+            db,
+            selected_text=data.selected_text,
+            guidance=data.guidance,
+            scene_id=data.scene_id,
+            model=data.model,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        return AIResult(
+            revision=RevisionRead.model_validate(revision),
+            job=GenerationJobRead.model_validate(job),
+            context_entities=[ContextEntity(**c) for c in context_entities],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI generation failed: {safe_error(e)}",
+        )
+
+
+@router.post("/compress", response_model=AIResult)
+async def compress(
+    data: CompressRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+    svc: AIService = Depends(get_ai_service),
+) -> AIResult:
+    """Tighten the selection (cut filler, keep meaning + voice). HITL like
+    rewrite: returns an unapproved ``Revision(revision_type="compress")``."""
+    try:
+        revision, job, context_entities = await svc.compress(
+            db,
+            selected_text=data.selected_text,
+            guidance=data.guidance,
             scene_id=data.scene_id,
             model=data.model,
             temperature=data.temperature,
@@ -645,6 +826,126 @@ async def generate_chapter(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not enqueue chapter generation job (queue unavailable).",
+        )
+    return GenerationJobRead.model_validate(job)
+
+
+@router.post(
+    "/books/{book_id}/generate",
+    response_model=GenerationJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_book(
+    book_id: uuid.UUID,
+    data: BookGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> GenerationJobRead:
+    """Enqueue a BOOK-generation job: generate every selected chapter, chapter
+    by chapter, scene by scene, as ONE background job (V2: book-level chapter
+    automation — the sequential wrapper over the chapter machinery).
+
+    Returns the queued parent ``GenerationJob`` (status ``pending``)
+    immediately; poll ``GET /jobs/{id}`` for live book-level progress (the
+    worker flips it running → done, commits ``output_data`` after each scene /
+    chapter, and links every generated ``Revision(approved=False)`` to THIS
+    parent job — HITL preserved, nothing auto-overwrites).
+
+    Selection semantics: ``chapter_ids`` omitted/null → ALL the book's chapters
+    (story order). Per chapter the job auto-selects the SAFE default — scenes
+    that are EMPTY (no content) AND have at least one beat; chapters with no
+    such scene are recorded as skipped by the worker. Validation (all BEFORE
+    the job is created, so a bad request never leaves a dangling job):
+      - the book must exist (404);
+      - every ``chapter_id`` must belong to that book (422);
+      - at least ONE selected chapter must have a generatable scene (422).
+
+    If the queue cannot be reached, the job is marked failed (so it never
+    dangles as forever-pending) and a sanitized 502 is returned.
+    """
+    book = await db.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="A könyv nem található.")
+
+    # The book's chapters in story (order_index) order — the basis both for the
+    # membership check and for resolving the null-selection ("ALL").
+    book_chapter_ids = (
+        (
+            await db.execute(
+                select(Chapter.id)
+                .where(Chapter.book_id == book_id)
+                .order_by(Chapter.order_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if data.chapter_ids is None:
+        resolved_chapter_ids = list(book_chapter_ids)
+    else:
+        selected = set(data.chapter_ids)
+        if not selected.issubset(set(book_chapter_ids)):
+            raise HTTPException(
+                status_code=422,
+                detail="Egy vagy több fejezet nem ehhez a könyvhöz tartozik.",
+            )
+        # Resolved to STORY order regardless of the request's ordering.
+        resolved_chapter_ids = [c for c in book_chapter_ids if c in selected]
+
+    # At least one selected chapter must have a generatable scene: EMPTY
+    # content AND >=1 beat (the INNER join to Beat enforces the beat). The
+    # worker re-resolves per chapter and records empty chapters as skipped —
+    # this guard only rejects a run that could do NOTHING at all.
+    has_generatable = (
+        await db.execute(
+            select(Scene.id)
+            .join(Beat, Beat.scene_id == Scene.id)
+            .where(
+                Scene.chapter_id.in_(resolved_chapter_ids),
+                Scene.content.is_(None) | (Scene.content == ""),
+            )
+            .limit(1)
+        )
+    ).first()
+    if has_generatable is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Nincs generálható jelenet: egyik kijelölt fejezetben sincs "
+                "üres jelenet legalább egy beattel."
+            ),
+        )
+
+    input_data: dict = {
+        "book_id": str(book_id),
+        "chapter_ids": [str(c) for c in resolved_chapter_ids],
+        "run_continuity": data.run_continuity,
+    }
+    if data.model is not None:
+        input_data["model"] = data.model
+    if data.temperature is not None:
+        input_data["temperature"] = data.temperature
+    if data.max_tokens is not None:
+        input_data["max_tokens"] = data.max_tokens
+
+    job = await create_book_generation_job(
+        db, book_id=book_id, project_id=book.project_id, input_data=input_data
+    )
+    try:
+        enqueue_book_generation_job(job.id)
+    except Exception as e:
+        # The job row exists but could not be queued (e.g. Redis unreachable).
+        # Mark it failed so it is not stuck PENDING forever. The 502 detail is a
+        # FIXED message — the enqueue exception can carry the broker URL incl.
+        # credentials, and safe_error only bounds (does NOT strip secrets) — so
+        # we never echo it to the client. The cause is logged server-side.
+        logger.warning("Book-generate job enqueue failed: %s", safe_error(e))
+        job.status = JobStatus.FAILED
+        job.error_message = "A feladat sorba állítása nem sikerült."
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not enqueue book generation job (queue unavailable).",
         )
     return GenerationJobRead.model_validate(job)
 

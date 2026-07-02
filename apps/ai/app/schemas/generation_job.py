@@ -11,6 +11,7 @@ class GenerationJobRead(BaseModel):
     project_id: uuid.UUID | None
     scene_id: uuid.UUID | None
     chapter_id: uuid.UUID | None
+    book_id: uuid.UUID | None
     job_type: str
     status: str
     model_name: str | None

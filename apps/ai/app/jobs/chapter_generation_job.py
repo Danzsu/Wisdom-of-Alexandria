@@ -45,7 +45,175 @@ from app.services.crud_generation_job import get_job
 logger = logging.getLogger(__name__)
 
 # The job row was deleted out from under a running job (DELETE /jobs/{id}).
-_VANISHED_LOG = "Chapter-generate job %s vanished mid-run; stopping."
+_VANISHED_LOG = "Generation job %s vanished mid-run; stopping."
+
+# Outcomes of the shared per-scene loop (``_generate_scenes_for_chapter``).
+SCENES_COMPLETED = "completed"  # every scene was processed (done or failed)
+SCENES_CANCELLED = "cancelled"  # a cooperative cancel stopped the loop
+SCENES_VANISHED = "vanished"  # the job row was deleted mid-run — stop cleanly
+
+
+async def _generate_scenes_for_chapter(
+    db,
+    ai: AIService,
+    job,
+    *,
+    ordered_scene_ids: list,
+    run_continuity: bool,
+    model: str | None,
+    temperature: float | None,
+    max_tokens: int | None,
+    output_data: dict,
+    scene_entries: list[dict],
+    counts: dict,
+) -> tuple:
+    """The ONE per-scene generation loop, shared by the CHAPTER job and the
+    BOOK job (which runs it once per chapter) — the logic exists exactly once.
+
+    For each scene id (already resolved, story order): cooperative-cancel check,
+    fetch ordered beats, ``ai.generate_scene_revision`` linked to the PARENT
+    ``job`` (whatever its type), optional non-fatal continuity pass, per-scene
+    failure isolation (rollback + record + continue), and a progress commit
+    after EVERY scene (``job.output_data = dict(output_data)``).
+
+    The caller owns the ``output_data`` shape: per-scene entries are appended to
+    ``scene_entries`` (e.g. the chapter job's top-level ``scenes`` array, or one
+    book-chapter entry's ``scenes``) and ``counts["completed"]`` /
+    ``counts["failed"]`` are incremented (both may simply BE ``output_data``).
+
+    Returns ``(outcome, job, remaining_scene_ids)``:
+      - ``SCENES_COMPLETED``: every scene processed; ``remaining`` is empty.
+      - ``SCENES_CANCELLED``: a cancel landed; NOTHING was committed for it —
+        the caller records it (skipped scenes / cancelled flag) and commits.
+      - ``SCENES_VANISHED``: the job row was deleted mid-run; ``job`` is None.
+    ``job`` is the LIVE instance (a per-scene rollback re-fetches it) — callers
+    must use the returned instance afterwards, not their original reference.
+    """
+    job_id = job.id
+    for index, scene_id in enumerate(ordered_scene_ids):
+        # COOPERATIVE CANCELLATION: re-read the job row at the top of each
+        # scene (the cancel endpoint commits ``cancelled`` from another
+        # session). Stop cleanly: completed scenes' revisions are KEPT and the
+        # CANCELLED status is preserved (never overwritten by DONE).
+        try:
+            await db.refresh(job)
+        except Exception:  # noqa: BLE001 — row deleted mid-run → stop cleanly
+            logger.warning(_VANISHED_LOG, job_id)
+            return SCENES_VANISHED, None, list(ordered_scene_ids[index:])
+        if job.status == JobStatus.CANCELLED:
+            logger.info(
+                "Generation job %s cancelled; stopping before scene %s "
+                "(%d completed so far).",
+                job_id,
+                scene_id,
+                counts.get("completed", 0),
+            )
+            return SCENES_CANCELLED, job, list(ordered_scene_ids[index:])
+        beats = (
+            (
+                await db.execute(
+                    select(Beat.description)
+                    .where(Beat.scene_id == scene_id)
+                    .order_by(Beat.order_index)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        try:
+            revision, _entities = await ai.generate_scene_revision(
+                db,
+                scene=scene_id,
+                beats=list(beats),
+                job_id=job_id,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            entry: dict = {
+                "scene_id": str(scene_id),
+                "revision_id": str(revision.id),
+                "status": "done",
+                "warning_count": 0,
+            }
+            if run_continuity:
+                # Continuity-check the JUST-GENERATED revision text — NOT
+                # scene.content (HITL: the generated draft is an unapproved
+                # Revision and is NOT yet written to scene.content; the default
+                # selection is empty scenes, so reading scene.content would
+                # find nothing). analyze_continuity_text checks arbitrary
+                # content and creates NO child job (no orphan continuity jobs
+                # under the parent). The check is a NON-fatal enhancement — its
+                # failure must not fail the scene's already-committed revision,
+                # so it is guarded separately and records warning_count=0.
+                try:
+                    warnings, _ctx = await ai.analyze_continuity_text(
+                        db,
+                        scene_id=scene_id,
+                        content=revision.content,
+                        model=model,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                    entry["warning_count"] = len(warnings)
+                    entry["warnings"] = warnings
+                except Exception as cexc:  # noqa: BLE001 — continuity is optional
+                    # The scene's revision is ALREADY committed (save_revision
+                    # commits). A failed analyze_continuity_text leaves only its
+                    # own uncommitted RAG/read work to clear; rolling that back
+                    # CANNOT revert the committed revision or prior job
+                    # progress. Re-load the job because rollback expires the
+                    # current instance, then continue with warning_count=0.
+                    await db.rollback()
+                    job = await get_job(db, job_id)
+                    if job is None:
+                        logger.warning(_VANISHED_LOG, job_id)
+                        return (
+                            SCENES_VANISHED,
+                            None,
+                            list(ordered_scene_ids[index + 1 :]),
+                        )
+                    entry["warning_count"] = 0
+                    entry["continuity_error"] = safe_error(cexc)
+                    logger.warning(
+                        "Continuity check failed for scene %s in job %s: %s",
+                        scene_id,
+                        job_id,
+                        safe_error(cexc),
+                    )
+            counts["completed"] += 1
+            scene_entries.append(entry)
+        except Exception as exc:  # noqa: BLE001 — isolate, don't abort the loop
+            # This scene's partial transaction may be poisoned; roll it back so
+            # the progress commit below runs on a clean session, then re-load
+            # the job (rollback expires the prior instance) and re-apply our
+            # in-memory progress.
+            await db.rollback()
+            job = await get_job(db, job_id)
+            if job is None:
+                logger.warning(_VANISHED_LOG, job_id)
+                return SCENES_VANISHED, None, list(ordered_scene_ids[index + 1 :])
+            counts["failed"] += 1
+            scene_entries.append(
+                {
+                    "scene_id": str(scene_id),
+                    "status": "failed",
+                    "error": safe_error(exc),
+                }
+            )
+            logger.error(
+                "Generation job %s: scene %s failed: %s",
+                job_id,
+                scene_id,
+                safe_error(exc),
+            )
+
+        # Persist progress after EACH scene (live polling). Re-assign a fresh
+        # dict so SQLAlchemy detects the JSON mutation.
+        job.output_data = dict(output_data)
+        await db.commit()
+
+    return SCENES_COMPLETED, job, []
 
 
 def run_chapter_generation_job(job_id: str) -> None:
@@ -141,138 +309,37 @@ async def _run_chapter_generation_job(
         # Resolve scene ids (not ORM instances) so a per-scene rollback — which
         # expires every ORM object bound to this session — can never leave us
         # holding a stale instance whose attribute access triggers a lazy load
-        # outside the async greenlet context. Each iteration re-fetches its beats.
-        for index, scene_id in enumerate(ordered_scene_ids):
-            # COOPERATIVE CANCELLATION: re-read the job row at the top of each
-            # scene (the cancel endpoint commits ``cancelled`` from another
-            # session). Stop cleanly: completed scenes' revisions are KEPT, the
-            # remaining scenes are recorded as skipped, and the CANCELLED status
-            # is preserved (never overwritten by DONE).
-            try:
-                await db.refresh(job)
-            except Exception:  # noqa: BLE001 — row deleted mid-run → stop cleanly
-                logger.warning(
-                    _VANISHED_LOG, job_id
-                )
-                return
-            if job.status == JobStatus.CANCELLED:
-                output_data["cancelled"] = True
-                output_data["skipped"] = [str(s) for s in ordered_scene_ids[index:]]
-                job.output_data = dict(output_data)
-                await db.commit()
-                logger.info(
-                    "Chapter-generate job %s cancelled; stopping before scene %s "
-                    "(%d/%d scenes completed).",
-                    job_id,
-                    scene_id,
-                    output_data["completed"],
-                    output_data["total"],
-                )
-                return
-            beats = (
-                (
-                    await db.execute(
-                        select(Beat.description)
-                        .where(Beat.scene_id == scene_id)
-                        .order_by(Beat.order_index)
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            try:
-                revision, _entities = await ai.generate_scene_revision(
-                    db,
-                    scene=scene_id,
-                    beats=list(beats),
-                    job_id=job_id,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                entry: dict = {
-                    "scene_id": str(scene_id),
-                    "revision_id": str(revision.id),
-                    "status": "done",
-                    "warning_count": 0,
-                }
-                if run_continuity:
-                    # Continuity-check the JUST-GENERATED revision text — NOT
-                    # scene.content (HITL: the generated draft is an unapproved
-                    # Revision and is NOT yet written to scene.content; the default
-                    # selection is empty scenes, so reading scene.content would
-                    # find nothing). analyze_continuity_text checks arbitrary
-                    # content and creates NO child job (no orphan continuity jobs
-                    # under the parent). The check is a NON-fatal enhancement — its
-                    # failure must not fail the scene's already-committed revision,
-                    # so it is guarded separately and records warning_count=0.
-                    try:
-                        warnings, _ctx = await ai.analyze_continuity_text(
-                            db,
-                            scene_id=scene_id,
-                            content=revision.content,
-                            model=model,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                        )
-                        entry["warning_count"] = len(warnings)
-                        entry["warnings"] = warnings
-                    except Exception as cexc:  # noqa: BLE001 — continuity is optional
-                        # The scene's revision is ALREADY committed (save_revision
-                        # commits). A failed analyze_continuity_text leaves only its
-                        # own uncommitted RAG/read work to clear; rolling that back
-                        # CANNOT revert the committed revision or prior job
-                        # progress. Re-load the job because rollback expires the
-                        # current instance, then continue with warning_count=0.
-                        await db.rollback()
-                        job = await get_job(db, job_id)
-                        if job is None:
-                            logger.warning(
-                                _VANISHED_LOG,
-                                job_id,
-                            )
-                            return
-                        entry["warning_count"] = 0
-                        entry["continuity_error"] = safe_error(cexc)
-                        logger.warning(
-                            "Continuity check failed for scene %s in job %s: %s",
-                            scene_id,
-                            job_id,
-                            safe_error(cexc),
-                        )
-                output_data["completed"] += 1
-                output_data["scenes"].append(entry)
-            except Exception as exc:  # noqa: BLE001 — isolate, don't abort the loop
-                # This scene's partial transaction may be poisoned; roll it back so
-                # the progress commit below runs on a clean session, then re-load
-                # the job (rollback expires the prior instance) and re-apply our
-                # in-memory progress.
-                await db.rollback()
-                job = await get_job(db, job_id)
-                if job is None:
-                    logger.warning(
-                        _VANISHED_LOG, job_id
-                    )
-                    return
-                output_data["failed"] += 1
-                output_data["scenes"].append(
-                    {
-                        "scene_id": str(scene_id),
-                        "status": "failed",
-                        "error": safe_error(exc),
-                    }
-                )
-                logger.error(
-                    "Chapter-generate job %s: scene %s failed: %s",
-                    job_id,
-                    scene_id,
-                    safe_error(exc),
-                )
-
-            # Persist progress after EACH scene (live polling). Re-assign a fresh
-            # dict so SQLAlchemy detects the JSON mutation.
+        # outside the async greenlet context. The shared loop re-fetches each
+        # scene's beats per iteration.
+        outcome, job, remaining = await _generate_scenes_for_chapter(
+            db,
+            ai,
+            job,
+            ordered_scene_ids=list(ordered_scene_ids),
+            run_continuity=run_continuity,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            output_data=output_data,
+            scene_entries=output_data["scenes"],
+            counts=output_data,
+        )
+        if outcome == SCENES_VANISHED:
+            return
+        if outcome == SCENES_CANCELLED:
+            # Completed scenes' revisions are KEPT; the remaining scenes are
+            # recorded as skipped and the CANCELLED status is preserved.
+            output_data["cancelled"] = True
+            output_data["skipped"] = [str(s) for s in remaining]
             job.output_data = dict(output_data)
             await db.commit()
+            logger.info(
+                "Chapter-generate job %s cancelled (%d/%d scenes completed).",
+                job_id,
+                output_data["completed"],
+                output_data["total"],
+            )
+            return
 
         # A cancel that landed DURING the last scene must not be stomped by the
         # DONE transition — re-read the persisted status one final time.

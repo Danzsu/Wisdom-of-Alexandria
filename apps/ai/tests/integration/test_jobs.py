@@ -249,6 +249,78 @@ async def test_list_jobs_filter_by_book_id_via_chapter(
     assert str(job_b.id) not in ids
 
 
+async def test_list_jobs_filter_by_book_id_via_book_column(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """A book-level job (``book_generate``) carries book_id DIRECTLY on the row
+    (no scene, no chapter) — the book-scoped listing must include it via the
+    ``GenerationJob.book_id`` column branch of the OR filter."""
+    from alexandria_core.models.generation_job import GenerationJob
+
+    book_a, _chapter_a, _scene_a = await _seed_book(db_session, "G könyv")
+    book_b, _chapter_b, _scene_b = await _seed_book(db_session, "H könyv")
+
+    job_a = GenerationJob(
+        job_type="book_generate", status="running", book_id=book_a.id
+    )
+    job_b = GenerationJob(
+        job_type="book_generate", status="running", book_id=book_b.id
+    )
+    db_session.add(job_a)
+    db_session.add(job_b)
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/v1/jobs?book_id={book_a.id}", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    ids = [j["id"] for j in resp.json()]
+    assert str(job_a.id) in ids
+    # The OTHER book's book-level job must never leak into the scoped result.
+    assert str(job_b.id) not in ids
+
+    # The read schema exposes the new column.
+    payload = next(j for j in resp.json() if j["id"] == str(job_a.id))
+    assert payload["book_id"] == str(book_a.id)
+
+
+async def test_list_jobs_book_id_or_combines_all_three_linkages(
+    client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+):
+    """One book-scoped query returns scene-linked, chapter-linked AND
+    book-column jobs together (the three OR branches), excluding outsiders."""
+    from alexandria_core.models.generation_job import GenerationJob
+
+    book_a, chapter_a, scene_a = await _seed_book(db_session, "I könyv")
+    book_b, _chapter_b, _scene_b = await _seed_book(db_session, "J könyv")
+
+    job_scene = GenerationJob(job_type="rewrite", status="done", scene_id=scene_a.id)
+    job_chapter = GenerationJob(
+        job_type="chapter_generate", status="done", chapter_id=chapter_a.id
+    )
+    job_book = GenerationJob(
+        job_type="book_generate", status="pending", book_id=book_a.id
+    )
+    job_other_book = GenerationJob(
+        job_type="book_generate", status="pending", book_id=book_b.id
+    )
+    job_orphan = GenerationJob(job_type="rewrite", status="done")
+    for j in (job_scene, job_chapter, job_book, job_other_book, job_orphan):
+        db_session.add(j)
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/v1/jobs?book_id={book_a.id}", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    ids = [j["id"] for j in resp.json()]
+    assert str(job_scene.id) in ids
+    assert str(job_chapter.id) in ids
+    assert str(job_book.id) in ids
+    assert str(job_other_book.id) not in ids
+    assert str(job_orphan.id) not in ids
+
+
 async def test_list_jobs_book_id_excludes_orphan_jobs(
     client: AsyncClient, auth_headers: dict, db_session: AsyncSession
 ):

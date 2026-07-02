@@ -57,6 +57,37 @@ async def create_chapter_generation_job(
     return job
 
 
+async def create_book_generation_job(
+    db: AsyncSession,
+    *,
+    book_id: uuid.UUID,
+    project_id: uuid.UUID,
+    input_data: dict,
+) -> GenerationJob:
+    """Create a PENDING book-generate job (the PARENT of every scene's revision
+    across ALL the selected chapters).
+
+    Created by ``POST /ai/books/{book_id}/generate`` and enqueued for the RQ
+    worker, which flips it running → done/failed and writes book-level progress
+    into ``output_data``. The job carries ``book_id`` on the row (so the
+    book-scoped jobs listing includes it) plus ``project_id``; ``input_data``
+    additionally carries the RESOLVED ``chapter_ids`` (story order). Committed +
+    refreshed so the caller gets a server-populated row (id, timestamps) and the
+    worker can immediately load it by id.
+    """
+    job = GenerationJob(
+        book_id=book_id,
+        project_id=project_id,
+        job_type=JobType.BOOK_GENERATE,
+        status=JobStatus.PENDING,
+        input_data=input_data,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
 async def list_jobs(
     db: AsyncSession,
     scene_id: uuid.UUID | None = None,
@@ -70,10 +101,11 @@ async def list_jobs(
       - ``scene_id`` / ``status``: direct column matches.
       - ``book_id``: a job belongs to a book when its ``scene_id``'s scene lives
         in a chapter of that book, OR its ``chapter_id`` is a chapter of that
-        book. ``chapter_id`` is a plain column (no FK), so both paths are joined
-        manually against ``Chapter`` / ``Scene`` (which the AI service shares via
-        ``alexandria_core``). Jobs with neither a scene nor a chapter in the book
-        are correctly excluded from a book-scoped query.
+        book, OR its own ``book_id`` column matches (book-level jobs, e.g.
+        ``book_generate``). ``chapter_id`` is a plain column (no FK), so the
+        first two paths are joined manually against ``Chapter`` / ``Scene``
+        (which the AI service shares via ``alexandria_core``). Jobs with no
+        linkage into the book are correctly excluded from a book-scoped query.
       - ``limit``: caps the number of rows returned (bounded by the endpoint).
     """
     query = select(GenerationJob)
@@ -94,6 +126,7 @@ async def list_jobs(
         query = query.where(
             GenerationJob.scene_id.in_(scene_ids_in_book)
             | GenerationJob.chapter_id.in_(chapter_ids_in_book)
+            | (GenerationJob.book_id == book_id)
         )
     query = query.order_by(GenerationJob.created_at.desc()).limit(limit)
     result = await db.execute(query)

@@ -111,6 +111,79 @@ def _parse_continuity(content: str) -> list[dict[str, Any]] | None:
     # Tier 3 is the CALLER's responsibility (degrade to a visible warning).
     return None
 
+# Default number of brainstorm ideas when the caller does not ask for a count.
+BRAINSTORM_DEFAULT_COUNT = 5
+
+# Bullet / numbering markers stripped from the front of a line in the tier-3
+# brainstorm parse fallback ("- idea", "* idea", "3. idea", "4) idea", "• idea").
+_IDEA_LINE_MARKER_RE = re.compile(r"^\s*(?:[-*•]+|\d+[.)])\s*")
+
+
+def _coerce_idea(raw: Any) -> str | None:
+    """Coerce one raw list item into an idea string, or drop it (``None``).
+
+    Strings are trimmed (empty → dropped). Objects carrying an ``idea``/``text``
+    string (a common model shape) yield that string. Anything else is junk and
+    is dropped — a number or ``null`` must never surface as an "idea".
+    """
+    if isinstance(raw, str):
+        return raw.strip() or None
+    if isinstance(raw, dict):
+        for key in ("idea", "text"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _parse_ideas(content: str) -> list[str] | None:
+    """Parse a brainstorm LLM response into a list of idea strings.
+
+    Robust, tiered parse (mirrors :func:`_parse_continuity`):
+      1. ``json.loads`` the whole response; accept a list, or a dict wrapping the
+         list under ``"ideas"``.
+      2. If that fails, extract the first ``[...]`` block via the lenient regex
+         and ``json.loads`` that.
+      3. Plain-line fallback: split on newlines, strip bullet/number markers,
+         keep non-empty lines — a non-JSON but line-per-idea answer still parses.
+
+    Returns ``None`` when the response is genuinely unusable (whitespace-only,
+    or every parsed item was junk) — the CALLER then degrades to a single
+    visible fallback idea (+ a logged WARNING), mirroring the continuity tiers.
+    """
+
+    def _validate_list(data: Any) -> list[str] | None:
+        if isinstance(data, dict):
+            data = data.get("ideas")
+        if not isinstance(data, list):
+            return None
+        out = [idea for idea in (_coerce_idea(item) for item in data) if idea]
+        return out or None
+
+    # Tier 1: the whole response is JSON.
+    try:
+        parsed = _validate_list(json.loads(content))
+        if parsed is not None:
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Tier 2: extract the first [...] block and parse that.
+    match = _JSON_ARRAY_RE.search(content)
+    if match is not None:
+        try:
+            parsed = _validate_list(json.loads(match.group(0)))
+            if parsed is not None:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Tier 3: plain-line fallback (bullet/number markers stripped).
+    lines = [_IDEA_LINE_MARKER_RE.sub("", line).strip() for line in content.splitlines()]
+    ideas = [line for line in lines if line]
+    return ideas or None
+
+
 # How many RAG snippets to inject per generation.
 RAG_TOP_K = 5
 # Bound the per-generation sync so a flaky/huge index can't stall a write.
@@ -437,6 +510,207 @@ class AIService:
             await db.rollback()
             await self.svc.fail_job(db, job, error_message=safe_error(e))
             raise
+
+    async def _transform_selection(
+        self,
+        db: AsyncSession,
+        *,
+        action: str,
+        selected_text: str,
+        guidance: str = "",
+        scene_id: uuid.UUID | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[Revision, GenerationJob, list[dict[str, str]]]:
+        """Shared HITL selection-transform core for ``expand`` / ``compress``.
+
+        Mirrors ``rewrite`` exactly: progression-aware scene-scoped RAG → the
+        ``action``-named template → ``ModelRouter.complete`` → an unapproved
+        ``Revision(revision_type=action)`` linked to a ``GenerationJob(job_type=
+        action)``. ``action`` doubles as the template name, the job_type and the
+        revision_type so producer + consumer can never drift apart.
+        """
+        # RAG context resolved BEFORE the job so a retrieval failure (which only
+        # degrades to no-context) never leaves a dangling RUNNING job.
+        context, retrieved = await self._rag_context(
+            db, scene_id=scene_id, query=f"{selected_text}\n{guidance}"
+        )
+        job = await self.svc.create_job(
+            db,
+            job_type=action,
+            scene_id=scene_id,
+            model_name=model,
+            prompt_version=PROMPT_VERSION,
+            input_data={"selected_text": selected_text, "guidance": guidance},
+        )
+        try:
+            system = self.loader.load_system(action)
+            user = self.loader.load_user(
+                action,
+                selected_text=selected_text,
+                guidance=guidance,
+                context=context,
+            )
+            response = await self.router.complete(
+                messages=self.router.build_messages(system, user),
+                model=model,
+                db=db,
+                **_gen_overrides(temperature, max_tokens),
+            )
+            revision = await self.svc.save_revision(
+                db,
+                content=response.content,
+                revision_type=action,
+                scene_id=scene_id,
+                job_id=job.id,
+                model_name=response.model,
+                prompt_version=PROMPT_VERSION,
+            )
+            await self.svc.complete_job(db, job, output_data={"revision_id": str(revision.id)})
+            return revision, job, _context_entities(retrieved)
+        except Exception as e:
+            # Roll back any partial / failed transaction so fail_job's commit
+            # runs on a clean session (avoids PendingRollbackError masking the
+            # original error). Then persist a sanitized, bounded error message.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
+            raise
+
+    async def expand(
+        self,
+        db: AsyncSession,
+        *,
+        selected_text: str,
+        guidance: str = "",
+        scene_id: uuid.UUID | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[Revision, GenerationJob, list[dict[str, str]]]:
+        """Expand a selection (sensory detail / interiority, voice preserved).
+
+        HITL like ``rewrite``: returns an unapproved ``Revision(revision_type=
+        "expand")`` linked to a ``GenerationJob(job_type="expand")`` — never
+        auto-applies.
+        """
+        return await self._transform_selection(
+            db,
+            action="expand",
+            selected_text=selected_text,
+            guidance=guidance,
+            scene_id=scene_id,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    async def compress(
+        self,
+        db: AsyncSession,
+        *,
+        selected_text: str,
+        guidance: str = "",
+        scene_id: uuid.UUID | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[Revision, GenerationJob, list[dict[str, str]]]:
+        """Tighten a selection (cut filler, keep meaning + voice).
+
+        HITL like ``rewrite``: returns an unapproved ``Revision(revision_type=
+        "compress")`` linked to a ``GenerationJob(job_type="compress")``.
+        """
+        return await self._transform_selection(
+            db,
+            action="compress",
+            selected_text=selected_text,
+            guidance=guidance,
+            scene_id=scene_id,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    async def brainstorm(
+        self,
+        db: AsyncSession,
+        *,
+        topic: str,
+        scene_id: uuid.UUID | None = None,
+        count: int = BRAINSTORM_DEFAULT_COUNT,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[list[str], GenerationJob | None, list[dict[str, str]]]:
+        """Brainstorm story ideas grounded on the Codex/manuscript (ötletelés).
+
+        ANALYSIS-like output, not manuscript text: creates a ``GenerationJob(
+        job_type="brainstorm")`` for provenance and returns ``(ideas, job,
+        context_entities)`` — NEVER a Revision (there is nothing to approve or
+        insert; the writer picks an idea and writes it themselves).
+
+        Flow mirrors ``research``:
+          1. Empty/whitespace topic → empty result, no LLM call, no job.
+          2. Scene-scoped RAG (when ``scene_id`` is given). RAG unconfigured →
+             the model still brainstorms from the topic alone (never a 500).
+          3. The response is parsed ROBUSTLY (``_parse_ideas``: json →
+             lenient-regex → line-split). An unusable response DEGRADES to a
+             single visible fallback idea (+ a logged WARNING) — never a crash,
+             never a silently-empty list. The list is truncated to ``count``.
+          4. A real LLM/infra error fails the job + re-raises (stays loud).
+        """
+        if not topic.strip():
+            return [], None, []
+        context, retrieved = await self._rag_context(db, scene_id=scene_id, query=topic)
+        job = await self.svc.create_job(
+            db,
+            job_type="brainstorm",
+            scene_id=scene_id,
+            model_name=model,
+            prompt_version=PROMPT_VERSION,
+            input_data={"topic": topic[:500], "count": count},
+        )
+        try:
+            system = self.loader.load_system("brainstorm")
+            user = self.loader.load_user(
+                "brainstorm", topic=topic, count=str(count), context=context
+            )
+            response = await self.router.complete(
+                messages=self.router.build_messages(system, user),
+                model=model,
+                db=db,
+                **_gen_overrides(temperature, max_tokens),
+            )
+        except Exception as e:
+            # Real LLM/infra error — roll back for a clean fail_job commit, then
+            # re-raise. NOT masked by the parse fallback below: only an
+            # unusable *response* degrades; an infra failure stays loud.
+            await db.rollback()
+            await self.svc.fail_job(db, job, error_message=safe_error(e))
+            raise
+
+        ideas = _parse_ideas(response.content)
+        if not ideas:
+            # Tiered graceful degradation: the model answered, but the output
+            # was unusable as an idea list. Surface ONE visible fallback idea
+            # (the user sees the call ran but produced nothing usable) and LOG
+            # it — not a crash, not a silently-swallowed empty list.
+            logger.warning(
+                "Brainstorm output could not be parsed for scene %s: %s",
+                scene_id,
+                safe_error(response.content),
+            )
+            ideas = [
+                "Az ötletelés eredménye nem volt feldolgozható. "
+                "Próbáld újra, vagy fogalmazd át a témát."
+            ]
+        ideas = ideas[:count]
+        # A parse-degradation is still a COMPLETED brainstorm (the call
+        # succeeded). Ideas live in output_data — the job IS the provenance
+        # record, there is no Revision.
+        await self.svc.complete_job(db, job, output_data={"ideas": ideas})
+        return ideas, job, _context_entities(retrieved)
 
     async def describe(
         self,

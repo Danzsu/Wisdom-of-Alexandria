@@ -15,7 +15,7 @@ from alexandria_core.core.config import settings
 from alexandria_core.models.codex_entry import CodexEntry
 from alexandria_core.models.project import Project
 
-from app.services.embedding_service import EmbeddingService, EmbeddingDimError
+from app.services.embedding_service import EmbeddingDimError, EmbeddingService
 
 # Reuse the project + wrong/right-dim mock router helpers from the service tests.
 from tests.integration.test_embedding_service import _mock_router

@@ -62,7 +62,9 @@ _COLUMNS_ADDED_LATER = {
     # aliases/role -> a1c4d7e9f2b3 ; series_id -> c3a1b2c3d4e5
     "codex_entries": {"aliases", "role", "series_id"},
     "books": {"series_id", "author"},  # series_id -> c3a1b2c3d4e5; author -> a7b3c1d2e4f5
-    "generation_jobs": {"project_id"},  # -> e5a1b2c3d4f6 (async RAG index job)
+    # project_id -> e5a1b2c3d4f6 (async RAG index job);
+    # book_id -> e9f0a1b2c3d4 (book-level job visibility)
+    "generation_jobs": {"project_id", "book_id"},
     "scenes": {"location_id"},  # -> d7e8f9a0b1c2 (scene location)
 }
 

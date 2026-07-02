@@ -29,6 +29,11 @@ class JobType:
     INDEX = "index"
     IMAGE = "image"
     CHAPTER_GENERATE = "chapter_generate"
+    # Book-level chapter automation: a sequential wrapper over the chapter
+    # machinery — one PARENT job whose input_data carries the book + the
+    # resolved chapter selection. The job carries ``book_id`` directly (plus
+    # ``project_id``) so book-scoped job listings can include it.
+    BOOK_GENERATE = "book_generate"
 
 
 class GenerationJob(UUIDPrimaryKey, Timestamps, Base):
@@ -52,6 +57,12 @@ class GenerationJob(UUIDPrimaryKey, Timestamps, Base):
     )
     chapter_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True
+    )
+    # Book scope for book-level jobs (``book_generate``). Mirrors chapter_id:
+    # a plain column (no FK — the AI service shares the table but must not
+    # cascade-manage books), indexed for the book-scoped jobs listing.
+    book_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True, index=True
     )
     job_type: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(

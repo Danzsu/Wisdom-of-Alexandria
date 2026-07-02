@@ -56,6 +56,15 @@ def _columns(db_path: str, table: str) -> set[str]:
     return {r[1] for r in rows}
 
 
+def _indexes(db_path: str, table: str) -> set[str]:
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(f"PRAGMA index_list({table})").fetchall()
+    finally:
+        conn.close()
+    return {r[1] for r in rows}
+
+
 def test_scene_location_id_migration_roundtrip():
     """The scenes.location_id revision adds the column (+ index) on upgrade and
     removes it on downgrade — verified against a throwaway SQLite DB by walking
@@ -81,6 +90,42 @@ def test_scene_location_id_migration_roundtrip():
         # And re-upgrading restores it (idempotent forward path).
         command.upgrade(cfg, "head")
         assert "location_id" in _columns(db_path, "scenes")
+    finally:
+        settings.database_url = prev_url
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+
+def test_generation_job_book_id_migration_roundtrip():
+    """The generation_jobs.book_id revision adds the column (+ index) on
+    upgrade and removes it on downgrade — verified against a throwaway SQLite
+    DB by walking head → one step below the owning revision → head again."""
+    from alexandria_core.core.config import settings
+
+    prev_url = settings.database_url
+    fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    os.remove(db_path)
+    try:
+        settings.database_url = f"sqlite+aiosqlite:///{db_path}"
+        cfg = _alembic_config(db_path)
+
+        command.upgrade(cfg, "head")
+        assert "book_id" in _columns(db_path, "generation_jobs")
+        assert "ix_generation_jobs_book_id" in _indexes(db_path, "generation_jobs")
+
+        # Step below the owning revision: the column (and its index) must go.
+        command.downgrade(cfg, "d7e8f9a0b1c2")
+        assert "generation_jobs" in _table_names(db_path)
+        assert "book_id" not in _columns(db_path, "generation_jobs")
+        assert "ix_generation_jobs_book_id" not in _indexes(
+            db_path, "generation_jobs"
+        )
+
+        # And re-upgrading restores it (idempotent forward path).
+        command.upgrade(cfg, "head")
+        assert "book_id" in _columns(db_path, "generation_jobs")
+        assert "ix_generation_jobs_book_id" in _indexes(db_path, "generation_jobs")
     finally:
         settings.database_url = prev_url
         if os.path.exists(db_path):

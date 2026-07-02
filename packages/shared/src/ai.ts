@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+    "/api/v1/ai/books/{book_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Book
+         * @description Enqueue a BOOK-generation job: generate every selected chapter, chapter
+         *     by chapter, scene by scene, as ONE background job (V2: book-level chapter
+         *     automation — the sequential wrapper over the chapter machinery).
+         *
+         *     Returns the queued parent ``GenerationJob`` (status ``pending``)
+         *     immediately; poll ``GET /jobs/{id}`` for live book-level progress (the
+         *     worker flips it running → done, commits ``output_data`` after each scene /
+         *     chapter, and links every generated ``Revision(approved=False)`` to THIS
+         *     parent job — HITL preserved, nothing auto-overwrites).
+         *
+         *     Selection semantics: ``chapter_ids`` omitted/null → ALL the book's chapters
+         *     (story order). Per chapter the job auto-selects the SAFE default — scenes
+         *     that are EMPTY (no content) AND have at least one beat; chapters with no
+         *     such scene are recorded as skipped by the worker. Validation (all BEFORE
+         *     the job is created, so a bad request never leaves a dangling job):
+         *       - the book must exist (404);
+         *       - every ``chapter_id`` must belong to that book (422);
+         *       - at least ONE selected chapter must have a generatable scene (422).
+         *
+         *     If the queue cannot be reached, the job is marked failed (so it never
+         *     dangles as forever-pending) and a sanitized 502 is returned.
+         */
+        post: operations["generate_book_api_v1_ai_books__book_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/brainstorm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Brainstorm
+         * @description Brainstorm story ideas (ötletelés) for a topic, grounded via RAG when a
+         *     ``scene_id`` gives a book/scene context. Ideas are NOT manuscript text —
+         *     there is NO revision; the ``brainstorm`` GenerationJob is the provenance.
+         *
+         *     Degradation contract (no 500 for either case):
+         *     - RAG/embeddings unconfigured → the model still brainstorms from the topic
+         *       alone (empty ``context_entities``).
+         *     - an unusable model response → a single visible fallback idea, never a
+         *       crash.
+         */
+        post: operations["brainstorm_api_v1_ai_brainstorm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/chapters/{chapter_id}/generate": {
         parameters: {
             query?: never;
@@ -53,6 +121,27 @@ export interface paths {
         put?: never;
         /** Summarize Chapter */
         post: operations["summarize_chapter_api_v1_ai_chapters__chapter_id__summarize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/compress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compress
+         * @description Tighten the selection (cut filler, keep meaning + voice). HITL like
+         *     rewrite: returns an unapproved ``Revision(revision_type="compress")``.
+         */
+        post: operations["compress_api_v1_ai_compress_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -166,6 +255,27 @@ export interface paths {
         put?: never;
         /** Describe */
         post: operations["describe_api_v1_ai_describe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/expand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Expand
+         * @description Expand the selection (sensory detail / interiority, voice preserved).
+         *     HITL like rewrite: returns an unapproved ``Revision(revision_type="expand")``.
+         */
+        post: operations["expand_api_v1_ai_expand_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -520,9 +630,19 @@ export interface paths {
          *
          *     PENDING → best-effort dequeue of the RQ job (its id equals this uuid — see
          *     ``job_queue``) and the row flips to ``cancelled``. RUNNING → cooperative:
-         *     only the flag is set; the chapter-generation loop checks it between scenes
-         *     and stops cleanly, KEEPING the already-generated revisions. A job already in
-         *     a terminal state (done/failed/cancelled) → 409.
+         *     only the flag is set; the worker checks it and stops cleanly. A job already
+         *     in a terminal state (done/failed/cancelled) → 409.
+         *
+         *     Cooperative-cancel semantics per job type (ALL types check at ENTRY: an
+         *     already-cancelled row is never started, never flipped to RUNNING):
+         *       - ``chapter_generate``: additionally checked BETWEEN scenes — the loop
+         *         stops before the next scene, KEEPING the already-generated revisions; a
+         *         cancel landing during the last scene is still honoured (the final DONE
+         *         write re-checks).
+         *       - ``index`` / ``image``: the work phase is one monolithic call, so mid-work
+         *         interruption is not possible — instead the worker re-checks BEFORE the
+         *         terminal DONE/FAILED write (a mid-work cancel is never stomped by
+         *         DONE/FAILED).
          *
          *     NOTE: ``DELETE /jobs/{id}`` only removes the DB row and never touches RQ —
          *     this endpoint is the one that actually stops work.
@@ -691,6 +811,74 @@ export interface components {
             revision: components["schemas"]["RevisionRead"];
         };
         /**
+         * BookGenerateRequest
+         * @description Request to generate ALL (selected) chapters of a book as one background
+         *     job (V2: book-level chapter automation).
+         *
+         *     ``chapter_ids`` is an OPTIONAL subset of the book's chapters; ``None`` (or
+         *     omitted) selects ALL chapters. An explicit empty list is rejected — the
+         *     "everything" selection is expressed by omission, not ``[]``. Per chapter the
+         *     job auto-selects the SAFE default scenes (EMPTY content + at least one
+         *     beat); the fine-grained per-scene opt-in stays a chapter-level feature.
+         *     ``run_continuity`` / ``model`` / ``temperature`` / ``max_tokens`` mirror the
+         *     chapter-generate request.
+         */
+        BookGenerateRequest: {
+            /** Chapter Ids */
+            chapter_ids?: string[] | null;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Run Continuity
+             * @default false
+             */
+            run_continuity: boolean;
+            /** Temperature */
+            temperature?: number | null;
+        };
+        /**
+         * BrainstormRequest
+         * @description Sudowrite-style ötletelés: brainstorm story ideas for a topic/question,
+         *     grounded via scene-scoped RAG when a ``scene_id`` is given.
+         */
+        BrainstormRequest: {
+            /**
+             * Count
+             * @default 5
+             */
+            count: number;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Scene Id */
+            scene_id?: string | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Topic */
+            topic: string;
+        };
+        /**
+         * BrainstormResult
+         * @description Brainstorm response. NO revision — ideas are not manuscript text.
+         *
+         *     ``ideas`` is the parsed idea list (at most the requested ``count``; a single
+         *     fallback idea when the model's output was unusable). ``job`` is the
+         *     ``brainstorm`` GenerationJob provenance record (``null`` only for the
+         *     whitespace-topic short-circuit). ``context_entities`` lists the Codex/
+         *     manuscript entries RAG grounded the ideas on (empty when RAG was skipped /
+         *     unconfigured).
+         */
+        BrainstormResult: {
+            /** Context Entities */
+            context_entities?: components["schemas"]["ContextEntity"][];
+            /** Ideas */
+            ideas?: string[];
+            job?: components["schemas"]["GenerationJobRead"] | null;
+        };
+        /**
          * ChapterGenerateRequest
          * @description Request to generate a chapter scene-by-scene as one background job (T2).
          *
@@ -712,6 +900,27 @@ export interface components {
             run_continuity: boolean;
             /** Scene Ids */
             scene_ids: string[];
+            /** Temperature */
+            temperature?: number | null;
+        };
+        /**
+         * CompressRequest
+         * @description Tighten a selection: cut filler, keep meaning + voice.
+         */
+        CompressRequest: {
+            /**
+             * Guidance
+             * @default
+             */
+            guidance: string;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Scene Id */
+            scene_id?: string | null;
+            /** Selected Text */
+            selected_text: string;
             /** Temperature */
             temperature?: number | null;
         };
@@ -818,6 +1027,27 @@ export interface components {
             /** Temperature */
             temperature?: number | null;
         };
+        /**
+         * ExpandRequest
+         * @description Expand a selection: add sensory detail / interiority, keep the voice.
+         */
+        ExpandRequest: {
+            /**
+             * Guidance
+             * @default
+             */
+            guidance: string;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Scene Id */
+            scene_id?: string | null;
+            /** Selected Text */
+            selected_text: string;
+            /** Temperature */
+            temperature?: number | null;
+        };
         /** GenerateSceneRequest */
         GenerateSceneRequest: {
             /** Beats */
@@ -848,6 +1078,8 @@ export interface components {
         };
         /** GenerationJobRead */
         GenerationJobRead: {
+            /** Book Id */
+            book_id: string | null;
             /** Chapter Id */
             chapter_id: string | null;
             /**
@@ -1309,6 +1541,74 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    generate_book_api_v1_ai_books__book_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    brainstorm_api_v1_ai_brainstorm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrainstormRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainstormResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_chapter_api_v1_ai_chapters__chapter_id__generate_post: {
         parameters: {
             query?: never;
@@ -1356,6 +1656,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SummarizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compress_api_v1_ai_compress_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompressRequest"];
             };
         };
         responses: {
@@ -1505,6 +1838,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AIDescribeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expand_api_v1_ai_expand_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpandRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIResult"];
                 };
             };
             /** @description Validation Error */

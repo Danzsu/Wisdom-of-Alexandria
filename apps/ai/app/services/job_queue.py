@@ -28,6 +28,7 @@ IMAGE_JOB_PATH = "app.jobs.image_job.run_image_job"
 CHAPTER_GENERATION_JOB_PATH = (
     "app.jobs.chapter_generation_job.run_chapter_generation_job"
 )
+BOOK_GENERATION_JOB_PATH = "app.jobs.book_generation_job.run_book_generation_job"
 
 
 def get_queue() -> Queue:
@@ -59,6 +60,17 @@ def enqueue_chapter_generation_job(job_id: uuid.UUID) -> None:
     (``cancel_rq_job``) without storing a separate linkage.
     """
     get_queue().enqueue(CHAPTER_GENERATION_JOB_PATH, str(job_id), job_id=str(job_id))
+
+
+def enqueue_book_generation_job(job_id: uuid.UUID) -> None:
+    """Enqueue the async BOOK-generation job for ``job_id`` onto the AI queue.
+
+    The only argument is the parent GenerationJob id, passed as a ``str`` so it
+    survives RQ's serialization; the worker re-parses it to a UUID. The RQ job id
+    is set to the SAME uuid string so a queued job is addressable
+    (``cancel_rq_job``) without storing a separate linkage.
+    """
+    get_queue().enqueue(BOOK_GENERATION_JOB_PATH, str(job_id), job_id=str(job_id))
 
 
 def enqueue_image_job(job_id: uuid.UUID) -> None:

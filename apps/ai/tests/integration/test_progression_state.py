@@ -15,7 +15,7 @@ PostgreSQL-only SQL), so this stays on the default tier.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from alexandria_core.models.book import Book
@@ -383,7 +383,7 @@ async def test_same_position_tiebreak_later_created_wins(db_session):
     s0 = await _add_scene(db_session, ch, 0)  # target S
     char = await _add_character(db_session, project)
 
-    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
     # Insert the EARLIER one second in row order to prove ordering is by
     # created_at, not insertion / PK order.
     later = CodexProgression(
