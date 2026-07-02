@@ -775,6 +775,29 @@ select:focus-visible,
   box-shadow: 0 0 0 2px var(--accent) !important;
 }
 
+/* Plan Board render scalability: an off-screen scene card skips layout + paint
+   (`content-visibility: auto`) while KEEPING its DOM node and geometry, so a
+   30-chapter x 100-scene board stays responsive without windowing — dnd-kit
+   sortables, keyboard focus, find-in-page and the a11y tree all keep working
+   (skipped subtrees stay searchable/focusable, and a focused or dragged card is
+   on-screen by definition, hence always rendered).
+   - `contain-intrinsic-block-size: auto <estimate>` reserves an estimated
+     height for never-rendered cards (scrollbar accuracy), then remembers the
+     REAL height once rendered (`auto` = last-remembered size), so scrolling
+     back never shifts. The estimate arrives per density via `--woa-cv-block`.
+   - `content-visibility: auto` implies `contain: paint`, which clips
+     descendant ink overflow to this element's bounds. The card's own
+     `--shadow-card` (2px) and the `woa-scene-over` drag-over top edge (3px
+     above the card) extend past the card box, so this class carries a 4px
+     padding + negative-margin bleed: the clip rect grows 4px past the card
+     while the net layout (flex gap spacing, card width) is unchanged. */
+.woa-card-cv {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--woa-cv-block, 112px);
+  padding: 4px;
+  margin: -4px;
+}
+
 /* Skeleton shimmer: a moving gradient across a muted surface. */
 .woa-skel {
   background: linear-gradient(

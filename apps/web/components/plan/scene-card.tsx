@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { motion } from "framer-motion";
 import { GripVertical, Info, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
@@ -20,6 +20,18 @@ const DENSITY_PADDING: Record<PlanDensity, string> = {
   default: "p-3",
   compact: "p-[9px_11px]",
   slim: "p-[7px_11px]",
+};
+
+/**
+ * Estimated card block-size per density for the `woa-card-cv` placeholder
+ * (`contain-intrinsic-block-size`). Only never-rendered off-screen cards use
+ * the estimate (scrollbar sizing); once a card has rendered, the browser
+ * remembers its REAL height (the `auto` keyword), so a rough figure is fine.
+ */
+const CV_BLOCK_ESTIMATE: Record<PlanDensity, string> = {
+  default: "112px",
+  compact: "72px",
+  slim: "40px",
 };
 
 export interface SceneCardProps {
@@ -89,8 +101,19 @@ export function SceneCard({
         and break dragging). No FM `layout` here for the same reason. The mount
         animation is suppressed (`initial={false}`) while dragging so a reorder
         never replays the entrance. Reduced motion → zero delay / instant.
+
+        The wrapper also carries `woa-card-cv` (content-visibility: auto —
+        render scalability, see globals.css): off-screen cards skip layout +
+        paint while keeping their DOM, so dnd-kit's measurements and the drag
+        transform on the INNER node are unaffected. It lives here (not on the
+        dnd node) so the containment never wraps the element dnd-kit measures
+        and transforms.
       */}
       <motion.div
+      className="woa-card-cv"
+      style={
+        { "--woa-cv-block": CV_BLOCK_ESTIMATE[density] } as CSSProperties
+      }
       initial={
         isDragging ? false : { opacity: 0, transform: "translateY(8px)" }
       }
