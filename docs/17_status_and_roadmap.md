@@ -72,7 +72,7 @@ ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 Ez a kör a korábbi „V1-rések" többségét leszállította (a roadmap c) szakasza ennek megfelelően lett karcsúsítva):
 
 - **PDF export (commit `43d3385`):** `pandoc --pdf-engine=weasyprint` (ha a motor hiányzik, **kecses 503**); `pdf` az `ExportFormat`-ban, a `packages/shared` típusok újragenerálva, a frontend export-tab bekötve. Ezzel a Markdown/DOCX/EPUB/**PDF** négyes teljes.
-- **Prompt Library backend (commit `a794b55`, auth-on-reads `ec0a286`):** a `/promptok` képernyő mostantól valódi, **workspace-globális `PromptTemplate`** entitásra épül — modell + migráció **`b3c5d7e9f1a2`** + 6 seedelt builtin + CRUD API (`/api/v1/prompt-templates`; builtin = immutábilis → **403**; auth a mutációkon **ÉS** az olvasásokon). A frontend az API-ról olvas, létrehozó modállal + törléssel. (Inline szerkesztő-UI még hátra — lásd c).)
+- **Prompt Library backend (commit `a794b55`, auth-on-reads `ec0a286`):** a `/promptok` képernyő mostantól valódi, **workspace-globális `PromptTemplate`** entitásra épül — modell + migráció **`b3c5d7e9f1a2`** + 6 seedelt builtin + CRUD API (`/api/v1/prompt-templates`; builtin = immutábilis → **403**; auth a mutációkon **ÉS** az olvasásokon). A frontend az API-ról olvas, létrehozó modállal + törléssel, és a saját sablonok **inline szerkesztésével** (commit `953e7d2` — ceruza-gomb + prefilles edit-modal; a builtin sablonok érinthetetlenek).
 - **`scene_count` aggregátum + `GET /api/v1/auth/me` (commit `a0bb5f1`):** a **Profil** mostantól a valós, összegzett jelenet-számot + valós felhasználói identitást mutat (kecses fallbackkel).
 - **Ollama in-app modell-letöltés (commit `101d63d`):** streaming NDJSON `POST /providers/{id}/models/pull` + **„Modell letöltése"** Settings-UI élő progress-szel.
 - **CodexProgression „állapot az N. jelenetnél" (commit `f8036e1`):** join-alapú linearizáció, amely a progresszió-jegyzeteket az AI-kontextusba szűri (migráció nélkül); a **horgony nélküli** progresszió projekt-globális baseline, a **horgonyzott** könyv+pozíció-scope-olt. Ezzel a RAG-kontextus időhelyesen szűri a jövőbeli állapotokat.
@@ -137,7 +137,6 @@ nem szerepelnek.)
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| **Prompt-template inline szerkesztő-UI** | A `PromptTemplate` backend (PATCH + DELETE) **kész**, és a frontendből a **létrehozás + törlés** is megy; ami hátra van: a meglévő (nem-builtin) sablonok **inline szerkesztése** a UI-ból | FE |
 | CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg (az AI-kontextus-szűrés már él — lásd b); projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
 | Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
 | E2E mélyítése | A Playwright **smoke fut/zöld** (commit `78c6d88`; a CI-gated lokális `webServer` a configban). Az `app` csomagnév-ütközés **non-issue** — a CI `e2e` job a web + api + ai szolgáltatásokat **külön processzként** indítja (`uv run --directory apps/api\|apps/ai uvicorn app.main:app`), így mindegyik a SAJÁT `app` csomagját oldja fel; web Dockerfile sem kell (`next start`). Hátralevő munka: mélyebb journey-k + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele | infra/FE |
@@ -164,6 +163,5 @@ nem szerepelnek.)
 Érték/kockázat arány szerint (a RAG, revíziók, design-rendszer + delight, kép/borító-gen, RQ worker, Lighthouse gate, a teljes Claude Design re-skin — DESIGN-A + B + C — **és az előző V1-rés-záró kör** — PDF export, Prompt Library backend, Profil `me` + `scene_count`, Ollama-pull, CodexProgression RAG-szűrés, DB-keményítés migráció — immár KÉSZ; lásd b):
 
 1. **E2E mélyítése + a kapu kötelezővé tétele** — a Playwright smoke már zöld (commit `78c6d88`; az `app` csomagnév non-issue a per-process `uv run --directory` alatt). Következő lépés: mélyebb journey-k (auth → projekt → generálás → jóváhagyás) + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele.
-2. **Prompt-template inline szerkesztő-UI** — a backend (PATCH + DELETE) és a létrehozás/törlés-UI kész; a meglévő sablonok inline szerkesztése zárja a Prompt Library rést.
-3. **CodexProgression editor + timeline-overlay** — az AI-kontextus-szűrés már él (commit `f8036e1`); ami hátra van: a progresszió-szerkesztő UI + idősor progresszió-réteg (+ projekt-scope progresszió-lista endpoint).
-4. **Plotline lane-vizualizáció** — a maradék FE-rés (az Áttekintés-képernyő a 2026-06-26 design-delta körben megépült).
+2. **CodexProgression editor + timeline-overlay** — az AI-kontextus-szűrés már él (commit `f8036e1`); ami hátra van: a progresszió-szerkesztő UI + idősor progresszió-réteg (+ projekt-scope progresszió-lista endpoint).
+3. **Plotline lane-vizualizáció** — a maradék FE-rés (az Áttekintés-képernyő a 2026-06-26 design-delta körben megépült).
