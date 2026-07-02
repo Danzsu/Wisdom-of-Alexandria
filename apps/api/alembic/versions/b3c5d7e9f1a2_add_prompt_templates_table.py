@@ -30,7 +30,7 @@ clean on SQLite, and the seed is idempotent across repeated upgrades.
 """
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 
@@ -193,7 +193,7 @@ def upgrade() -> None:
             sa.select(table.c.name).where(table.c.is_builtin.is_(True))
         )
     }
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         {
             "id": uuid.uuid4(),

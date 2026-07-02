@@ -138,7 +138,12 @@ describe("lib/api/images", () => {
       );
 
       const blob = await fetchMediaBlob("media-42");
-      expect(blob).toBeInstanceOf(Blob);
+      // Duck-typed on purpose: on newer Node runtimes (the CI runner was force-
+      // upgraded to Node 24) fetch returns a Blob from a different realm, so
+      // `instanceof Blob` is environment-dependent and broke CI.
+      expect(Object.prototype.toString.call(blob)).toBe("[object Blob]");
+      expect(blob.size).toBe(3);
+      expect(blob.type).toBe("image/png");
       expect(seenAuth).toBe("Bearer img-token-abc");
       // The token must NOT leak into the URL (the whole point of this change).
       expect(seenUrl).toContain("/ai/media/media-42");
