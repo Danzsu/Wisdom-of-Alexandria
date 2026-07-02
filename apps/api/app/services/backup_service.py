@@ -32,7 +32,7 @@ INCLUDED (authored, durable content)
 ------------------------------------
 * Project (title/description/language)
 * Series, Books (book.series_id), Chapters, Scenes (content + summary +
-  pov_character_id), Beats
+  pov_character_id + location_id), Beats
 * Codex: CodexEntry (codex_entry.series_id), Character, Location,
   WorldbuildingEntry, Snippet, StyleGuide
 * CodexRelation (from/to entity ids), CodexProgression (entity/chapter/scene
@@ -176,6 +176,7 @@ def _serialize_scene(s: Scene) -> dict[str, Any]:
         "status": s.status,
         "word_count": s.word_count,
         "pov_character_id": _uid(s.pov_character_id),
+        "location_id": _uid(s.location_id),
     }
 
 
@@ -442,11 +443,11 @@ async def restore_project(db: AsyncSession, payload: Any) -> Project:
     Rebuilds the whole graph in DEPENDENCY ORDER, remapping every FK via an
     ``old_id -> new_id`` map:
 
-      project → series → books(series_id) → chapters → scenes(pov_character_id)
-      → beats ; characters/locations/worldbuilding/codex_entries(series_id)/
-      snippets(source_scene_id)/style_guides ; then codex_relations (from/to
-      ids) + codex_progressions (entity/chapter/scene ids) which reference the
-      already-remapped ids.
+      project → series → books(series_id) → chapters → characters + locations
+      → scenes(pov_character_id, location_id) → beats ;
+      worldbuilding/codex_entries(series_id)/snippets(source_scene_id)/
+      style_guides ; then codex_relations (from/to ids) + codex_progressions
+      (entity/chapter/scene ids) which reference the already-remapped ids.
 
     TRANSACTIONAL: any failure rolls back the session so NO partial project is
     left behind. Raises ``BackupError`` for a malformed/unsupported payload
@@ -543,7 +544,23 @@ async def restore_project(db: AsyncSession, payload: Any) -> Project:
             await db.flush()
             character_map[_parse_uid(ch["id"])] = row.id
 
-        # 6. Scenes (chapter_id + pov_character_id remapped).
+        # 6. Locations (project-scoped) — created BEFORE scenes so a scene's
+        #    location_id can be remapped (same rationale as characters above).
+        for loc in data.get("locations", []):
+            row = Location(
+                project_id=project.id,
+                name=loc["name"],
+                description=loc.get("description"),
+                geography=loc.get("geography"),
+                atmosphere=loc.get("atmosphere"),
+                ai_visible=loc.get("ai_visible", True),
+                notes=loc.get("notes"),
+            )
+            db.add(row)
+            await db.flush()
+            location_map[_parse_uid(loc["id"])] = row.id
+
+        # 7. Scenes (chapter_id + pov_character_id + location_id remapped).
         for sc in data.get("scenes", []):
             new_chapter_id = _remap(sc.get("chapter_id"), chapter_map)
             if new_chapter_id is None:
@@ -559,12 +576,13 @@ async def restore_project(db: AsyncSession, payload: Any) -> Project:
                 pov_character_id=_remap(
                     sc.get("pov_character_id"), character_map
                 ),
+                location_id=_remap(sc.get("location_id"), location_map),
             )
             db.add(row)
             await db.flush()
             scene_map[_parse_uid(sc["id"])] = row.id
 
-        # 7. Beats (scene_id remapped).
+        # 8. Beats (scene_id remapped).
         for bt in data.get("beats", []):
             new_scene_id = _remap(bt.get("scene_id"), scene_map)
             if new_scene_id is None:
@@ -578,21 +596,6 @@ async def restore_project(db: AsyncSession, payload: Any) -> Project:
                     notes=bt.get("notes"),
                 )
             )
-
-        # 8. Locations (project-scoped).
-        for loc in data.get("locations", []):
-            row = Location(
-                project_id=project.id,
-                name=loc["name"],
-                description=loc.get("description"),
-                geography=loc.get("geography"),
-                atmosphere=loc.get("atmosphere"),
-                ai_visible=loc.get("ai_visible", True),
-                notes=loc.get("notes"),
-            )
-            db.add(row)
-            await db.flush()
-            location_map[_parse_uid(loc["id"])] = row.id
 
         # 9. Worldbuilding entries (project-scoped).
         for w in data.get("worldbuilding_entries", []):

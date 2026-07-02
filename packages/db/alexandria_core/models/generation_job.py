@@ -11,6 +11,14 @@ class JobStatus:
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+    # User-requested cancellation. PENDING jobs flip immediately (+ best-effort
+    # RQ dequeue); RUNNING jobs stop cooperatively (the chapter-generation loop
+    # checks the flag between scenes, keeping already-completed work).
+    CANCELLED = "cancelled"
+
+
+# Statuses a job can never leave — cancel on these is a 409 conflict.
+TERMINAL_JOB_STATUSES = (JobStatus.DONE, JobStatus.FAILED, JobStatus.CANCELLED)
 
 
 class JobType:

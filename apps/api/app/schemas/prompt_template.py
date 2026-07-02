@@ -33,6 +33,12 @@ class PromptTemplateUpdate(BaseModel):
     icon_key: str | None = Field(default=None, max_length=_ICON_KEY_MAX)
 
 
+class PromptTemplateUseResult(BaseModel):
+    """New ``uses`` count after ``POST /{id}/use`` registered one application."""
+
+    uses: int
+
+
 class PromptTemplateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

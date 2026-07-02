@@ -101,6 +101,7 @@ async def _seed_rich_project(db: AsyncSession) -> Project:
         order_index=0,
         word_count=3,
         pov_character_id=character.id,
+        location_id=location.id,
     )
     db.add(scene)
     await db.flush()
@@ -305,6 +306,16 @@ async def test_round_trip_structural_equivalence(db_session: AsyncSession):
     assert len(r_characters) == 1
     assert scene.pov_character_id == r_characters[0].id
     assert scene.pov_character_id != original.id  # sanity
+
+    # scene.location_id points at the RESTORED location (remapped like pov).
+    r_scene_locations = (
+        await db_session.execute(
+            select(Location).where(Location.project_id == restored.id)
+        )
+    ).scalars().all()
+    assert len(r_scene_locations) == 1
+    assert scene.location_id == r_scene_locations[0].id
+    assert str(scene.location_id) != env["scenes"][0]["location_id"]  # not the original
 
     # Beat under the restored scene.
     assert await count(Beat, Beat.scene_id == scene.id) == 1
@@ -521,3 +532,44 @@ async def test_restore_endpoint_requires_auth(client):
     files = {"file": ("x.json", io.BytesIO(payload), "application/json")}
     resp = await client.post("/api/v1/projects/restore", files=files)
     assert resp.status_code == 401
+
+
+# --------------------------------------------------------------------------- #
+# Scene.location_id — serialized + FK-remapped on restore (like pov)          #
+# --------------------------------------------------------------------------- #
+
+
+async def test_export_serializes_scene_location_id(db_session: AsyncSession):
+    """The scene's location reference is part of the authored graph and MUST
+    travel in the backup (it was silently dropped before this fix)."""
+    project = await _seed_rich_project(db_session)
+    env = await export_project(db_session, project.id)
+
+    original_location_id = env["locations"][0]["id"]
+    assert env["scenes"][0]["location_id"] == original_location_id
+
+
+async def test_restore_without_scene_location_id_is_backward_compatible(
+    db_session: AsyncSession,
+):
+    """A v1 backup taken BEFORE scenes carried location_id (no key at all) must
+    still restore cleanly, with the scene's location simply unset."""
+    project = await _seed_rich_project(db_session)
+    env = await export_project(db_session, project.id)
+    for sc in env["scenes"]:
+        sc.pop("location_id", None)
+
+    restored = await restore_project(db_session, env)
+
+    r_scenes = (
+        await db_session.execute(
+            select(Scene)
+            .join(Chapter, Scene.chapter_id == Chapter.id)
+            .join(Book, Chapter.book_id == Book.id)
+            .where(Book.project_id == restored.id)
+        )
+    ).scalars().all()
+    assert len(r_scenes) == 1
+    assert r_scenes[0].location_id is None
+    # The pov remap is untouched by the missing location key.
+    assert r_scenes[0].pov_character_id is not None

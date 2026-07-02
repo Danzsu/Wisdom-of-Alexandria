@@ -406,3 +406,161 @@ async def test_move_scene_requires_auth(client: AsyncClient):
         json={"chapter_id": str(uuid.uuid4()), "order_index": 0},
     )
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Scene.location_id — PATCH sets/clears the scene's location; a nonexistent
+# location is 404 and a location from ANOTHER project is 422 (cross-project
+# references must never be persisted).
+# ---------------------------------------------------------------------------
+
+
+async def _setup_with_project(client, auth_headers):
+    """Create project → book → chapter, return (project_id, chapter_id)."""
+    proj = (await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)).json()
+    book = (await client.post(f"/api/v1/projects/{proj['id']}/books", json={"title": "B"}, headers=auth_headers)).json()
+    chapter = (await client.post(f"/api/v1/books/{book['id']}/chapters", json={"title": "Ch"}, headers=auth_headers)).json()
+    return proj["id"], chapter["id"]
+
+
+async def _create_location(client, auth_headers, project_id, name="Kikötő"):
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/locations",
+        json={"name": name},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_scene_read_has_location_id_null_by_default(
+    client: AsyncClient, auth_headers: dict
+):
+    _project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+    )
+    assert resp.status_code == 201
+    assert "location_id" in resp.json()
+    assert resp.json()["location_id"] is None
+
+
+async def test_patch_scene_sets_location_id(client: AsyncClient, auth_headers: dict):
+    project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    scene_id = (
+        await client.post(
+            f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()["id"]
+    location_id = await _create_location(client, auth_headers, project_id)
+
+    resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": location_id},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["location_id"] == location_id
+
+    # Persisted — a fresh GET returns the same location.
+    got = await client.get(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}", headers=auth_headers
+    )
+    assert got.json()["location_id"] == location_id
+
+
+async def test_patch_scene_clears_location_id(client: AsyncClient, auth_headers: dict):
+    project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    scene_id = (
+        await client.post(
+            f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()["id"]
+    location_id = await _create_location(client, auth_headers, project_id)
+    set_resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": location_id},
+        headers=auth_headers,
+    )
+    assert set_resp.json()["location_id"] == location_id
+
+    resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": None},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["location_id"] is None
+
+
+async def test_patch_scene_location_not_found(client: AsyncClient, auth_headers: dict):
+    _project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    scene_id = (
+        await client.post(
+            f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()["id"]
+
+    resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": str(uuid.uuid4())},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+    # The scene is untouched.
+    got = await client.get(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}", headers=auth_headers
+    )
+    assert got.json()["location_id"] is None
+
+
+async def test_patch_scene_location_from_other_project_rejected(
+    client: AsyncClient, auth_headers: dict
+):
+    _project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    other_project_id, _other_chapter = await _setup_with_project(client, auth_headers)
+    scene_id = (
+        await client.post(
+            f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()["id"]
+    foreign_location_id = await _create_location(
+        client, auth_headers, other_project_id, name="Idegen hely"
+    )
+
+    resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": foreign_location_id},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+    got = await client.get(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}", headers=auth_headers
+    )
+    assert got.json()["location_id"] is None
+
+
+async def test_patch_scene_other_fields_do_not_require_location(
+    client: AsyncClient, auth_headers: dict
+):
+    """A PATCH that does not mention location_id must not touch it."""
+    project_id, chapter_id = await _setup_with_project(client, auth_headers)
+    scene_id = (
+        await client.post(
+            f"/api/v1/chapters/{chapter_id}/scenes", json={"title": "S"}, headers=auth_headers
+        )
+    ).json()["id"]
+    location_id = await _create_location(client, auth_headers, project_id)
+    await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"location_id": location_id},
+        headers=auth_headers,
+    )
+
+    resp = await client.patch(
+        f"/api/v1/chapters/{chapter_id}/scenes/{scene_id}",
+        json={"title": "Új cím"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["location_id"] == location_id

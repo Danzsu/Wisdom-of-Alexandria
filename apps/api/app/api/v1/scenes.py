@@ -1,6 +1,8 @@
 import uuid
 
+from alexandria_core.models.book import Book
 from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.location import Location
 from alexandria_core.models.scene import Scene
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -95,6 +97,24 @@ async def get_one(
     return scene
 
 
+async def _validate_location_for_chapter(
+    location_id: uuid.UUID, chapter: Chapter, db: AsyncSession
+) -> None:
+    """A scene's location must exist (404) and belong to the SAME project as the
+    scene's chapter (422) — a cross-project reference is never persisted."""
+    location = await db.get(Location, location_id)
+    if location is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
+        )
+    book = await db.get(Book, chapter.book_id)
+    if book is None or location.project_id != book.project_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Location belongs to a different project",
+        )
+
+
 @router.patch("/{scene_id}", response_model=SceneRead)
 async def update(
     chapter_id: uuid.UUID,
@@ -103,10 +123,13 @@ async def update(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> SceneRead:
-    await _get_chapter_or_404(chapter_id, db)
+    chapter = await _get_chapter_or_404(chapter_id, db)
     scene = await get_scene(db, chapter_id, scene_id)
     if scene is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    payload = data.model_dump(exclude_unset=True)
+    if payload.get("location_id") is not None:
+        await _validate_location_for_chapter(data.location_id, chapter, db)
     return await update_scene(db, scene, data)
 
 

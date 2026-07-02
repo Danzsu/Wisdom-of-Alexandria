@@ -8,11 +8,13 @@ from app.schemas.prompt_template import (
     PromptTemplateCreate,
     PromptTemplateRead,
     PromptTemplateUpdate,
+    PromptTemplateUseResult,
 )
 from app.services.crud_prompt_template import (
     create_prompt_template,
     delete_prompt_template,
     get_prompt_template,
+    increment_prompt_template_uses,
     list_prompt_templates,
     update_prompt_template,
 )
@@ -69,6 +71,24 @@ async def update(
             status_code=status.HTTP_403_FORBIDDEN, detail=_BUILTIN_PROTECTED
         )
     return await update_prompt_template(db, template, data)
+
+
+@router.post("/{template_id}/use", response_model=PromptTemplateUseResult)
+async def use(
+    template_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> PromptTemplateUseResult:
+    """Register one application of the template (applied/copied in the UI).
+
+    Atomically increments ``uses`` and returns the new count. Works for
+    builtins too — usage tracking is not an edit, so the builtin write
+    protection (403 on PATCH/DELETE) deliberately does not apply here.
+    """
+    new_uses = await increment_prompt_template_uses(db, template_id)
+    if new_uses is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return PromptTemplateUseResult(uses=new_uses)
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)

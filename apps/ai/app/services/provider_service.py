@@ -32,6 +32,14 @@ class PullModelError(Exception):
     failure (Ollama unreachable / HTTP error).
     """
 
+
+class OllamaHealthError(Exception):
+    """Raised when the Ollama health ping fails (unreachable / non-2xx).
+
+    Carries a safe, bounded message (sanitized via ``safe_error``) so the
+    health endpoint can surface an actionable 503 instead of an opaque 500.
+    """
+
 # Static, well-known model catalogs per cloud provider type. The UI must not
 # hardcode model names (CLAUDE.md); it reads them from the API. These are the
 # canonical LiteLLM-style identifiers. Ollama is dynamic (queried at runtime).
@@ -156,6 +164,33 @@ async def list_provider_models(provider: Provider) -> list[ProviderModelInfo]:
             )
             return []
     return list(STATIC_CLOUD_MODELS.get(provider.type, []))
+
+
+# A health ping must fail FAST (the UI polls it) — much shorter than the 10s
+# used by the full connectivity test.
+_HEALTH_TIMEOUT = 3.0
+
+
+async def check_ollama_health(provider: Provider) -> int:
+    """Lightweight Ollama liveness ping: GET ``{base_url}/api/tags``.
+
+    Returns the number of locally available models on success. Raises
+    ``OllamaHealthError`` (with a sanitized, bounded message) when Ollama is
+    unreachable or answers non-2xx. The caller is responsible for ensuring the
+    provider IS an Ollama provider (a cloud provider has no ``/api/tags``).
+    """
+    base = provider.base_url or _DEFAULT_OLLAMA_BASE
+    url = base.rstrip("/") + "/api/tags"
+    try:
+        async with httpx.AsyncClient(timeout=_HEALTH_TIMEOUT) as http:
+            resp = await http.get(url)
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception as exc:  # noqa: BLE001 — convert to a clear, bounded error
+        logger.warning("Ollama health ping failed for %s: %s", base, _safe_error(exc))
+        raise OllamaHealthError(_safe_error(exc)) from exc
+    models = payload.get("models", []) if isinstance(payload, dict) else []
+    return len(models)
 
 
 # Pulls can take many minutes for a multi-GB model — no overall timeout on the

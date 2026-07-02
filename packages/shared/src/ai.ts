@@ -505,6 +505,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel
+         * @description Cancel a generation job.
+         *
+         *     PENDING → best-effort dequeue of the RQ job (its id equals this uuid — see
+         *     ``job_queue``) and the row flips to ``cancelled``. RUNNING → cooperative:
+         *     only the flag is set; the chapter-generation loop checks it between scenes
+         *     and stops cleanly, KEEPING the already-generated revisions. A job already in
+         *     a terminal state (done/failed/cancelled) → 409.
+         *
+         *     NOTE: ``DELETE /jobs/{id}`` only removes the DB row and never touches RQ —
+         *     this endpoint is the one that actually stops work.
+         */
+        post: operations["cancel_api_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers": {
         parameters: {
             query?: never;
@@ -540,6 +569,30 @@ export interface paths {
         head?: never;
         /** Update */
         patch: operations["update_api_v1_providers__provider_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/providers/{provider_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health
+         * @description Lightweight Ollama liveness ping (short timeout — the UI may poll this).
+         *
+         *     Pings ``{base_url}/api/tags``: reachable → ``{"status": "ok", "model_count": N}``;
+         *     unreachable → 503 with an actionable message. Only meaningful for a local
+         *     Ollama provider (a cloud provider has no ``/api/tags``) — others → 400.
+         */
+        get: operations["health_api_v1_providers__provider_id__health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/providers/{provider_id}/models": {
@@ -985,6 +1038,23 @@ export interface components {
              * @enum {string}
              */
             type: "ollama" | "gemini" | "anthropic" | "openai" | "openrouter" | "custom";
+        };
+        /**
+         * ProviderHealthResult
+         * @description Result of the lightweight Ollama liveness ping (``GET .../health``).
+         *
+         *     Only returned on success — an unreachable Ollama surfaces as a 503, a
+         *     non-Ollama provider as a 400.
+         */
+        ProviderHealthResult: {
+            /** Model Count */
+            model_count: number;
+            /**
+             * Status
+             * @default ok
+             * @constant
+             */
+            status: "ok";
         };
         /** ProviderModelInfo */
         ProviderModelInfo: {
@@ -1988,6 +2058,37 @@ export interface operations {
             };
         };
     };
+    cancel_api_v1_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_all_api_v1_providers_get: {
         parameters: {
             query?: {
@@ -2134,6 +2235,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_api_v1_providers__provider_id__health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealthResult"];
                 };
             };
             /** @description Validation Error */

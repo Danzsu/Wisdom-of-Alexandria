@@ -25,6 +25,7 @@ class SceneUpdate(BaseModel):
     order_index: int | None = None
     status: SceneStatusLiteral | None = None
     pov_character_id: uuid.UUID | None = None
+    location_id: uuid.UUID | None = None
 
 
 class SceneReorder(BaseModel):
@@ -56,5 +57,6 @@ class SceneRead(BaseModel):
     status: str
     word_count: int
     pov_character_id: uuid.UUID | None
+    location_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime

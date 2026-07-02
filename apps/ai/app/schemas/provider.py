@@ -85,6 +85,17 @@ class ProviderTestResult(BaseModel):
     detail: str
 
 
+class ProviderHealthResult(BaseModel):
+    """Result of the lightweight Ollama liveness ping (``GET .../health``).
+
+    Only returned on success — an unreachable Ollama surfaces as a 503, a
+    non-Ollama provider as a 400.
+    """
+
+    status: Literal["ok"] = "ok"
+    model_count: int
+
+
 class ProviderPullRequest(BaseModel):
     """Request body for ``POST /providers/{id}/models/pull``.
 

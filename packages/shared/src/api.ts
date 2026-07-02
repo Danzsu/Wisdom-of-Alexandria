@@ -796,6 +796,30 @@ export interface paths {
         patch: operations["update_api_v1_prompt_templates__template_id__patch"];
         trace?: never;
     };
+    "/api/v1/prompt-templates/{template_id}/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use
+         * @description Register one application of the template (applied/copied in the UI).
+         *
+         *     Atomically increments ``uses`` and returns the new count. Works for
+         *     builtins too — usage tracking is not an edit, so the builtin write
+         *     protection (403 on PATCH/DELETE) deliberately does not apply here.
+         */
+        post: operations["use_api_v1_prompt_templates__template_id__use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revisions": {
         parameters: {
             query?: never;
@@ -1863,6 +1887,14 @@ export interface components {
             name?: string | null;
         };
         /**
+         * PromptTemplateUseResult
+         * @description New ``uses`` count after ``POST /{id}/use`` registered one application.
+         */
+        PromptTemplateUseResult: {
+            /** Uses */
+            uses: number;
+        };
+        /**
          * RestoreSummary
          * @description Result of a successful restore: the new project + restored-entity counts.
          *
@@ -2005,6 +2037,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Location Id */
+            location_id: string | null;
             /** Order Index */
             order_index: number;
             /** Pov Character Id */
@@ -2032,6 +2066,8 @@ export interface components {
         SceneUpdate: {
             /** Content */
             content?: string | null;
+            /** Location Id */
+            location_id?: string | null;
             /** Order Index */
             order_index?: number | null;
             /** Pov Character Id */
@@ -5173,6 +5209,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromptTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    use_api_v1_prompt_templates__template_id__use_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptTemplateUseResult"];
                 };
             };
             /** @description Validation Error */

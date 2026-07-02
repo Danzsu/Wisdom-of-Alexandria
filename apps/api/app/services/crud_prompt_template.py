@@ -1,7 +1,7 @@
 import uuid
 
 from alexandria_core.models.prompt_template import PromptTemplate
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.prompt_template import PromptTemplateCreate, PromptTemplateUpdate
@@ -143,6 +143,30 @@ async def update_prompt_template(
 async def delete_prompt_template(db: AsyncSession, template: PromptTemplate) -> None:
     await db.delete(template)
     await db.commit()
+
+
+async def increment_prompt_template_uses(
+    db: AsyncSession, template_id: uuid.UUID
+) -> int | None:
+    """Atomically increment ``uses`` and return the new count.
+
+    A single ``UPDATE ... SET uses = uses + 1 ... RETURNING uses`` — never a
+    read-modify-write on a loaded instance, so two concurrent applications can
+    not lose an increment. Returns ``None`` when the template does not exist
+    (0 rows matched; nothing is committed). Builtins are deliberately
+    incrementable — usage tracking is not an edit.
+    """
+    result = await db.execute(
+        update(PromptTemplate)
+        .where(PromptTemplate.id == template_id)
+        .values(uses=PromptTemplate.uses + 1)
+        .returning(PromptTemplate.uses)
+    )
+    new_uses = result.scalar_one_or_none()
+    if new_uses is None:
+        return None
+    await db.commit()
+    return new_uses
 
 
 async def seed_builtin_prompt_templates(db: AsyncSession) -> int:

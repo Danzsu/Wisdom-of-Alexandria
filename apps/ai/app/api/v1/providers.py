@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.provider import (
     ProviderCreate,
+    ProviderHealthResult,
     ProviderModelsResult,
     ProviderPullRequest,
     ProviderRead,
@@ -25,7 +26,9 @@ from app.services.crud_provider import (
     update_provider,
 )
 from app.services.provider_service import (
+    OllamaHealthError,
     PullModelError,
+    check_ollama_health,
     check_provider,
     list_provider_models,
     pull_model,
@@ -101,6 +104,37 @@ async def test_connection(
 ) -> ProviderTestResult:
     provider = await _get_provider_or_404(provider_id, db)
     return await check_provider(provider)
+
+
+@router.get("/{provider_id}/health", response_model=ProviderHealthResult)
+async def health(
+    provider_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> ProviderHealthResult:
+    """Lightweight Ollama liveness ping (short timeout — the UI may poll this).
+
+    Pings ``{base_url}/api/tags``: reachable → ``{"status": "ok", "model_count": N}``;
+    unreachable → 503 with an actionable message. Only meaningful for a local
+    Ollama provider (a cloud provider has no ``/api/tags``) — others → 400.
+    """
+    provider = await _get_provider_or_404(provider_id, db)
+    if provider.type != "ollama":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Az állapot-ellenőrzés csak Ollama (lokális) providerhez érhető el.",
+        )
+    try:
+        model_count = await check_ollama_health(provider)
+    except OllamaHealthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Az Ollama nem érhető el: {exc}. "
+                "Ellenőrizd, hogy az Ollama fut és elérhető-e."
+            ),
+        ) from exc
+    return ProviderHealthResult(model_count=model_count)
 
 
 @router.get("/{provider_id}/models", response_model=ProviderModelsResult)

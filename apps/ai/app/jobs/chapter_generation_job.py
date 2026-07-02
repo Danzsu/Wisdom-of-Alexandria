@@ -20,6 +20,11 @@ per-scene isolation):
     couldn't-start error is ``FAILED``.
   - ``output_data`` is committed after EACH scene so the frontend polls live
     per-scene progress.
+
+Cooperative cancellation (POST /jobs/{id}/cancel): checked at ENTRY (an
+already-cancelled row never starts, never flips to RUNNING) and BETWEEN scenes
+(the loop stops before the next scene, keeping completed revisions; the final
+DONE write re-checks so a last-scene cancel is never stomped).
 """
 
 import asyncio
@@ -38,6 +43,9 @@ from app.services.ai_service import AIService, ai_service
 from app.services.crud_generation_job import get_job
 
 logger = logging.getLogger(__name__)
+
+# The job row was deleted out from under a running job (DELETE /jobs/{id}).
+_VANISHED_LOG = "Chapter-generate job %s vanished mid-run; stopping."
 
 
 def run_chapter_generation_job(job_id: str) -> None:
@@ -68,6 +76,13 @@ async def _run_chapter_generation_job(
         job = await get_job(db, job_id)
         if job is None:
             logger.warning("Chapter-generate job %s not found; nothing to do.", job_id)
+            return
+        if job.status == JobStatus.CANCELLED:
+            # Cancelled before the worker dequeued it (the best-effort RQ cancel
+            # raced or failed) — never start the work, never flip to RUNNING.
+            logger.info(
+                "Chapter-generate job %s already cancelled; not starting.", job_id
+            )
             return
 
         # The job can only START if its chapter still exists.
@@ -127,7 +142,33 @@ async def _run_chapter_generation_job(
         # expires every ORM object bound to this session — can never leave us
         # holding a stale instance whose attribute access triggers a lazy load
         # outside the async greenlet context. Each iteration re-fetches its beats.
-        for scene_id in ordered_scene_ids:
+        for index, scene_id in enumerate(ordered_scene_ids):
+            # COOPERATIVE CANCELLATION: re-read the job row at the top of each
+            # scene (the cancel endpoint commits ``cancelled`` from another
+            # session). Stop cleanly: completed scenes' revisions are KEPT, the
+            # remaining scenes are recorded as skipped, and the CANCELLED status
+            # is preserved (never overwritten by DONE).
+            try:
+                await db.refresh(job)
+            except Exception:  # noqa: BLE001 — row deleted mid-run → stop cleanly
+                logger.warning(
+                    _VANISHED_LOG, job_id
+                )
+                return
+            if job.status == JobStatus.CANCELLED:
+                output_data["cancelled"] = True
+                output_data["skipped"] = [str(s) for s in ordered_scene_ids[index:]]
+                job.output_data = dict(output_data)
+                await db.commit()
+                logger.info(
+                    "Chapter-generate job %s cancelled; stopping before scene %s "
+                    "(%d/%d scenes completed).",
+                    job_id,
+                    scene_id,
+                    output_data["completed"],
+                    output_data["total"],
+                )
+                return
             beats = (
                 (
                     await db.execute(
@@ -187,7 +228,7 @@ async def _run_chapter_generation_job(
                         job = await get_job(db, job_id)
                         if job is None:
                             logger.warning(
-                                "Chapter-generate job %s vanished mid-run; stopping.",
+                                _VANISHED_LOG,
                                 job_id,
                             )
                             return
@@ -210,7 +251,7 @@ async def _run_chapter_generation_job(
                 job = await get_job(db, job_id)
                 if job is None:
                     logger.warning(
-                        "Chapter-generate job %s vanished mid-run; stopping.", job_id
+                        _VANISHED_LOG, job_id
                     )
                     return
                 output_data["failed"] += 1
@@ -232,6 +273,21 @@ async def _run_chapter_generation_job(
             # dict so SQLAlchemy detects the JSON mutation.
             job.output_data = dict(output_data)
             await db.commit()
+
+        # A cancel that landed DURING the last scene must not be stomped by the
+        # DONE transition — re-read the persisted status one final time.
+        try:
+            await db.refresh(job)
+        except Exception:  # noqa: BLE001 — row deleted mid-run → stop cleanly
+            logger.warning(
+                _VANISHED_LOG, job_id
+            )
+            return
+        if job.status == JobStatus.CANCELLED:
+            output_data["cancelled"] = True
+            job.output_data = dict(output_data)
+            await db.commit()
+            return
 
         # Partial failures still finish DONE — only a couldn't-START error is
         # FAILED (handled above). The job row is the source of truth the UI polls.

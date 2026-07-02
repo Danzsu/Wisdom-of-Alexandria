@@ -11,6 +11,12 @@ transaction is rolled back so that write can commit cleanly, and the exception
 is NOT re-raised — the GenerationJob row is the single source of truth the
 frontend polls, so re-raising would only risk the worker's default handler
 logging a raw (possibly secret-bearing) traceback.
+
+Cooperative cancellation (POST /jobs/{id}/cancel): the work phase is ONE
+monolithic ``sync_project`` call, so mid-work interruption is not possible —
+the checks are (a) at ENTRY, before the RUNNING flip (an already-cancelled row
+never starts the work), and (b) BEFORE the terminal DONE/FAILED write (a cancel
+landing mid-work is never stomped). A row DELETED mid-run stops gracefully.
 """
 
 import asyncio
@@ -25,6 +31,9 @@ from app.services.crud_generation_job import get_job
 from app.services.embedding_service import EmbeddingService, SyncResult, embedding_service
 
 logger = logging.getLogger(__name__)
+
+# The job row was deleted out from under a running job (DELETE /jobs/{id}).
+_VANISHED_LOG = "Index job %s vanished mid-run; stopping."
 
 
 def run_index_job(job_id: str) -> None:
@@ -56,6 +65,11 @@ async def _run_index_job(
         if job is None:
             logger.warning("Index job %s not found; nothing to do.", job_id)
             return
+        if job.status == JobStatus.CANCELLED:
+            # Cancelled before the worker dequeued it (the best-effort RQ cancel
+            # raced or failed) — never start the work, never flip to RUNNING.
+            logger.info("Index job %s already cancelled; not starting.", job_id)
+            return
         if job.project_id is None:
             # Defensive: an index job must carry a project scope. Record + stop.
             job.status = JobStatus.FAILED
@@ -77,6 +91,20 @@ async def _run_index_job(
                 result = await embeddings.sync_project(
                     db, job.project_id, embedding_model=model
                 )
+            # COOPERATIVE CANCELLATION (terminal protection): a cancel landing
+            # DURING the sync must not be stomped by the DONE transition —
+            # re-read the persisted status before the terminal write.
+            try:
+                await db.refresh(job)
+            except Exception:  # noqa: BLE001 — row deleted mid-run → stop cleanly
+                logger.warning(_VANISHED_LOG, job_id)
+                return
+            if job.status == JobStatus.CANCELLED:
+                logger.info(
+                    "Index job %s cancelled mid-run; not overwriting with DONE.",
+                    job_id,
+                )
+                return
             job.output_data = result.as_dict()
             job.status = JobStatus.DONE
             await db.commit()
@@ -86,7 +114,16 @@ async def _run_index_job(
             # job (rollback expires the prior instance).
             await db.rollback()
             failed = await get_job(db, job_id)
-            if failed is not None:
+            if failed is None:
+                logger.warning(_VANISHED_LOG, job_id)
+            elif failed.status == JobStatus.CANCELLED:
+                # Terminal protection for the failure path too: a cancel that
+                # landed mid-work is never stomped by FAILED.
+                logger.info(
+                    "Index job %s cancelled mid-run; not overwriting with FAILED.",
+                    job_id,
+                )
+            else:
                 failed.status = JobStatus.FAILED
                 failed.error_message = safe_error(exc)
                 await db.commit()

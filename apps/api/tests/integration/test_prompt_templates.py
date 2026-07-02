@@ -42,9 +42,8 @@ async def test_seed_is_idempotent(db_session: AsyncSession, seeded: int):
     assert again == 0
     # Trust the table, not just the counter: a dedup regression that drops or
     # duplicates rows while still returning 0 must be caught — exactly 6 remain.
-    from sqlalchemy import func, select
-
     from alexandria_core.models.prompt_template import PromptTemplate
+    from sqlalchemy import func, select
 
     total = await db_session.scalar(select(func.count()).select_from(PromptTemplate))
     assert total == 6
@@ -301,3 +300,103 @@ async def test_delete_not_found(client: AsyncClient, auth_headers: dict):
         f"/api/v1/prompt-templates/{uuid.uuid4()}", headers=auth_headers
     )
     assert resp.status_code == 404
+
+
+# --- use counter -----------------------------------------------------------
+# POST /{id}/use registers one application of a template (the FE calls it when
+# a prompt is applied/copied). The increment is a single atomic UPDATE.
+
+
+async def _create_user_template(client: AsyncClient, auth_headers: dict) -> str:
+    resp = await client.post(
+        "/api/v1/prompt-templates", json=_user_payload(), headers=auth_headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_use_increments_and_returns_new_count(
+    client: AsyncClient, auth_headers: dict
+):
+    tid = await _create_user_template(client, auth_headers)
+
+    first = await client.post(
+        f"/api/v1/prompt-templates/{tid}/use", headers=auth_headers
+    )
+    assert first.status_code == 200, first.text
+    assert first.json() == {"uses": 1}
+
+    second = await client.post(
+        f"/api/v1/prompt-templates/{tid}/use", headers=auth_headers
+    )
+    assert second.json() == {"uses": 2}
+
+    # The persisted counter matches (two calls → +2, no lost update).
+    got = await client.get(f"/api/v1/prompt-templates/{tid}", headers=auth_headers)
+    assert got.json()["uses"] == 2
+
+
+async def test_use_builtin_template_is_incrementable(
+    client: AsyncClient, auth_headers: dict, seeded: int
+):
+    """Builtins reject edit/delete (403) but usage tracking is NOT an edit —
+    counting how often a builtin is applied must work."""
+    listed = await client.get("/api/v1/prompt-templates", headers=auth_headers)
+    builtin = next(t for t in listed.json() if t["is_builtin"])
+
+    resp = await client.post(
+        f"/api/v1/prompt-templates/{builtin['id']}/use", headers=auth_headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"uses": 1}
+
+
+async def test_use_unknown_template_404(client: AsyncClient, auth_headers: dict):
+    resp = await client.post(
+        f"/api/v1/prompt-templates/{uuid.uuid4()}/use", headers=auth_headers
+    )
+    assert resp.status_code == 404
+
+
+async def test_use_requires_auth(client: AsyncClient):
+    resp = await client.post(f"/api/v1/prompt-templates/{uuid.uuid4()}/use")
+    assert resp.status_code == 401
+
+
+async def test_use_increment_is_atomic_single_update(db_session: AsyncSession):
+    """The service issues ONE ``UPDATE ... SET uses = uses + 1`` (no
+    read-modify-write): a stale in-memory ``uses`` value must not be able to
+    overwrite a concurrent increment. Simulated by bumping the row out-of-band
+    AFTER the ORM instance was loaded — the atomic increment must build on the
+    DB value (2 → 3), not the stale snapshot (0 → 1)."""
+    from alexandria_core.models.prompt_template import PromptTemplate
+    from sqlalchemy import update
+
+    from app.schemas.prompt_template import PromptTemplateCreate
+    from app.services.crud_prompt_template import (
+        create_prompt_template,
+        increment_prompt_template_uses,
+    )
+
+    template = await create_prompt_template(
+        db_session,
+        PromptTemplateCreate(name="Atomi", category="Teszt", body="x"),
+    )
+    assert template.uses == 0  # stale snapshot now held in memory
+
+    # Out-of-band concurrent increments (as another request would).
+    await db_session.execute(
+        update(PromptTemplate)
+        .where(PromptTemplate.id == template.id)
+        .values(uses=PromptTemplate.uses + 2)
+    )
+    await db_session.commit()
+
+    new_uses = await increment_prompt_template_uses(db_session, template.id)
+    assert new_uses == 3  # 2 (concurrent) + 1 (ours) — never 1
+
+
+async def test_use_missing_returns_none_service_level(db_session: AsyncSession):
+    from app.services.crud_prompt_template import increment_prompt_template_uses
+
+    assert await increment_prompt_template_uses(db_session, uuid.uuid4()) is None

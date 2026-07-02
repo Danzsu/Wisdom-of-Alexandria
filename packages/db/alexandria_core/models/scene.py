@@ -36,10 +36,19 @@ class Scene(UUIDPrimaryKey, Timestamps, Base):
         nullable=True,
         index=True,
     )
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="scenes")
     pov_character: Mapped["Character | None"] = relationship(
         "Character", foreign_keys=[pov_character_id]
+    )
+    location: Mapped["Location | None"] = relationship(
+        "Location", foreign_keys=[location_id]
     )
     beats: Mapped[list["Beat"]] = relationship(
         "Beat",
