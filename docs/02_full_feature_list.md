@@ -33,7 +33,7 @@ Jelölések:
 |---|---:|---|
 | Chapter CRUD | MVP | Fejezetek létrehozása, szerkesztése, törlése |
 | Scene CRUD | MVP | Jelenetek létrehozása, szerkesztése, törlése |
-| Beat CRUD | MVP | Scene beat-ek kezelése: goal, conflict, turn, outcome |
+| Beat CRUD | MVP | Scene beat-ek kezelése: goal, conflict, turn, outcome — **UI beat-szerkesztővel** (inspektor „Beatek" tab: lista / hozzáadás / szerkesztés / törlés / drag-átrendezés). Lásd `docs/17` |
 | Chapter sorrend | MVP | Fejezetek kézi rendezése |
 | Scene sorrend | MVP | Jelenetek sorrendezése fejezeten belül |
 | Act struktúra | V1 | Act I / II / III vagy saját act struktúra |
@@ -63,8 +63,8 @@ Jelölések:
 | Karakterhang | V1 | Beszédstílus, szóhasználat, tiltott fordulatok |
 | Karakterív | V1 | Starting state, midpoint state, final state |
 | Karakterkapcsolatok | V1 | Relationship graph, kapcsolat típusa és leírása |
-| Codex Progressions (UI + AI) | V1 | Temporális Codex state UI-ban: mikor aktiválódik, AI figyeli scene context alapján |
-| Codex Relations (UI) | V1 | Kapcsolatok vizuális megjelenítése, auto context expansion |
+| Codex Progressions (UI + AI) | V1 | Temporális Codex state UI-ban: mikor aktiválódik, AI figyeli scene context alapján — **megvalósítva** (Progresszió tab a Codex-detailben; az AI-kontextus-szűrés már korábban élt). Lásd `docs/17` |
+| Codex Relations (UI) | V1 | Kapcsolatok vizuális megjelenítése, auto context expansion — **a tab-UI megvalósítva** (Kapcsolatok tab a Codex-detailben; a gráf-képernyő már korábban élt). Lásd `docs/17` |
 | AI Visibility per trait | V1 | Mezőszintű AI láthatóság (pl. csak a gyilkos motívuma rejtett) |
 | Helyszínprofil | MVP | Leírás, hangulat, szabályok, kapcsolódó jelenetek |
 | Világépítési bejegyzések | MVP | Társadalom, technológia, mágia, politika, szabályok |
@@ -123,15 +123,15 @@ Jelölések:
 
 | Funkció | Prioritás | Leírás |
 |---|---:|---|
-| Brainstorm | V1 | Ötletek, konfliktusok, fordulatok |
+| Brainstorm | V1 | Ötletek, konfliktusok, fordulatok — **megvalósítva** (endpoint + hu/en prompt-sablon + inspektor „Ötletelés" panel). Lásd `docs/17` |
 | Brainstorm Keepers List | V1 | Jó ötletek mentése listába, rosszak eldobása |
 | Alternative plot ideas | V1 | Több cselekményirány |
 | Scene continuation (Auto) | MVP | Jelenet folytatása instrukció nélkül |
 | Scene continuation (Guided) | V1 | Jelenet folytatása user instrukció alapján |
 | Rewrite | MVP | Kijelölt szöveg újraírása |
 | Rewrite modes | V1 | Rövidebb, drámaibb, természetesebb, irodalmibb, sötétebb |
-| Expand | V1 | Rövid szöveg kibővítése |
-| Compress | V1 | Túl hosszú szöveg tömörítése |
+| Expand | V1 | Rövid szöveg kibővítése — **megvalósítva** („Bővítés" a rewrite HITL-sínen). Lásd `docs/17` |
+| Compress | V1 | Túl hosszú szöveg tömörítése — **megvalósítva** („Tömörítés" a rewrite HITL-sínen). Lásd `docs/17` |
 | Describe (sensory) | MVP | Érzékletes leírás generálása érzékszervenként: Látás, Hang, Tapintás, Szag, Íz, Metaforák — kártyánként, Snippet-be menthetők |
 | Describe — Érzelmi atmoszféra (7. csatorna) | V1 | Magyar prózára specifikus extra csatorna: érzelmi és hangulati atmoszféra leírása |
 | Dialogue improvement | V1 | Párbeszéd természetesebbé tétele |
@@ -152,13 +152,14 @@ Jelölések:
 | Chapterből scene lista | V1 | Fejezetcélból jelenetlista |
 | Scene beat generation | MVP | Jelenetcélból beat lista |
 | Beatből scene draft | MVP | Beat-ekből jelenet első draftja |
-| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása — **megvalósítva (V2 első szelet, fejezet-szint)** (`POST /ai/chapters/{id}/generate` + `run_chapter_generation_job` RQ worker: jelenetenként a beat-ekből, egyetlen RQ háttér-job, jelenetenként egy jóvá nem hagyott Revision = HITL, opcionális folytonosság-ellenőrzés; a könyv-szint későbbi bővítés). Lásd `docs/17` |
+| Chapter batch generation | V2 | Több jelenet/fejezet háttérben generálása — **megvalósítva fejezet- ÉS könyv-szinten** (`POST /ai/chapters/{id}/generate` + `POST /ai/books/{id}/generate` → RQ háttér-jobok: jelenetenként a beat-ekből egy jóvá nem hagyott Revision = HITL, opcionális folytonosság-ellenőrzés; „Könyv generálása" dialógus az Áttekintésen, fejezetenkénti review + job-megszakítás). Lásd `docs/17` |
 | Chapter opening variation | V2 | Nyitási technikák rotálása |
 | Chapter ending awareness | V2 | Következő chapter előkészítése |
 | Setup/payoff tracking | V2 | Elültetés és későbbi kifizetés követése |
 | Plot-twist audit | V2 | Fordulatok ellenőrzése és javaslata |
 | Full book cohesion audit | V2 | Teljes kézirat kohézióvizsgálata |
 | Automated revision loop | V2 | Draft → critique → rewrite → review |
+| Job-megszakítás | V1 | Várakozó/futó generálási job megszakítása — **megvalósítva** (`POST /jobs/{id}/cancel`, kooperatív cancel mindhárom worker-típusban, `cancelled` státusz + UI). Lásd `docs/17` |
 
 ---
 
@@ -242,8 +243,8 @@ Jelölések:
 |---|---:|---|
 | Markdown export | MVP | Teljes kézirat Markdownban |
 | DOCX export | MVP | Word kompatibilis export |
-| EPUB export | V1 | E-book export |
-| PDF export | V1 | Olvasható PDF export — **megvalósítva** (`pandoc --pdf-engine=weasyprint`; motor hiányában kecses 503). Lásd `docs/17` |
+| EPUB export | V1 | E-book export — **megvalósítva** (Pandoc; a kanonikus könyvborító beágyazva). Lásd `docs/17` |
+| PDF export | V1 | Olvasható PDF export — **megvalósítva** (`pandoc --pdf-engine=weasyprint`; motor hiányában kecses 503; a kanonikus borító borító-oldalként beágyazva). Lásd `docs/17` |
 | Chapter-only export | V1 | Egy fejezet exportja |
 | Scene-only export | V1 | Egy jelenet exportja |
 | Project backup JSON | MVP | Teljes projekt adatmentés |
@@ -262,7 +263,7 @@ Jelölések:
 | Model collection | V1 | Feladatokhoz modellek csoportosítása |
 | Prompt preset editor | V1 | Promptok szerkesztése UI-ból — **megvalósítva** (valódi `PromptTemplate` DB-entitás + migráció `b3c5d7e9f1a2` + 6 beépített seed + teljes CRUD API (builtin = immutable) + létrehozó/szerkesztő/törlő UI). Lásd `docs/17` |
 | Temperature / max tokens | MVP | Modellparaméterek beállítása |
-| Local model health check | MVP | Ollama elérhetőség tesztelése |
+| Local model health check | MVP | Ollama elérhetőség tesztelése — **megvalósítva** (`GET /providers/{id}/health` health-ping). Lásd `docs/17` |
 | Cloud API key storage | V1 | Biztonságos API kulcs kezelés |
 | Task-based routing | V1 | Draft local, review cloud stb. |
 | Cost estimate | V2 | Cloud modellköltség becslés |

@@ -240,6 +240,13 @@ cd apps/api
 alembic upgrade head
 ```
 
+> **Compose alatt automatikus.** `docker compose up`-nál az `apps/api` konténer
+> entrypointja (`apps/api/docker-entrypoint.sh`) az uvicorn indítása ELŐTT
+> lefuttatja az `alembic upgrade head`-et (idempotens; hiba esetén hangosan,
+> nem-nulla exittel elhal). Csak az api migrál — az `ai` + `worker`
+> szolgáltatások az api healthcheckjére kapuznak, így sosem indulnak félig
+> migrált séma ellen. A fenti kézi parancs compose-on kívüli fejlesztéshez kell.
+
 Rollback:
 
 ```bash
@@ -319,6 +326,12 @@ Ollama through backend:
 
 ```bash
 curl http://localhost:8000/api/v1/models/local/status
+```
+
+Provider health-ping (AI szolgáltatás, `:8001` — Ollama-elérhetőség provider-configból):
+
+```bash
+curl http://localhost:8001/api/v1/providers/<provider-id>/health
 ```
 
 ## Frontend commands

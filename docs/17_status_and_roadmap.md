@@ -4,7 +4,7 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 ---
 
-## a) Jelenlegi állapot (2026-06-26)
+## a) Jelenlegi állapot (2026-07-02)
 
 **Architektúra (egysoros):** local-first, magyar nyelvű, agentic regényíró-workspace; **két, külön deployolható backend-szolgáltatás** — `apps/api` (domain/CRUD, `:8000`) + `apps/ai` (AI/agentic + provider/jobs, `:8001`) — közös `packages/db` (`alexandria_core`) Python-csomagon és közös PostgreSQL-en (a HITL-kontraktus DB-szinten köt; a két app sosem hivatkozik egymásra). Frontend: `apps/web` (Next.js 15). A FE/BE típuskontraktus a `packages/shared` OpenAPI-generált TS-típuscsomagon át fut, fordításidős `MatchesContract` guarddal a Zod-sémákhoz kötve.
 
@@ -12,15 +12,17 @@ Ez a dokumentum az **autoritatív, élő állapot- és roadmap-leírás**. Ahol 
 
 | Csomag | Tesztek | Megjegyzés |
 |---|---|---|
-| `apps/api` | **536** | CI-ban (Postgres) futnak; a pandoc/weasyprint-igényes tesztek lokálisan skippelnek |
-| `apps/ai` | **422** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
-| `apps/web` | **~887** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight + fejezet-automatizáció + **design-delta** tesztjeivel) |
+| `apps/api` | **582** | CI-ban (Postgres) futnak; a pandoc/weasyprint-igényes tesztek lokálisan skippelnek |
+| `apps/ai` | **519** | a pgvector-tesztek SQLite-on skippelnek; CI Postgresen futtatja őket |
+| `apps/web` | **1001** | — (Phase-1/2 design + state-minták + re-skin + DESIGN-C + delight + fejezet-automatizáció + design-delta + **GAP-FIX program** tesztjeivel) |
+
+Összesen **2102 teszt**; egyetlen alembic head (`e9f0a1b2c3d4`).
 
 ruff / type-check / lint tiszta; az anti-pattern detektor anti-pattern-mentes.
 
-**CI:** a `feat/alexandria-ui` ág fel van pusholva originra, és a **GitHub Actions CI ZÖLD** (run #5/#6 a backend / frontend / shared-types / lighthouse jobokon át): backend ruff + `alembic upgrade head` Postgresen + pytest (pgvector + pandoc) · frontend type-check / lint / vitest · shared-types frissesség-check · **advisory (non-blocking) Lighthouse job**.
+**CI:** a `feat/alexandria-ui` ág fel van pusholva originra, és a **GitHub Actions CI ZÖLD** (a GAP-FIX kör után is — az ág CI-ját a `437f147` javította: realm-safe Blob assertion + ruff UP017): backend ruff + `alembic upgrade head` Postgresen + pytest (pgvector + pandoc) · frontend type-check / lint / vitest · shared-types frissesség-check · **advisory (non-blocking) Lighthouse job (küszöb 0.75)** · **advisory `e2e` job** — immár **3 Playwright journey-speckel**, a korábban némán hibás e2e-invokáció javítva.
 
-**Branch/push:** `feat/alexandria-ui` @ origin, zöld CI. Commit/push/branch nélkül — ez a doc-kör csak Markdown.
+**Branch/push:** `feat/alexandria-ui` @ origin, zöld CI. A GAP-FIX program commitjai (`568a28d` … `7417f23` + `437f147`) commitolva + pusholva; ez a doc-kör csak Markdown, commit nélkül.
 
 ---
 
@@ -114,6 +116,26 @@ Részletek: `docs/18` g) szakasz.
   lásd a c) Roadmap design-delta sorait.
 - Web teszt-szám **~887 zöld**; tsc + lint tiszta.
 
+### Új a legutóbbi frissítés óta (2026-07-02 — GAP-FIX program)
+
+Egy átfogó gap-audit után két implementációs hullám zárta a feltárt réseket (commitok `568a28d` … `7417f23` + CI-javítás `437f147`, mind pusholva a `feat/alexandria-ui` ágon):
+
+- **W1–W2 — backend-rések + Codex/beat UI:**
+  - **Codex Kapcsolatok + Progresszió tab** a Codex-detailben (`relations-tab.tsx`, `progression-tab.tsx`) — a régóta létező CRUD-backendek + az „állapot az N. jelenetnél" RAG-szűrés mostantól **felhasználó által elérhetők**; a progresszió-szerkesztő UI ezzel KÉSZ (az idősor progresszió-overlay maradt — lásd c);
+  - **`Scene.location_id`** + migráció **`d7e8f9a0b1c2`** (backup round-trip, restore-sorrend javítással);
+  - **Job-megszakítás:** `POST /jobs/{id}/cancel` — kooperatív cancel **mindhárom worker-típusban**, `cancelled` státusz + UI-affordance a feladatok-képernyőn;
+  - **Ollama health-ping:** `GET /providers/{id}/health`;
+  - **PromptTemplate használat-számláló** (`POST /prompt-templates/{id}/use`);
+  - **Borító az exportban:** a kanonikus borító beágyazva az **EPUB**-ba (+ **PDF** borító-oldal) + a docker **media-volume javítás** (közös `media_data` volume — az api konténer korábban nem látta a borítókat);
+  - **Beat-szerkesztő:** inspektor **„Beatek" tab** (`SceneBeatsPanel`) — lista / hozzáadás / szerkesztés / törlés / drag-átrendezés.
+- **W3–W5 + bekötés:**
+  - **Valódi parancspaletta-keresés** (jelenetek + Codex-bejegyzések); **szerkesztő undo/redo UI** (+ egy lappangó **jelenetváltás-undo-korrupciós bug javítva**: a scene-switch seedek nem kerülnek a history-ba); **sorozat-létrehozás** a Codex scope-pickeréből (`NewSeriesModal`); őszinte **„Fejezet kész" banner** a fejezet-jobokon;
+  - **Brainstorm / Expand / Compress** AI-műveletek end-to-end: endpointok + hu/en prompt-sablonok + inspektor **„Ötletelés" panel** + **Bővítés/Tömörítés** a rewrite HITL-síneken;
+  - **Könyv-szintű automatizáció** end-to-end: `POST /ai/books/{id}/generate` + `run_book_generation_job` + `GenerationJob.book_id` migráció (**`e9f0a1b2c3d4`**) + **„Könyv generálása"** dialógus az Áttekintésen + könyv-job progressz **fejezetenkénti review-val** + job-cancel UI (a HITL érintetlen: jelenetenként egy jóvá nem hagyott Revision);
+  - **Infra:** auto-migráló api **docker-entrypoint** (`alembic upgrade head` az uvicorn előtt) + healthcheck-gating; **idempotens magyar demo-seed** (`python -m app.seed`, „A tenger emlékezete"); husky pre-push élesítve; dependabot; CORS-szigorítás; SECRET_KEY prod-guard; Lighthouse-küszöb 0.75; **3 Playwright journey-spec** + a némán hibás CI e2e-invokáció javítva; a branch CI un-broken (`437f147`).
+
+Tesztek: **web 1001 / api 582 / ai 519 zöld** (összesen **2102**); egyetlen alembic head (`e9f0a1b2c3d4`); tsc + lint + ruff tiszta.
+
 ### Minőség + CI + biztonság
 - **C0:** GitHub Actions CI (`.github/workflows/ci.yml`) + zöld repo-szintű ruff baseline + a korábban üres `initial_schema` migráció javítva, így `alembic upgrade head` működik.
 - `packages/shared`: OpenAPI-generált TS-típusok (openapi-typescript) `MatchesContract` fordításidős guarddal a FE Zod-sémákhoz kötve (leváltotta az interim fixture drift-guardot); CI freshness-check.
@@ -125,7 +147,7 @@ Részletek: `docs/18` g) szakasz.
 
 ## c) Roadmap — mi van hátra (konszolidált)
 
-> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB/**PDF** export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C) + delight (celestial)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)** · **Prompt Library backend (`PromptTemplate` + CRUD)** · **Profil `me` endpoint + `scene_count` aggregátum** · **Ollama in-app modell-letöltés (pull)** · **CodexProgression „állapot az N. jelenetnél" RAG-szűrés** · **DB-keményítés migráció `a8c4e1f2b3d4` (FK-indexek + hnsw)** · **fejezet-automatizáció (V2 első szelet — a halasztott MVP #11)**. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
+> **Frissen lezárt tételek (lásd b):** RAG Q&A (Kutatás) · revízió-böngésző + diff/restore · DOCX/EPUB/**PDF** export · provider-hub + provider-titok-titkosítás · projekt-backup/restore · sorozat-scope · cselekményszálak · folytonosság-ellenőrző · **design-system (Phase 1+2) + Claude Design re-skin (DESIGN-A + B + C) + delight (celestial)** · **kép-generálás (Phase 1) + borító-generálás (Phase 2)** · RQ async worker · Lighthouse CI gate · **backend-audit keményítés (`8a72244`)** · **Prompt Library backend (`PromptTemplate` + CRUD)** · **Profil `me` endpoint + `scene_count` aggregátum** · **Ollama in-app modell-letöltés (pull)** · **CodexProgression „állapot az N. jelenetnél" RAG-szűrés** · **DB-keményítés migráció `a8c4e1f2b3d4` (FK-indexek + hnsw)** · **fejezet-automatizáció (V2 első szelet — a halasztott MVP #11)** · **GAP-FIX program (2026-07-02):** Codex Kapcsolatok+Progresszió tab UI · beat-szerkesztő · job-cancel · Ollama health-ping · borító-beágyazott EPUB/PDF export · `Scene.location_id` · valódi parancspaletta-keresés · undo/redo · brainstorm/expand/compress · **könyv-szintű automatizáció** · demo-seed + auto-migráló entrypoint + husky/dependabot/CORS/SECRET_KEY-guard. Ezek a **b)** szakaszban dokumentáltak — itt már nem szerepelnek.
 
 A maradék két csoportba esik: **V1-rések** (a V1-et lezáró konkrét tételek) · **Halasztott / V2**. (A **DESIGN-C** net-új design-képernyők leszállítva — lásd b) + `docs/18`. A **2026-06-26 design-delta kör** további 5 net-új képernyőt szállított — köztük az **Áttekintést**, ami ezzel **megépült** és kikerült a V1-résekből; a `hangok` az egyetlen megmaradt placeholder. A delta 3 elhalasztott tétele alább, a Halasztott / V2 listában.)
 
@@ -137,17 +159,23 @@ nem szerepelnek.)
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| CodexProgression editor + timeline-overlay | Progresszió-szerkesztő UI + idősor progresszió-réteg (az AI-kontextus-szűrés már él — lásd b); projekt-scope progresszió-lista endpoint kell | BE (`apps/api`) + FE |
+| Idősor progresszió-overlay | A progresszió-**szerkesztő** UI a GAP-FIX körben leszállt (lásd b); ami maradt: a progresszió-réteg megjelenítése az Idősor nézeten | FE |
 | Plotline lane-vizualizáció | Cselekményszál-sávok vizuális megjelenítése | FE |
-| E2E mélyítése | A Playwright **smoke fut/zöld** (commit `78c6d88`; a CI-gated lokális `webServer` a configban). Az `app` csomagnév-ütközés **non-issue** — a CI `e2e` job a web + api + ai szolgáltatásokat **külön processzként** indítja (`uv run --directory apps/api\|apps/ai uvicorn app.main:app`), így mindegyik a SAJÁT `app` csomagját oldja fel; web Dockerfile sem kell (`next start`). Hátralevő munka: mélyebb journey-k + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele | infra/FE |
+| E2E kapu kötelezővé tétele | A **3 Playwright journey-spec megírva** + a némán hibás CI e2e-invokáció javítva (lásd b — GAP-FIX); hátra: az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele stabil CI-futások után | infra |
+| Plan-board virtualizáció | Nagy könyvek terv-boardjának lista-virtualizációja — **folyamatban** | FE |
+| Offline autosave-queue | Kapcsolatvesztést túlélő, sorba állított autosave (resilience) — **folyamatban** | FE |
 
 ### Halasztott / V2
 
 | Tétel | Scope (1 sor) | Hol |
 |---|---|---|
-| Fejezet-automatizáció fast-follow-ok | A fejezet-szintű első szelet KÉSZ (lásd b); hátra: **könyv-szintű** batch-generálás, **jelenetenkénti modell-override**, gazdagabb **batch-review panel** | BE (`apps/ai`) + FE |
-| Audio domain + EPUB-3 media-overlay (SMIL) | Hang-szövegrész horgony-modell + SMIL exporter; saját spec kell | BE + FE + infra |
-| Kollaboráció / megosztás | Több-felhasználós, szerepkörök, presence, realtime — Auth.js átalakítás kell | BE + FE + infra |
+| Automatizáció fast-follow-ok | A **fejezet- ÉS könyv-szintű** batch-generálás KÉSZ (lásd b — GAP-FIX); hátra: **jelenetenkénti modell-override** + gazdagabb **batch-review panel** | BE (`apps/ai`) + FE |
+| Audio domain + EPUB-3 media-overlay (SMIL) | Hang-szövegrész horgony-modell + SMIL exporter; saját spec kell (a `hangok` az egyetlen placeholder-képernyő) | BE + FE + infra |
+| Kollaboráció / multi-user + ownership | Több-felhasználós működés, ownership + szerepkörök (a **V1-cloud blockere**), presence, realtime — Auth.js átalakítás kell | BE + FE + infra |
+| Deploy-pipeline | A CI deploy-lépés (Vercel + Cloud Run) élesítése / végigvitele | infra |
+| LICENSE | Licenc-döntés + LICENSE fájl a repóba | termék |
+| EN UI | Angol felület (a UI ma magyar-only; a prompt-sablonok hu/en már léteznek) | FE |
+| AIComment-döntés | A meglévő `AIComment` entitás sorsa: a margókomment-funkció bekötése vagy elvetése | BE + FE |
 | MCP providerek | Szerver-toggle-ök + MCP-integráció | BE + FE |
 | NSFW / reasoning toggle + modell-presetek | Generálási-mód kapcsolók + modell-csomagok | BE + FE |
 | Marketplace / launch | Launch-kit, marketplace | termék |
@@ -160,8 +188,9 @@ nem szerepelnek.)
 
 ## d) Javasolt következő kör
 
-Érték/kockázat arány szerint (a RAG, revíziók, design-rendszer + delight, kép/borító-gen, RQ worker, Lighthouse gate, a teljes Claude Design re-skin — DESIGN-A + B + C — **és az előző V1-rés-záró kör** — PDF export, Prompt Library backend, Profil `me` + `scene_count`, Ollama-pull, CodexProgression RAG-szűrés, DB-keményítés migráció — immár KÉSZ; lásd b):
+Érték/kockázat arány szerint (a **GAP-FIX program** — Codex Kapcsolatok+Progresszió UI, beat-szerkesztő, job-cancel, brainstorm/expand/compress, **könyv-szintű automatizáció**, borító-beágyazott exportok, demo-seed + infra-keményítés — immár KÉSZ; lásd b):
 
-1. **E2E mélyítése + a kapu kötelezővé tétele** — a Playwright smoke már zöld (commit `78c6d88`; az `app` csomagnév non-issue a per-process `uv run --directory` alatt). Következő lépés: mélyebb journey-k (auth → projekt → generálás → jóváhagyás) + az advisory `e2e` (`continue-on-error`) kapu **kötelezővé** tétele.
-2. **CodexProgression editor + timeline-overlay** — az AI-kontextus-szűrés már él (commit `f8036e1`); ami hátra van: a progresszió-szerkesztő UI + idősor progresszió-réteg (+ projekt-scope progresszió-lista endpoint).
-3. **Plotline lane-vizualizáció** — a maradék FE-rés (az Áttekintés-képernyő a 2026-06-26 design-delta körben megépült).
+1. **A folyamatban lévő tételek lezárása** — plan-board virtualizáció + offline autosave-queue (mindkettő elkezdve — lásd c) V1-rések).
+2. **E2E kapu kötelezővé tétele** — a 3 journey-spec már fut a CI-ban; stabil futások után az advisory `e2e` (`continue-on-error`) kapu kötelezővé tétele.
+3. **Idősor progresszió-overlay + plotline lane-vizualizáció** — a két megmaradt FE-vizualizációs rés.
+4. **Multi-user / ownership** — a V1-cloud blockere (Auth.js átalakítás; nagyobb falat, külön spec kell).

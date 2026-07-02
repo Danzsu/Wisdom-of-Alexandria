@@ -36,9 +36,9 @@ A shell-t egyszer rendereli az `(app)` layout (`apps/web/components/shell/app-sh
 - **IconRail** (`icon-rail.tsx`, 56px) — elsődleges célok rail-sorrendben: **Terv · Írás · Codex · Chat · Tiszta írás** [térköz] **Tools-flyout · Export · Beállítások**. Az Írás cél a betöltött könyv-fából feloldja az *első valódi jelenetet* (ha nincs, a Terv nézetre esik vissza). A **Tiszta írás** AI-mentes írásmódot kapcsol be, majd megnyitja a kéziratot. A **Tools-flyout** (`PopoverMenu`) tartja a V1-elemzőképernyőket (Áttekintés, Idősor, Kapcsolatok, Cselekményszálak), az AI-feladatokat (valódi „elbukott job" attention-dot + badge), és a prompt-/hang-tárakat. Az aktív elemnek `aria-current="page"` + accent-muted highlight + `woaRailPop` ikon-pop.
 - **ChapterTree** (`chapter-tree.tsx`) — bal struktúra-pane az Írás nézeten (fejezetek → jelenetek).
 - **CodexSidebar** (`codex-sidebar.tsx`) — bal struktúra-pane a Codexen.
-- **InspectorPanel** (`components/inspector/`) — jobb oldali, 360px-es inspektor (csak Írás); tabok: **Codex · AI · Beat · Revíziók · Warnings**. Egy `AiGenerationProvider` átfogja a kézirat-`<main>`-t és az inspektort, így a generálás → elfogadás → beszúrás folyam egy állapotot oszt.
+- **InspectorPanel** (`components/inspector/`) — jobb oldali, 360px-es inspektor (csak Írás); tabok: **AI · Codex · Beatek · Revíziók · Figyelmeztetések · Meta**. A **Beatek** tab a teljes beat-szerkesztő (`SceneBeatsPanel`), az AI tabból nyílik az **„Ötletelés"** brainstorm-panel (`BrainstormPanel`). Egy `AiGenerationProvider` átfogja a kézirat-`<main>`-t és az inspektort, így a generálás → elfogadás → beszúrás folyam egy állapotot oszt.
 - **StatusBar** (`status-bar.tsx`, 32px, csak Írás) — élő szószám (tabular-nums), fej./jelenet-lokáció a fából, autosave-állapot (`Mentés…` / `Mentve ✓` / hiba, `aria-live` régióban), config-vezérelt aktív modell-badge.
-- **CommandPalette** (`command-palette.tsx` + `…-hotkey.tsx`) — ⌘K/Ctrl-K parancspaletta.
+- **CommandPalette** (`command-palette.tsx` + `…-hotkey.tsx`) — ⌘K/Ctrl-K parancspaletta **valódi kereséssel** (jelenetek + Codex-bejegyzések, nem csak statikus parancsok).
 - **ShortcutsOverlay** (`shortcuts-overlay.tsx`) — billentyű-overlay.
 - **Sparkfield** (`sparkfield.tsx`) — finom navigációs szikra-effekt.
 - **ShellDrawer** (`shell-drawer.tsx`) — `<lg` alatt a bal struktúra-pane és az inspektor slide-in Radix Dialog drawerbe csúszik (focus-trap, Esc/scrim-zár, címkézett). A rail inline marad (már 56px). **Fókusz mód** (Írás): minden chrome eltűnik, csak a kézirat marad; Esc kilép.
@@ -55,16 +55,16 @@ A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/k
 | `/profil` | Profil | `components/profile/ProfileScreen` | Dedikált felhasználói profil-képernyő; a `/me` végpontot + a `scene_count`-ot köti be; a user-menü „Profil" sora ide navigál | **KÉSZ** (DESIGN-C) |
 | `/projekt` | Projektek dashboard | `components/projects/ProjectsDashboard` | Könyvespolc / projektválasztó + új-könyv wizard, TanStack Query-vel | **KÉSZ** — Cormorant (`font-display`) hero, arany eyebrow + lebegő könyv-gerinc ikon, Daily-Spark kártya |
 | `/konyv/[bookId]/terv` | Terv-board | route → terv-screen | NovelCrafter-szerű fejezet/jelenet tervezőfelület, status-pillek, beat-előnézet, drag; **fejezet-generálás-trigger** (`GenerateChapterDialog`) indít AI fejezet-jobot | **KÉSZ** |
-| `/konyv/[bookId]/iras/[sceneId]` | Írás nézet | route → Tiptap editor + inspektor | Fókuszált kézirat-szerkesztés, autosave, AI-bubble, jelenet-fa, jobb inspektor | **KÉSZ** |
-| `/konyv/[bookId]/codex` | Codex | route → Codex-screen + `CodexSidebar` | Story Bible: karakter/helyszín/worldbuilding, keresés, kártya/tábla/detail, **„Képek" panel** | **KÉSZ** |
+| `/konyv/[bookId]/iras/[sceneId]` | Írás nézet | route → Tiptap editor + inspektor | Fókuszált kézirat-szerkesztés, autosave, **undo/redo toolbar-gombok**, AI-bubble, jelenet-fa, jobb inspektor | **KÉSZ** |
+| `/konyv/[bookId]/codex` | Codex | route → Codex-screen + `CodexSidebar` | Story Bible: karakter/helyszín/worldbuilding, keresés, kártya/tábla/detail, **„Képek" panel**, detail-tabok: **Kapcsolatok + Progresszió**; **sorozat-létrehozás** a scope-pickerből (`NewSeriesModal`) | **KÉSZ** |
 | `/konyv/[bookId]/kapcsolatok` | Kapcsolatok | relations-graph | Karakter-kapcsolat gráf — egyedi SVG force-graph (determinista d3-force, GSAP él-rajz) | **KÉSZ** |
 | `/konyv/[bookId]/cselekmenyszalak` | Cselekményszálak | plotlines-screen | Subplotok típus szerint csoportosítva, status-pillek, jelenet-chipek, attach/detach | **KÉSZ** |
 | `/konyv/[bookId]/idosor` | Idősor | timeline-screen | Fejezet/jelenet kronológia a könyv-fából (GSAP spine-draw) | **KÉSZ** |
-| `/konyv/[bookId]/feladatok` | AI feladatok | jobs-screen | Élő AI-job-képernyő (book-scope `GET /jobs` + polling, history + attention); a **fejezet-job progressz + review** itt fut le (a tervről indított fejezet-generálás állapota + emberi jóváhagyása) | **KÉSZ** |
+| `/konyv/[bookId]/feladatok` | AI feladatok | jobs-screen | Élő AI-job-képernyő (book-scope `GET /jobs` + polling, history + attention); a **fejezet- és könyv-job progressz + review** itt fut le (`ChapterJobRow` / `BookJobRow`, fejezetenkénti review-val), **job-megszakítás gombbal** (`POST /jobs/{id}/cancel`) | **KÉSZ** |
 | `/konyv/[bookId]/chat` | Kutatás (RAG) | chat-screen | Grounded RAG Q&A a Codex + kézirat felett, idézet-chipekkel | **KÉSZ** |
 | `/konyv/[bookId]/export` | Export / Import | `components/export/ExportScreen` | Manuscript-export; **Markdown / DOCX / EPUB / PDF mind valódi** (letöltés), csak **TXT stub**, Import V1-stub | **MD/DOCX/EPUB/PDF KÉSZ** (TXT stub) |
 | `/konyv/[bookId]/beallitasok` | Beállítások | `BookTab` + `components/settings/SettingsScreen` | 2-tabos: **Könyv** (cím/műfaj/szerző) + **AI / Szolgáltatók** (Local/Ollama, Cloud/API-kulcs hub, MCP, generálási paraméterek, RAG-index) | **KÉSZ** — provider-hub megőrizve |
-| `/konyv/[bookId]/attekintes` | Áttekintés | route → áttekintés-screen | Könyv-dashboard áttekintő-nézet (a design-delta körben megépült, placeholder kitöltve) | **KÉSZ** (design-delta, `32486eb`) |
+| `/konyv/[bookId]/attekintes` | Áttekintés | route → áttekintés-screen | Könyv-dashboard áttekintő-nézet (a design-delta körben megépült, placeholder kitöltve); innen indul a **„Könyv generálása"** könyv-szintű batch-job (`GenerateBookDialog`) | **KÉSZ** (design-delta, `32486eb`) |
 | `/konyv/[bookId]/stiluskalauz` | Stíluskalauz | route → stíluskalauz-screen | Style Guide szerkesztő, a `StyleGuide` backendhez kötve (net-új design-delta route) | **KÉSZ** (design-delta, `1056e2f`) |
 | `/konyv/[bookId]/promptok` | Prompt-tár | `components/prompts/PromptLibraryScreen` | Prompt Library — **teljes CRUD** (létrehozás / szerkesztés / törlés UI), nem placeholder többé | **KÉSZ** (full CRUD) |
 | `/konyv/[bookId]/hangok` | Hangkönyvtár | `ScreenPlaceholder` | Audio domain — **az egyetlen megmaradt placeholder** | **PLACEHOLDER (V2, M11)** |
@@ -78,6 +78,13 @@ A route-ok az `(app)` szegmens alatt élnek. A könyv-scope-os route-ok mind `/k
 - **Verzióelőzmények panel** (Revision History, design-delta `06633e6`) — jobbról-csúszó panel diffel + restore-ral, a Write inspektorba kötve.
 - **Scene Metadata modal** (design-delta `b9461c5`) — a terv-board jelenet-kártya „Info" gombjáról nyíló jelenet-metaadat modal.
 - **Codex Image Lightbox** (design-delta `d316528`) — a Codex „Képek" panel képeit teljes méretben nyitó képnagyító overlay.
+- **SceneBeatsPanel** (`components/inspector/scene-beats-panel.tsx`, GAP-FIX) — a jobb inspektor **„Beatek" tabja**: teljes beat-szerkesztő (lista / hozzáadás / szerkesztés / törlés / drag-átrendezés).
+- **BrainstormPanel** (`components/inspector/brainstorm-panel.tsx`, GAP-FIX) — az inspektor AI-tabjából nyíló **„Ötletelés"** panel (brainstorm AI-művelet, HITL).
+- **GenerateBookDialog** (`components/overview/generate-book-dialog.tsx`, GAP-FIX) — az Áttekintésről indított **könyv-szintű** batch-generálás dialógusa; a job progressze + fejezetenkénti review-ja a feladatok-képernyőn fut (HITL).
+- **BookJobRow** (`components/jobs/book-job-row.tsx`, GAP-FIX) — könyv-job sor a feladatok-képernyőn: élő progressz, fejezetenkénti review, **megszakítás-gomb**.
+- **NewSeriesModal** (`components/codex/new-series-modal.tsx`, GAP-FIX) — sorozat-létrehozás a Codex scope-pickeréből.
+- **RelationsTab / ProgressionTab** (`components/codex/relations-tab.tsx`, `progression-tab.tsx`, GAP-FIX) — a Codex-detail **Kapcsolatok + Progresszió** tabjai: a `CodexRelation` / `CodexProgression` CRUD-backendek (és az „állapot az N. jelenetnél" AI-szűrés) felhasználói felülete.
+- **Szerkesztő undo/redo** (`components/editor/ai-toolbar.tsx`, GAP-FIX) — visszavonás/mégis gombok a kézirat-toolbaron, élő `can().undo()/redo()` állapottal (a jelenetváltás-seedek nem kerülnek a historyba — cross-scene undo-korrupció javítva).
 
 ---
 
