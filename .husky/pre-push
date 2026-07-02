@@ -1,0 +1,18 @@
+# Pre-push gate (husky v9+ format: plain shell, no husky.sh sourcing).
+#
+# Fast local checks only (~20-30s): web type-check + lint + unit tests — the
+# same three gates as the CI `frontend` job. The backend suites (ruff, mypy,
+# pytest for apps/api + apps/ai) are intentionally SKIPPED here to keep pushes
+# fast; CI runs them on every push, so nothing broken reaches main unchecked.
+set -e
+
+echo "pre-push: web type-check (tsc --noEmit)..."
+corepack pnpm --dir apps/web type-check
+
+echo "pre-push: web lint..."
+corepack pnpm --dir apps/web lint
+
+echo "pre-push: web unit tests (vitest)..."
+corepack pnpm --dir apps/web test
+
+echo "pre-push: all checks passed."

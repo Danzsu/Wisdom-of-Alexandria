@@ -10,8 +10,11 @@ import { defineConfig, devices } from "@playwright/test";
  * the apps/api + apps/ai shared `app` package name never collides here (that
  * only matters inside a single Python process).
  *
- * `@playwright/test` is fetched on demand (CI uses `pnpm dlx playwright`), so it
- * is NOT a committed dependency and `e2e/**` is excluded from tsc + vitest.
+ * `@playwright/test` is NOT a committed dependency and `e2e/**` is excluded
+ * from tsc + vitest. The CI e2e job installs it runner-locally (`pnpm add -D`,
+ * nothing committed) and runs `pnpm exec playwright` — `pnpm dlx` cannot work
+ * here, because this config's own `import "@playwright/test"` resolves from
+ * apps/web upward and the dlx sandbox is never on that path.
  */
 export default defineConfig({
   testDir: "./e2e",

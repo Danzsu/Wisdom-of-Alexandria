@@ -179,6 +179,20 @@ turbo dev
 Az alkalmazás elérhető: [http://localhost:3000](http://localhost:3000)  
 API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
+### Demó tartalom (opcionális seed)
+
+Üres adatbázisba egy kis magyar mintaprojektet tölt (1 projekt + könyv,
+2 fejezet, 3 jelenet beat-ekkel, 3 Codex-bejegyzés). Ha már létezik bármilyen
+projekt, nem csinál semmit — kétszer futtatni is biztonságos.
+
+```bash
+# repo gyökeréből
+uv run --directory apps/api python -m app.seed
+
+# vagy a futó compose stackben
+docker compose exec api uv run --no-sync python -m app.seed
+```
+
 ### Ollama modell letöltése
 
 ```bash

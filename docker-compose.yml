@@ -81,6 +81,17 @@ services:
         condition: service_healthy
     volumes:
       - media_data:/data/media
+    # /health only turns healthy AFTER the entrypoint's `alembic upgrade head`
+    # has completed and uvicorn is serving — ai/worker gate on this (below) so
+    # the schema exists before they can touch shared tables. python + urllib
+    # are always present in the python:3.12-slim image (no curl/wget needed).
+    # start_period is generous: it covers the migration run on a fresh DB.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   ai:
     build:
@@ -109,6 +120,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # api owns the schema (its entrypoint runs `alembic upgrade head` before
+      # serving; healthy == migrated). The ai service connects to the DB
+      # lazily, but its provider/job routes hit shared tables on the very
+      # first request — gating on a migrated schema removes that boot race.
+      api:
+        condition: service_healthy
     volumes:
       - ./packages/prompts:/app/prompts:ro
       - media_data:/data/media
@@ -136,6 +153,11 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      # Generation jobs read/write shared tables as soon as the first job is
+      # dequeued — gate on the api service (healthy == migrations applied by
+      # its entrypoint) so a job can never race a half-migrated schema.
+      api:
         condition: service_healthy
     volumes:
       - ./packages/prompts:/app/prompts:ro

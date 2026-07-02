@@ -1,0 +1,51 @@
+# Dependabot: weekly dependency PRs for every ecosystem in the monorepo.
+# Minor + patch bumps are GROUPED per ecosystem to keep the PR volume sane;
+# majors stay individual PRs (they deserve their own review).
+version: 2
+updates:
+  # --- JavaScript (pnpm workspace) -----------------------------------------
+  # The root manifest owns the single pnpm lockfile; apps/web is the only app
+  # package with its own runtime deps.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # --- Python (uv workspace; pip ecosystem reads the pyproject manifests) ---
+  - package-ecosystem: "pip"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pip"
+    directory: "/apps/ai"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # --- GitHub Actions -------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

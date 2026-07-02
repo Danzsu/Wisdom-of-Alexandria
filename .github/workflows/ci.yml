@@ -284,9 +284,20 @@ jobs:
       - name: Build the web app
         run: corepack pnpm -C apps/web build
 
-      - name: Install the Playwright browser
+      # @playwright/test is intentionally NOT a committed dependency (e2e/** is
+      # excluded from tsc + vitest). But `pnpm dlx` CANNOT run the tests: dlx
+      # executes playwright from an isolated cache sandbox, and when
+      # playwright.config.ts / the specs `import "@playwright/test"`, Node
+      # resolves from apps/web upward — the sandbox is never on that path →
+      # ERR_MODULE_NOT_FOUND before a single test collects (reproduced locally;
+      # `continue-on-error` masked it here). Install the package into the
+      # workspace AT RUNTIME instead (runner-local, nothing committed) and run
+      # everything through `pnpm exec`.
+      - name: Install Playwright + browser
         working-directory: apps/web
-        run: corepack pnpm dlx @playwright/test@1.49.1 install --with-deps chromium
+        run: |
+          corepack pnpm add -D @playwright/test@1.49.1
+          corepack pnpm exec playwright install --with-deps chromium
 
       # Start api + ai + web in the BACKGROUND and run the wait + tests in the
       # SAME step: GitHub Actions reaps a step's background processes when its
@@ -311,7 +322,7 @@ jobs:
               sleep 2
             done
           done
-          corepack pnpm dlx @playwright/test@1.49.1 test
+          corepack pnpm exec playwright test
 
   # ---------------------------------------------------------------------------
   # TODO (future):

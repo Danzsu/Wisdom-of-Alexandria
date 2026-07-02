@@ -45,8 +45,12 @@ COPY apps/api/ ./apps/api/
 # Create the user AFTER all root-owned installs/copies, then hand the whole
 # workspace to it — this includes the uv-managed venv at /workspace/.venv, which
 # `uv run --no-sync` must READ at runtime. Without the chown, appuser could not
-# read the venv and the app would fail to start.
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /workspace
+# read the venv and the app would fail to start. The chmod covers the
+# migrate-then-serve entrypoint (apps/api/docker-entrypoint.sh): a Windows
+# checkout's unreliable git exec bit must not yield an unexecutable script.
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /workspace \
+    && chmod +x /workspace/apps/api/docker-entrypoint.sh
 USER appuser
 
 WORKDIR /workspace/apps/api
@@ -56,4 +60,8 @@ WORKDIR /workspace/apps/api
 
 EXPOSE 8000
 
-CMD ["uv", "run", "--no-sync", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Migrate-then-serve: docker-entrypoint.sh runs `alembic upgrade head` and then
+# exec's uvicorn (exec replaces the shell, so uvicorn receives signals
+# directly). Invoked via `sh` explicitly as a second layer of defense against a
+# lost exec bit.
+CMD ["sh", "docker-entrypoint.sh"]

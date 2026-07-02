@@ -9,8 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
+from app.core.startup_checks import warn_if_default_secret_in_production
 
 logger = logging.getLogger(__name__)
+
+# Loud (but non-fatal) guard: dev-default SECRET_KEY + production-looking env.
+warn_if_default_secret_in_production(settings.secret_key)
 
 
 @asynccontextmanager
@@ -29,7 +33,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    # Explicit allowlist instead of "*": the API only serves these verbs, and
+    # an explicit list keeps CORS preflight responses from advertising methods
+    # (TRACE/CONNECT/…) that no route implements.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

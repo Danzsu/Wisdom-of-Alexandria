@@ -247,26 +247,34 @@ cd apps/api
 alembic downgrade -1
 ```
 
-## Seed data
+## Seed data (opt-in demo content)
 
-Create demo project:
+A fresh install boots into an empty workspace. The demo seed fills it with a
+small, browsable Hungarian sample (original demo content). It is **opt-in** —
+nothing runs it automatically.
+
+From the repo root:
 
 ```bash
-cd apps/api
-python -m app.scripts.seed_demo_project
+uv run --directory apps/api python -m app.seed
 ```
 
-Seed should create:
+Inside the running compose stack:
 
-- one project
-- one book
-- three chapters
-- seven scenes
-- three characters
-- two locations
-- five worldbuilding entries
-- one style guide
-- one scene with beats
+```bash
+docker compose exec api uv run --no-sync python -m app.seed
+```
+
+The seed creates:
+
+- one project ("Demó — A tenger emlékezete") + one book
+- two chapters with three scenes (every scene has content + beats)
+- three Codex entries: one character (with aliases), one location, one
+  worldbuilding entry
+
+**Idempotence guard:** if the database already contains *any* project (demo or
+real), the seed no-ops with a message and touches nothing — safe to run twice.
+Contract test: `apps/api/tests/integration/test_seed.py`.
 
 ## Ollama setup
 

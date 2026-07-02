@@ -37,7 +37,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    # Explicit allowlist instead of "*": the service only serves these verbs,
+    # and an explicit list keeps CORS preflight responses from advertising
+    # methods (TRACE/CONNECT/…) that no route implements.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
