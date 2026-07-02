@@ -9,11 +9,13 @@
  *
  *   AI service (:8001):
  *     GET    /jobs?book_id=&scene_id=&status=&limit=  → GenerationJobRead[]
+ *     POST   /jobs/{job_id}/cancel                    → GenerationJobRead
  *     DELETE /jobs/{job_id}                           → 204
  *
  * Interactive single-scene AI stays SYNCHRONOUS (it persists each job inline);
- * this client only READS the resulting job records (history + failure surfacing)
- * and supports deleting a job row.
+ * this client READS the resulting job records (history + failure surfacing),
+ * supports CANCELLING a queued/running background job (chapter/book
+ * automation), and supports deleting a job row.
  */
 import { AI_BASE_URL, apiFetch } from "./client";
 import {
@@ -61,6 +63,21 @@ export async function getJob(jobId: string): Promise<GenerationJobRead> {
   const data = await apiFetch<unknown>(`/jobs/${encodeURIComponent(jobId)}`, {
     baseUrl: AI_BASE_URL,
   });
+  return generationJobReadSchema.parse(data);
+}
+
+/**
+ * Cancel a generation job (`POST /jobs/{id}/cancel`). PENDING jobs flip to
+ * `cancelled` immediately (best-effort RQ dequeue); RUNNING chapter/book jobs
+ * stop cooperatively between scenes/chapters, KEEPING the already-generated
+ * revisions. A job already in a terminal state answers 409 — surfaced as a
+ * thrown error via `apiFetch`, never swallowed. Returns the updated job row.
+ */
+export async function cancelJob(jobId: string): Promise<GenerationJobRead> {
+  const data = await apiFetch<unknown>(
+    `/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { method: "POST", baseUrl: AI_BASE_URL },
+  );
   return generationJobReadSchema.parse(data);
 }
 

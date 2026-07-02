@@ -2,7 +2,14 @@
 
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { RotateCcw, Eye, ChevronsUpDown, Database, Music } from "lucide-react";
+import {
+  RotateCcw,
+  Eye,
+  ChevronsUpDown,
+  Shrink,
+  Database,
+  Music,
+} from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { BrandStar } from "@/components/kit/brand-star";
 import { hu } from "@/lib/i18n/hu";
@@ -12,6 +19,7 @@ export type BubbleAction =
   | "rewrite"
   | "describe"
   | "expand"
+  | "compress"
   | "visualize"
   | "ai"
   | "codex"
@@ -98,6 +106,11 @@ export function SelectionBubbleMenu({
           label={hu.write.bubbleExpand}
           icon={ChevronsUpDown}
           onClick={() => onAction("expand")}
+        />
+        <PillAction
+          label={hu.write.bubbleCompress}
+          icon={Shrink}
+          onClick={() => onAction("compress")}
         />
         <PillAction
           label={hu.write.bubbleVisualize}

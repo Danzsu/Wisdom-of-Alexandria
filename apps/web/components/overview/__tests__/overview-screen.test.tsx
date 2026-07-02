@@ -219,6 +219,30 @@ describe("OverviewScreen", () => {
     );
   });
 
+  it("opens the Könyv generálása dialog from the hero action (V2 book automation)", async () => {
+    useFullData();
+    // The dialog fans out per-scene beat queries once open — serve them empty
+    // (0 beats → every chapter reads 0 generatable; the trigger still opens).
+    server.use(
+      http.get(`${base}/scenes/:sceneId/beats`, () => HttpResponse.json([])),
+    );
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByRole("heading", { name: BOOK_WITH_SYNOPSIS.title });
+
+    // The hero exposes the book-level generate trigger…
+    await user.click(
+      screen.getByRole("button", { name: hu.bookGen.trigger }),
+    );
+    // …and the selection dialog opens (its subtitle copy is rendered — it may
+    // appear both as the a11y description and in the body).
+    expect(
+      (await screen.findAllByText(hu.bookGen.subtitle)).length,
+    ).toBeGreaterThan(0);
+    // The book's chapters are listed as selectable rows.
+    expect(await screen.findAllByRole("checkbox")).toHaveLength(2);
+  });
+
   it("shows a skeleton while the book is loading", () => {
     server.use(
       http.get(`${base}/projects`, () => new Promise(() => {})),

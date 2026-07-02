@@ -47,6 +47,8 @@ export type SnippetRead = ApiSchemas["SnippetRead"];
 export type PromptTemplateRead = ApiSchemas["PromptTemplateRead"];
 export type PromptTemplateCreate = ApiSchemas["PromptTemplateCreate"];
 export type PromptTemplateUpdate = ApiSchemas["PromptTemplateUpdate"];
+// `POST /prompt-templates/{id}/use` → the new atomic `uses` count.
+export type PromptTemplateUseResult = ApiSchemas["PromptTemplateUseResult"];
 export type StyleGuideRead = ApiSchemas["StyleGuideRead"];
 
 /* ---------------------------------------------------------------------------
@@ -65,6 +67,9 @@ export type AIDescribeResult = AiSchemas["AIDescribeResult"];
 export type ContinuityWarning = AiSchemas["ContinuityWarning"];
 export type ContinuityResult = AiSchemas["ContinuityResult"];
 export type ResearchResult = AiSchemas["ResearchResult"];
+// Brainstorm returns ideas + job provenance, never a Revision; expand/compress
+// reuse the standard `AIResult` (revision + job + context_entities).
+export type BrainstormResult = AiSchemas["BrainstormResult"];
 export type ModelInfo = AiSchemas["ModelInfo"];
 export type ModelsResponse = AiSchemas["ModelsResponse"];
 export type ProviderRead = AiSchemas["ProviderRead"];

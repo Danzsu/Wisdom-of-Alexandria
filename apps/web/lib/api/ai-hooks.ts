@@ -20,9 +20,13 @@ import {
 } from "@tanstack/react-query";
 import {
   approveRevision,
+  brainstorm,
   checkContinuity,
+  compress,
   createSnippet,
   describe,
+  expand,
+  generateBook,
   generateChapter,
   generateScene,
   indexProjectAsync,
@@ -33,16 +37,22 @@ import {
   writeContinue,
   type ResearchInput,
 } from "./ai";
-import { getJob, listJobs } from "./jobs";
+import { cancelJob, getJob, listJobs } from "./jobs";
+import { listChapters } from "./chapters";
 import { listScenes } from "./scenes";
 import { listBeats } from "./beats";
 import { queryKeys } from "./hooks";
 import type {
   AIDescribeResult,
   AIResult,
+  BookGenerateRequest,
+  BrainstormRequest,
+  BrainstormResult,
   ChapterGenerateRequest,
+  CompressRequest,
   ContinuityResult,
   DescribeRequest,
+  ExpandRequest,
   GenerateSceneRequest,
   GenerationJobRead,
   ModelsResponse,
@@ -246,6 +256,42 @@ export function useRewrite(): UseMutationResult<AIResult, Error, RewriteRequest>
   return useMutation({ mutationFn: (input: RewriteRequest) => rewrite(input) });
 }
 
+/**
+ * Expand the selection via the dedicated `/ai/expand` endpoint. Resolves to an
+ * `AIResult` whose revision is UNAPPROVED (`revision_type: "expand"`) — the
+ * same HITL rails as rewrite.
+ */
+export function useExpand(): UseMutationResult<AIResult, Error, ExpandRequest> {
+  return useMutation({ mutationFn: (input: ExpandRequest) => expand(input) });
+}
+
+/**
+ * Tighten the selection via the dedicated `/ai/compress` endpoint. Resolves to
+ * an `AIResult` whose revision is UNAPPROVED (`revision_type: "compress"`).
+ */
+export function useCompress(): UseMutationResult<
+  AIResult,
+  Error,
+  CompressRequest
+> {
+  return useMutation({ mutationFn: (input: CompressRequest) => compress(input) });
+}
+
+/**
+ * Brainstorm story ideas (ötletelés). Resolves to an idea LIST — never a
+ * Revision (ideas are not manuscript text, so there is nothing to approve or
+ * insert). Errors surface via the mutation's `error` (never swallowed).
+ */
+export function useBrainstorm(): UseMutationResult<
+  BrainstormResult,
+  Error,
+  BrainstormRequest
+> {
+  return useMutation({
+    mutationFn: (input: BrainstormRequest) => brainstorm(input),
+  });
+}
+
 export function useDescribe(): UseMutationResult<
   AIDescribeResult,
   Error,
@@ -397,6 +443,182 @@ export function useGenerateChapter(): UseMutationResult<
   return useMutation({
     mutationFn: ({ chapterId, body }: GenerateChapterInput) =>
       generateChapter(chapterId, body),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Book automation (V2) — selection data + the generate mutation + cancel.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * One row of the "Könyv generálása" selection list: a chapter with the fact the
+ * modal's default-selection rule needs — how many of its scenes are GENERATABLE
+ * (EMPTY manuscript text AND at least one beat; the same SAFE default the
+ * backend/worker auto-selects per chapter). `selectableByDefault` collapses the
+ * rule (generatableCount > 0) so the component stays a pure renderer.
+ */
+export interface BookGenChapter {
+  id: string;
+  title: string;
+  /** Total scenes in the chapter (context for the row hint). */
+  sceneCount: number;
+  /** Scenes the backend would generate: EMPTY content AND >=1 beat. */
+  generatableCount: number;
+  /** Pre-checked iff generatableCount > 0 (the modal's default rule). */
+  selectableByDefault: boolean;
+}
+
+/** What {@link useBookChaptersForGeneration} returns to the dialog. */
+export interface BookChaptersForGeneration {
+  chapters: BookGenChapter[];
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+}
+
+/**
+ * Load a book's chapters plus each chapter's generatable-scene count (EMPTY
+ * content AND >=1 beat), the data the GenerateBookDialog needs. Reuses the
+ * existing endpoints (`listChapters` + `listScenes` + `listBeats`) under the
+ * SHARED cache keys (`bookChapters` / `chapterScenes` / `sceneBeats`), so tree
+ * data the Áttekintés screen already loaded is reused and beat lists are only
+ * fetched lazily while the dialog is open — the same fan-out pattern as
+ * {@link useChapterScenesForGeneration}. Disabled (no fetch) until both a book
+ * id is supplied AND `enabled` is true. Errors surface via `error`/`isError`
+ * (never swallowed).
+ */
+export function useBookChaptersForGeneration(
+  bookId: string | undefined,
+  enabled: boolean,
+): BookChaptersForGeneration {
+  const active = Boolean(bookId) && enabled;
+
+  const chaptersQuery = useQuery({
+    queryKey: queryKeys.bookChapters(bookId ?? "__none__"),
+    queryFn: () => listChapters(bookId as string),
+    enabled: active,
+  });
+  const chapters = chaptersQuery.data ?? [];
+
+  const sceneQueries = useQueries({
+    queries: chapters.map((chapter) => ({
+      queryKey: queryKeys.chapterScenes(chapter.id),
+      queryFn: () => listScenes(chapter.id),
+      enabled: active,
+    })),
+  });
+
+  // Flatten every scene (keeping its owning chapter index) for the beat fan-out.
+  const flatScenes = sceneQueries.flatMap(
+    (query, chapterIndex) =>
+      (query.data ?? []).map((scene) => ({ scene, chapterIndex })),
+  );
+
+  const beatQueries = useQueries({
+    queries: flatScenes.map(({ scene }) => ({
+      queryKey: queryKeys.sceneBeats(scene.id),
+      queryFn: () => listBeats(scene.id),
+      enabled: active,
+    })),
+  });
+
+  const scenesLoading = sceneQueries.some((q) => q.isLoading);
+  const beatsLoading = beatQueries.some((q) => q.isLoading);
+  const firstError =
+    (chaptersQuery.error as Error | null) ??
+    (sceneQueries.find((q) => q.error)?.error as Error | null) ??
+    (beatQueries.find((q) => q.error)?.error as Error | null) ??
+    null;
+
+  // The query arrays are fresh each render; key the memo on these resolved
+  // data signatures so it only recomputes when the data actually changes.
+  const sceneSignature = flatScenes.map(({ scene }) => scene.id).join(",");
+  const beatSignature = beatQueries
+    .map((q) => q.data?.length ?? -1)
+    .join(",");
+
+  const rows = useMemo<BookGenChapter[]>(
+    () => {
+      // Per-chapter generatable tally from the flat scene+beat pairs.
+      const generatableByChapter = new Map<number, number>();
+      flatScenes.forEach(({ scene, chapterIndex }, flatIndex) => {
+        const beatCount = beatQueries[flatIndex]?.data?.length ?? 0;
+        const isEmpty = sceneIsEmpty(scene.content, scene.word_count);
+        if (isEmpty && beatCount > 0) {
+          generatableByChapter.set(
+            chapterIndex,
+            (generatableByChapter.get(chapterIndex) ?? 0) + 1,
+          );
+        }
+      });
+      return chapters.map((chapter, index) => {
+        const generatableCount = generatableByChapter.get(index) ?? 0;
+        return {
+          id: chapter.id,
+          title: chapter.title,
+          sceneCount: sceneQueries[index]?.data?.length ?? 0,
+          generatableCount,
+          selectableByDefault: generatableCount > 0,
+        };
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chapters, sceneSignature, beatSignature],
+  );
+
+  return {
+    chapters: rows,
+    isLoading:
+      chaptersQuery.isLoading ||
+      (active && chapters.length > 0 && (scenesLoading || beatsLoading)),
+    isError:
+      chaptersQuery.isError ||
+      sceneQueries.some((q) => q.isError) ||
+      beatQueries.some((q) => q.isError),
+    error: firstError,
+  };
+}
+
+/** Input for the book-generation mutation (the book + the request body). */
+export interface GenerateBookInput {
+  bookId: string;
+  body: BookGenerateRequest;
+}
+
+/**
+ * Enqueue a book-generation job (V2 book automation). Resolves to the queued
+ * parent `GenerationJob` (status `pending`); the caller toasts + closes the
+ * modal and the job then surfaces live in the AI feladatok screen (book-level
+ * progress + per-chapter review groups). Every generated scene is a
+ * `Revision(approved=false)` — the manuscript only changes on an explicit
+ * approve (HITL). Errors surface via the mutation's `error` (never swallowed).
+ */
+export function useGenerateBook(): UseMutationResult<
+  GenerationJobRead,
+  Error,
+  GenerateBookInput
+> {
+  return useMutation({
+    mutationFn: ({ bookId, body }: GenerateBookInput) =>
+      generateBook(bookId, body),
+  });
+}
+
+/**
+ * Cancel a pending/running generation job (`POST /jobs/{id}/cancel`). PENDING
+ * flips immediately; a RUNNING chapter/book job stops cooperatively between
+ * scenes/chapters, KEEPING the already-generated revisions. The caller
+ * invalidates the book's jobs list on success so the row reflects `cancelled`
+ * without waiting for the next poll. Errors surface via the mutation's `error`
+ * (never swallowed).
+ */
+export function useCancelJob(): UseMutationResult<
+  GenerationJobRead,
+  Error,
+  string
+> {
+  return useMutation({
+    mutationFn: (jobId: string) => cancelJob(jobId),
   });
 }
 

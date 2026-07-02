@@ -7,6 +7,7 @@ import { http, HttpResponse } from "msw";
 import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
 import {
   AI_GENERATED_TEXT,
+  BRAINSTORM_IDEAS_FIXTURE,
   CHAPTERS_FIXTURE,
   COVER_LAYOUTS_FIXTURE,
   COVER_STYLES_FIXTURE,
@@ -16,6 +17,7 @@ import {
   FAROSZ_RELATIONS,
   IMAGE_STYLES_FIXTURE,
   JOBS_FIXTURE,
+  JOB_BOOK_GENERATE_RUNNING,
   MODELS_FIXTURE,
   PLOTLINES_FIXTURE,
   PLOTLINE_SCENES_FIXTURE,
@@ -26,6 +28,7 @@ import {
   SERIES_FIXTURE,
   SZELENE_PROGRESSIONS,
   makeAiResult,
+  makeBrainstormResult,
   makeChapter,
   makeCodexEntry,
   makeCodexProgression,
@@ -341,6 +344,18 @@ const promptTemplateStore = {
     if (this.items[index].is_builtin) return "403";
     this.items.splice(index, 1);
     return "ok";
+  },
+
+  /**
+   * Register one application (`POST /{id}/use`): atomically increment `uses`
+   * and return the new count. Works for builtins too (usage is not an edit) —
+   * mirrors the real endpoint. Returns undefined for an unknown id (404).
+   */
+  use(id: string): number | undefined {
+    const target = this.items.find((t) => t.id === id);
+    if (!target) return undefined;
+    target.uses += 1;
+    return target.uses;
   },
 };
 promptTemplateStore.seed();
@@ -1669,6 +1684,19 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
+  /* Register one template application — the atomic `uses` counter. Stateful:
+   * the next list/get reflects the incremented count (the UI refetches it). */
+  http.post(`${base}/prompt-templates/:id/use`, ({ params }) => {
+    const uses = promptTemplateStore.use(String(params.id));
+    if (uses === undefined) {
+      return HttpResponse.json(
+        { detail: "Prompt template not found" },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json({ uses });
+  }),
+
   /* ---- CodexRelations (UX-3a relationship graph). Project-scoped CRUD. ---- */
   http.get(`${base}/projects/:projectId/codex-relations`, ({ params }) =>
     HttpResponse.json(relationStore.list(String(params.projectId))),
@@ -2058,6 +2086,36 @@ export const handlers = [
     return HttpResponse.json(makeAiResult("rewrite", AI_GENERATED_TEXT, model));
   }),
 
+  /* Expand / compress — dedicated endpoints, HITL like rewrite: the revision
+   * comes back UNAPPROVED with the matching revision_type. */
+  http.post(`${aiBase}/ai/expand`, async ({ request }) => {
+    const body = (await request.json()) as { model?: string | null };
+    const model = body.model ?? MODELS_FIXTURE.default;
+    return HttpResponse.json(makeAiResult("expand", AI_GENERATED_TEXT, model));
+  }),
+
+  http.post(`${aiBase}/ai/compress`, async ({ request }) => {
+    const body = (await request.json()) as { model?: string | null };
+    const model = body.model ?? MODELS_FIXTURE.default;
+    return HttpResponse.json(
+      makeAiResult("compress", AI_GENERATED_TEXT, model),
+    );
+  }),
+
+  /* Brainstorm (ötletelés) — ideas, NOT manuscript text: NO revision. Honors
+   * the requested `count` (mirrors the backend "at most count ideas"). */
+  http.post(`${aiBase}/ai/brainstorm`, async ({ request }) => {
+    const body = (await request.json()) as {
+      count?: number;
+      model?: string | null;
+    };
+    const model = body.model ?? MODELS_FIXTURE.default;
+    const count = body.count ?? 5;
+    return HttpResponse.json(
+      makeBrainstormResult(BRAINSTORM_IDEAS_FIXTURE.slice(0, count), model),
+    );
+  }),
+
   http.post(`${aiBase}/ai/write-continue`, async ({ request }) => {
     const body = (await request.json()) as { model?: string | null };
     const model = body.model ?? MODELS_FIXTURE.default;
@@ -2217,6 +2275,34 @@ export const handlers = [
     }
     return new HttpResponse(null, { status: 204 });
   }),
+
+  /* Cancel a pending/running job — echoes the row flipped to `cancelled`
+   * (mirrors POST /jobs/{id}/cancel). Tests that pin the EXACT cancelled job id
+   * override with `server.use(...)` and capture the param. */
+  http.post(`${aiBase}/jobs/:jobId/cancel`, ({ params }) =>
+    HttpResponse.json({
+      ...JOB_BOOK_GENERATE_RUNNING,
+      id: String(params.jobId),
+      status: "cancelled",
+    }),
+  ),
+
+  /* ---- Book automation (V2). POST enqueues ONE pending book_generate job for
+   * the selected chapters; the worker-side progress then arrives via the jobs
+   * poll. Tests that pin the EXACT chapter_ids/run_continuity capture the body
+   * via `server.use(...)`. ---- */
+  http.post(`${aiBase}/ai/books/:bookId/generate`, ({ params }) =>
+    HttpResponse.json(
+      {
+        ...JOB_BOOK_GENERATE_RUNNING,
+        id: "job-bookgen-queued",
+        book_id: String(params.bookId),
+        status: "pending",
+        output_data: null,
+      },
+      { status: 202 },
+    ),
+  ),
 
   /* ---- Async RAG index (P1L-1). POST enqueues a pending INDEX job; GET
    * /jobs/{id} polls it. The default GET returns a DONE index job with counts so

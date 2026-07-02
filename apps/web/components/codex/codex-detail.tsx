@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   Pin,
+  Plus,
   Trash2,
   UserRound,
   X,
@@ -57,6 +58,7 @@ import { cn, countWords } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { CodexEntryAvatar } from "./codex-meta";
 import { ImagePanel } from "./image-panel";
+import { NewSeriesModal } from "./new-series-modal";
 import { ProgressionTab } from "./progression-tab";
 import { RelationsTab } from "./relations-tab";
 
@@ -542,7 +544,10 @@ function RoleField({
  * (`null`, visible in every book) or a specific series in the project. On change
  * it persists via the shared patch helper (errors surfaced there, never
  * swallowed). When the project has no series, only the project-global option is
- * offered (honest — there is nothing to scope to yet).
+ * offered (honest — there is nothing to scope to yet) — and the "Új sorozat"
+ * affordance (gap-fix #3) creates one right here: it opens a small name modal,
+ * POSTs project-scoped, and the invalidated series list makes the new series
+ * immediately selectable.
  */
 function ScopeField({
   projectId,
@@ -555,6 +560,7 @@ function ScopeField({
 }) {
   const series = useSeries(projectId);
   const options = series.data ?? [];
+  const [newSeriesOpen, setNewSeriesOpen] = useState(false);
 
   function handleChange(value: string) {
     const next = value === "" ? null : value;
@@ -573,20 +579,35 @@ function ScopeField({
           {series.error?.message ?? hu.codex.seriesLoadError}
         </p>
       ) : null}
-      <select
-        id="codex-scope"
-        aria-label={hu.codex.entryScopeLabel}
-        value={seriesId ?? ""}
-        onChange={(e) => handleChange(e.target.value)}
-        className="box-border h-9 w-full max-w-[320px] rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
-      >
-        <option value="">{hu.codex.entryScopeProject}</option>
-        {options.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.title}
-          </option>
-        ))}
-      </select>
+      <div className="flex max-w-[420px] items-center gap-1.5">
+        <select
+          id="codex-scope"
+          aria-label={hu.codex.entryScopeLabel}
+          value={seriesId ?? ""}
+          onChange={(e) => handleChange(e.target.value)}
+          className="box-border h-9 min-w-0 flex-1 rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-muted)]"
+        >
+          <option value="">{hu.codex.entryScopeProject}</option>
+          {options.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.title}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setNewSeriesOpen(true)}
+          className="flex h-9 flex-none items-center gap-1 rounded-[10px] border border-border bg-surface px-2.5 text-[12px] text-text-soft transition-colors hover:border-accent hover:bg-accent-muted hover:text-accent-text"
+        >
+          <Icon icon={Plus} size={12} />
+          {hu.codex.seriesNewLabel}
+        </button>
+      </div>
+      <NewSeriesModal
+        projectId={projectId}
+        open={newSeriesOpen}
+        onOpenChange={setNewSeriesOpen}
+      />
     </div>
   );
 }

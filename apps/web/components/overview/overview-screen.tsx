@@ -19,13 +19,20 @@
  * with no chapters → EmptyState. Quick actions navigate to the real routes
  * (Codex, plan, Stíluskalauz). Nothing without a cheap data source is fabricated.
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PenLine, Users, ScrollText, ChevronRight } from "lucide-react";
+import {
+  PenLine,
+  Users,
+  ScrollText,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
 import { ProgressBar } from "@/components/kit/progress-bar";
 import { ErrorState } from "@/components/kit/error-state";
 import { EmptyState } from "@/components/kit/empty-state";
 import { Skeleton } from "@/components/kit/skeleton";
+import { GenerateBookDialog } from "@/components/overview/generate-book-dialog";
 import { hu } from "@/lib/i18n/hu";
 import { useResolvedBook } from "@/lib/api/export-hooks";
 import { useBookTree, usePlotlines } from "@/lib/api/hooks";
@@ -78,6 +85,9 @@ export function OverviewScreen() {
   const tree = useBookTree(bookId);
   const projectId = bookQuery.data?.project_id;
   const plotlinesQuery = usePlotlines(projectId);
+
+  // Book automation (V2): the hero-level "Könyv generálása" dialog.
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const book = bookQuery.data;
   const chapters = tree.chapters;
@@ -154,7 +164,16 @@ export function OverviewScreen() {
         author={book.author}
         genre={book.genre}
         onContinue={() => router.push(`/konyv/${bookId}/terv`)}
+        onGenerate={() => setGenerateOpen(true)}
       />
+
+      {bookId ? (
+        <GenerateBookDialog
+          bookId={bookId}
+          open={generateOpen}
+          onOpenChange={setGenerateOpen}
+        />
+      ) : null}
 
       {/* Aggregate stat cards. */}
       <div className="mb-[18px] grid grid-cols-2 gap-3.5 sm:grid-cols-4">
@@ -286,17 +305,20 @@ function OverviewShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The gold book-spine hero card: cover chip, eyebrow, title, meta, CTA. */
+/** The gold book-spine hero card: cover chip, eyebrow, title, meta, CTA(s). */
 function BookHero({
   title,
   author,
   genre,
   onContinue,
+  onGenerate,
 }: {
   title: string;
   author: string | null;
   genre: string | null;
   onContinue: () => void;
+  /** Opens the book-level "Könyv generálása" dialog (omitted on empty books). */
+  onGenerate?: () => void;
 }) {
   const meta = [author, genre].filter(Boolean).join(" · ");
   return (
@@ -323,14 +345,26 @@ function BookHero({
           <p className="mt-2 text-[13px] text-text-muted">{meta}</p>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={onContinue}
-        className="inline-flex h-[42px] flex-none items-center gap-2 rounded-[11px] bg-[linear-gradient(145deg,var(--gold),var(--gold-deep))] px-[18px] text-sm font-semibold text-white [box-shadow:0_8px_20px_color-mix(in_srgb,var(--gold)_34%,transparent)]"
-      >
-        <PenLine size={15} strokeWidth={1.8} aria-hidden="true" />
-        {t.continueWriting}
-      </button>
+      <div className="flex flex-none items-center gap-2.5 pb-1">
+        {onGenerate ? (
+          <button
+            type="button"
+            onClick={onGenerate}
+            className="inline-flex h-[42px] flex-none items-center gap-2 rounded-[11px] border border-ai/40 bg-ai-muted px-[18px] text-sm font-semibold text-ai-text transition-colors hover:bg-ai hover:text-ai-fg"
+          >
+            <Sparkles size={15} strokeWidth={1.8} aria-hidden="true" />
+            {hu.bookGen.trigger}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onContinue}
+          className="inline-flex h-[42px] flex-none items-center gap-2 rounded-[11px] bg-[linear-gradient(145deg,var(--gold),var(--gold-deep))] px-[18px] text-sm font-semibold text-white [box-shadow:0_8px_20px_color-mix(in_srgb,var(--gold)_34%,transparent)]"
+        >
+          <PenLine size={15} strokeWidth={1.8} aria-hidden="true" />
+          {t.continueWriting}
+        </button>
+      </div>
     </div>
   );
 }

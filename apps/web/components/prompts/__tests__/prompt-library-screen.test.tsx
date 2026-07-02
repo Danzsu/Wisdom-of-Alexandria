@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { Providers } from "@/test/test-utils";
 import { expectNoA11yViolations } from "@/test/a11y";
 import { server } from "@/test/msw/server";
+import { resetPromptTemplateStore } from "@/test/msw/handlers";
 import { API_BASE_URL } from "@/lib/api/client";
 import { hu } from "@/lib/i18n/hu";
 
@@ -472,6 +473,130 @@ describe("PromptLibraryScreen", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // "Sablon másolása" — clipboard copy + the atomic `uses` counter (POST /use).
+  // ---------------------------------------------------------------------------
+
+  describe("Sablon másolása (copy + uses counter)", () => {
+    beforeEach(() => {
+      // The `uses` counter is STATEFUL in the MSW store — reset per test so the
+      // 0 → 1 assertions are deterministic.
+      resetPromptTemplateStore();
+    });
+
+    it("copies THIS template's body to the clipboard AND POSTs /use with its id; the count refreshes", async () => {
+      const usedIds: string[] = [];
+      const listener = ({ request }: { request: Request }) => {
+        const path = new URL(request.url).pathname;
+        const match = /\/prompt-templates\/([^/]+)\/use$/.exec(path);
+        if (request.method === "POST" && match) usedIds.push(match[1]);
+      };
+      server.events.on("request:start", listener);
+
+      const user = userEvent.setup();
+      renderScreen();
+
+      await user.click(
+        await screen.findByRole("button", { name: /Érzéki leírás/ }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent(hu.promptLibrary.usesLabel("0"));
+
+      await user.click(
+        within(dialog).getByRole("button", {
+          name: hu.promptLibrary.copyTemplate,
+        }),
+      );
+
+      // The EXACT template body reached the clipboard (userEvent's stub).
+      await waitFor(async () => {
+        await expect(navigator.clipboard.readText()).resolves.toContain(
+          "Gazdagítsd a kijelölt jelenetet érzéki részletekkel.",
+        );
+      });
+      // The /use POST hit exactly this template (Érzéki leírás = builtin-3).
+      await waitFor(() => expect(usedIds).toEqual(["builtin-3"]));
+      // Success toast + the invalidate-driven refetch shows the NEW count in
+      // the (still open) modal.
+      expect(
+        await screen.findByText(hu.promptLibrary.copySuccess),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole("dialog")).toHaveTextContent(
+          hu.promptLibrary.usesLabel("1"),
+        ),
+      );
+      server.events.removeListener("request:start", listener);
+    });
+
+    it("the card's uses count also refreshes after the modal is closed", async () => {
+      const user = userEvent.setup();
+      renderScreen();
+
+      await user.click(
+        await screen.findByRole("button", { name: /Érzéki leírás/ }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      await user.click(
+        within(dialog).getByRole("button", {
+          name: hu.promptLibrary.copyTemplate,
+        }),
+      );
+      await screen.findByText(hu.promptLibrary.copySuccess);
+      await user.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+
+      // The Érzéki leírás card now shows 1 use (the other five stay at 0).
+      const card = screen
+        .getAllByRole("button", { name: /Érzéki leírás/ })
+        .find((b) => b.textContent?.includes(hu.promptLibrary.usesLabel("1")));
+      expect(card).toBeDefined();
+    });
+
+    it("a failed /use POST surfaces the honest partial-error toast (copy done, count not)", async () => {
+      server.use(
+        http.post(`${base}/prompt-templates/:id/use`, () =>
+          HttpResponse.json({ detail: "boom" }, { status: 500 }),
+        ),
+      );
+      const user = userEvent.setup();
+      renderScreen();
+
+      await user.click(
+        await screen.findByRole("button", { name: /Érzéki leírás/ }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      await user.click(
+        within(dialog).getByRole("button", {
+          name: hu.promptLibrary.copyTemplate,
+        }),
+      );
+
+      expect(
+        await screen.findByText(hu.promptLibrary.copyCountError),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(hu.promptLibrary.copySuccess),
+      ).not.toBeInTheDocument();
+      // The body still reached the clipboard (copy is the primary function).
+      await expect(navigator.clipboard.readText()).resolves.toContain(
+        "Gazdagítsd a kijelölt jelenetet érzéki részletekkel.",
+      );
+    });
+
+    it("has no a11y violations with the detail modal (copy affordance) open", async () => {
+      const user = userEvent.setup();
+      renderScreen();
+      await user.click(
+        await screen.findByRole("button", { name: /Érzéki leírás/ }),
+      );
+      await screen.findByRole("dialog");
+      await expectNoA11yViolations(document);
+    });
   });
 
   it("has no a11y violations on the loaded screen", async () => {

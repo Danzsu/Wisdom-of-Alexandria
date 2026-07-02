@@ -9,6 +9,7 @@ import {
   Shrink,
   MessageSquare,
   Sparkles,
+  Lightbulb,
 } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { Textarea } from "@/components/kit/textarea";
@@ -16,25 +17,33 @@ import { ModelSelector } from "@/components/kit/model-selector";
 import { AIResultCard } from "@/components/kit/ai-result-card";
 import { hu } from "@/lib/i18n/hu";
 import { cn } from "@/lib/utils";
-import { useEditorStore } from "@/lib/stores/editor-store";
+import { useEditorStore, type AiPanelView } from "@/lib/stores/editor-store";
 import { GeneratingCard } from "./generating-card";
 import { DescribePanel } from "./describe-panel";
+import { BrainstormPanel } from "./brainstorm-panel";
 import { useInspectorModels } from "./use-inspector-models";
 import {
   useAiGeneration,
   type AiActionKind,
 } from "./ai-generation-context";
 
-/** The 2×3 action grid (Átírás primary). "Leírás" opens the Describe panel. */
-const GRID: { id: AiActionKind | "describe"; label: string; icon: typeof RotateCcw }[] =
-  [
-    { id: "rewrite", label: hu.inspector.actRewrite, icon: RotateCcw },
-    { id: "describe", label: hu.inspector.actDescribe, icon: Eye },
-    { id: "expand", label: hu.inspector.actExpand, icon: ChevronsUpDown },
-    { id: "compress", label: hu.inspector.actCompress, icon: Shrink },
-    { id: "dialog", label: hu.inspector.actDialog, icon: MessageSquare },
-    { id: "fix", label: hu.inspector.actFix, icon: Sparkles },
-  ];
+/** The grid entries that open a SUB-PANEL instead of firing a generation. */
+type PanelActionId = Extract<AiPanelView, "describe" | "brainstorm">;
+
+/** The action grid (Átírás primary). "Leírás" / "Ötletelés" open sub-panels. */
+const GRID: {
+  id: AiActionKind | PanelActionId;
+  label: string;
+  icon: typeof RotateCcw;
+}[] = [
+  { id: "rewrite", label: hu.inspector.actRewrite, icon: RotateCcw },
+  { id: "describe", label: hu.inspector.actDescribe, icon: Eye },
+  { id: "expand", label: hu.inspector.actExpand, icon: ChevronsUpDown },
+  { id: "compress", label: hu.inspector.actCompress, icon: Shrink },
+  { id: "dialog", label: hu.inspector.actDialog, icon: MessageSquare },
+  { id: "fix", label: hu.inspector.actFix, icon: Sparkles },
+  { id: "brainstorm", label: hu.inspector.actBrainstorm, icon: Lightbulb },
+];
 
 /**
  * The AI inspector tab. Shows the selected-text QuoteBox, the 2×3 action grid,
@@ -47,18 +56,25 @@ export function AiTab() {
   const models = useInspectorModels();
   const gen = useAiGeneration();
   const [instruction, setInstruction] = useState("");
-  const [view, setView] = useState<"main" | "describe">("main");
+  // The sub-panel view lives in the STORE (not local state) so the Write page
+  // can open a specific panel across the route boundary (the toolbar's
+  // Ötletelés action sets it to "brainstorm").
+  const view = useEditorStore((s) => s.aiPanelView);
+  const setView = useEditorStore((s) => s.setAiPanelView);
 
   if (view === "describe") {
     return <DescribePanel onBack={() => setView("main")} />;
+  }
+  if (view === "brainstorm") {
+    return <BrainstormPanel onBack={() => setView("main")} />;
   }
 
   const hasSelection = Boolean(aiSelection && aiSelection.text.trim().length > 0);
   const selectionText = aiSelection?.text ?? "";
 
-  const onGridClick = (id: AiActionKind | "describe") => {
-    if (id === "describe") {
-      setView("describe");
+  const onGridClick = (id: AiActionKind | PanelActionId) => {
+    if (id === "describe" || id === "brainstorm") {
+      setView(id);
       return;
     }
     gen.trigger(id, instruction);

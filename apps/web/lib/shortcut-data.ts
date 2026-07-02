@@ -26,6 +26,8 @@ export interface ShortcutGroup {
  * - Esc — close overlay / exit focus mode (Radix Dialog + AppShell).
  * - `/` — editor slash menu (SlashMenu).
  * - Mod+B / Mod+I — Tiptap StarterKit bold / italic.
+ * - Mod+Z / Mod+Shift+Z — Tiptap StarterKit UndoRedo (history), also on the
+ *   editor toolbar as buttons.
  * - AI rewrite / continue — surfaced via the toolbar + slash menu (no global
  *   keybinding yet); listed so the overlay is an honest index of AI actions.
  */
@@ -46,6 +48,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: hu.shortcuts.slashMenu, keys: ["/"] },
       { label: hu.shortcuts.bold, keys: ["Mod", "B"] },
       { label: hu.shortcuts.italic, keys: ["Mod", "I"] },
+      { label: hu.shortcuts.undo, keys: ["Mod", "Z"] },
+      { label: hu.shortcuts.redo, keys: ["Mod", "Shift", "Z"] },
     ],
   },
   {

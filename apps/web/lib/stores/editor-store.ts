@@ -51,6 +51,15 @@ export type InspectorTab =
   | "meta";
 
 /**
+ * Which sub-panel the AI inspector tab shows: the main action grid, the
+ * 6-channel Describe accordion, or the Ötletelés (brainstorm) panel. Lives in
+ * the store (not AiTab-local state) so the Write page — a different subtree
+ * across the route boundary — can open a specific panel (the toolbar's
+ * Ötletelés action opens `"brainstorm"` directly).
+ */
+export type AiPanelView = "main" | "describe" | "brainstorm";
+
+/**
  * A snapshot of the manuscript selection at the moment an AI action is
  * triggered. The inspector reads `text` (shown in the QuoteBox + sent to the
  * model); `from`/`to` record the ProseMirror range so an accepted rewrite can
@@ -109,6 +118,8 @@ interface EditorState {
   /* ---- AI inspector ---- */
   /** Which inspector tab is shown (AI / Codex / Beatek / Figyelmeztetések / Meta). */
   inspectorTab: InspectorTab;
+  /** Which AI-tab sub-panel is shown (main grid / describe / brainstorm). */
+  aiPanelView: AiPanelView;
   /**
    * The user-chosen active model id, or `null` to use the backend default. Set by
    * the ModelSelector; read by every generation call + the beat card badge.
@@ -150,6 +161,8 @@ interface EditorState {
 
   /* ---- AI inspector actions ---- */
   setInspectorTab: (tab: InspectorTab) => void;
+  /** Switch the AI-tab sub-panel (main / describe / brainstorm). */
+  setAiPanelView: (view: AiPanelView) => void;
   /** Set the active model id (from the config-driven ModelSelector). */
   setActiveModel: (model: string | null) => void;
   /** Capture the current selection (or clear it). */
@@ -194,6 +207,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   beatWords: "400",
 
   inspectorTab: "ai",
+  aiPanelView: "main",
   activeModel: null,
   aiSelection: null,
   applySuggestion: null,
@@ -219,6 +233,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setBeatWords: (words) => set({ beatWords: words }),
 
   setInspectorTab: (tab) => set({ inspectorTab: tab }),
+  setAiPanelView: (view) => set({ aiPanelView: view }),
   setActiveModel: (model) => set({ activeModel: model }),
   setAiSelection: (selection) => set({ aiSelection: selection }),
   setApplySuggestion: (fn) => set({ applySuggestion: fn }),
@@ -229,6 +244,9 @@ export const useEditorStore = create<EditorState>((set) => ({
       wordCount: 0,
       beatState: "hidden",
       aiSelection: null,
+      // A sub-panel (describe/brainstorm) is a per-scene working context; a
+      // scene switch returns the AI tab to the main grid.
+      aiPanelView: "main",
       // A continuity result is scene-specific; clear it so the toolbar badge
       // never carries a stale count into a different scene.
       continuityWarningCount: null,

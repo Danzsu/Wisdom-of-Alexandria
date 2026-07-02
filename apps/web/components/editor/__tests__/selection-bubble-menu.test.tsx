@@ -67,6 +67,27 @@ describe("SelectionBubbleMenu", () => {
     expect(onAction).toHaveBeenCalledWith("rewrite");
   });
 
+  it("fires the expand + compress actions (dedicated AI ops)", async () => {
+    let editor: Editor | null = null;
+    const onAction = vi.fn();
+    render(<BubbleHarness onAction={onAction} onReady={(e) => (editor = e)} />);
+    await waitFor(() => expect(editor).not.toBeNull());
+    act(() => {
+      (editor as Editor)
+        .chain()
+        .focus()
+        .setTextSelection({ from: 1, to: 10 })
+        .run();
+    });
+    await screen.findByRole("toolbar", { name: "Kijelölés műveletei" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Bővítés" }));
+    expect(onAction).toHaveBeenCalledWith("expand");
+
+    fireEvent.click(screen.getByRole("button", { name: "Tömörítés" }));
+    expect(onAction).toHaveBeenCalledWith("compress");
+  });
+
   it("fires the codex + audio actions", async () => {
     let editor: Editor | null = null;
     const onAction = vi.fn();

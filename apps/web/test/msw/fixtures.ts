@@ -23,6 +23,7 @@ import type {
   AIContextEntity,
   AIDescribeResult,
   AIResult,
+  BrainstormResult,
   ContinuityResult,
   ContinuityWarning,
   GenerationJobRead,
@@ -580,6 +581,7 @@ function makeJob(jobType: string, model: string): GenerationJobRead {
     project_id: null,
     scene_id: SCENE_ACTIVE.id,
     chapter_id: null,
+    book_id: null,
     job_type: jobType,
     status: "done",
     model_name: model,
@@ -608,6 +610,7 @@ export function makeIndexJob(
     project_id: FAROSZ_PROJECT.id,
     scene_id: null,
     chapter_id: null,
+    book_id: null,
     job_type: "index",
     status,
     model_name: null,
@@ -715,6 +718,38 @@ export function makeResearchResult(
   ],
 ): ResearchResult {
   return { answer, context_entities: contextEntities };
+}
+
+/* ---------------------------------------------------------------------------
+ * Brainstorm (ötletelés) — mirror apps/ai ai.py (BrainstormResult). Ideas, NOT
+ * manuscript text: NO revision, only the idea list + the `brainstorm` job
+ * provenance + the RAG context chips.
+ * ------------------------------------------------------------------------- */
+
+/** Five distinctive idea texts (the backend default `count`). */
+export const BRAINSTORM_IDEAS_FIXTURE: string[] = [
+  "A tekercs valójában térkép a Fárosz alatti katakombákhoz.",
+  "Szelene felismeri a kézírást — a saját anyjáé.",
+  "A könyvtáros szándékosan hagyta elöl a tekercset: próbatétel.",
+  "A jelek fénnyel olvashatók csak — a Fárosz tüze a kulcs.",
+  "Egy rivális írnok ugyanazt a tekercset keresi.",
+];
+
+/**
+ * Build a `BrainstormResult` (idea list + brainstorm job + RAG context). The
+ * default carries the {@link CONTEXT_ENTITIES_FIXTURE} chips; pass `[]` for the
+ * RAG-skipped path.
+ */
+export function makeBrainstormResult(
+  ideas: string[] = BRAINSTORM_IDEAS_FIXTURE,
+  model: string = MODELS_FIXTURE.default,
+  contextEntities: AIContextEntity[] = CONTEXT_ENTITIES_FIXTURE,
+): BrainstormResult {
+  return {
+    ideas,
+    job: makeJob("brainstorm", model),
+    context_entities: contextEntities,
+  };
 }
 
 /** Build a `SnippetRead` echo for a POST /projects/{pid}/snippets body. */
@@ -827,6 +862,7 @@ export const JOB_DONE: GenerationJobRead = {
   project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
+  book_id: null,
   job_type: "rewrite",
   status: "done",
   model_name: "ollama/llama3.2",
@@ -843,6 +879,7 @@ export const JOB_RUNNING: GenerationJobRead = {
   project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
+  book_id: null,
   job_type: "generate_scene",
   status: "running",
   model_name: "ollama/llama3.2",
@@ -859,6 +896,7 @@ export const JOB_FAILED: GenerationJobRead = {
   project_id: null,
   scene_id: SCENE_ACTIVE.id,
   chapter_id: null,
+  book_id: null,
   job_type: "describe",
   status: "failed",
   model_name: "ollama/llama3.2",
@@ -882,6 +920,7 @@ export const JOB_CHAPTER_GENERATE_DONE: GenerationJobRead = {
   project_id: null,
   scene_id: null,
   chapter_id: CHAPTER_TWO.id,
+  book_id: null,
   job_type: "chapter_generate",
   status: "done",
   model_name: "ollama/llama3.2",
@@ -914,10 +953,81 @@ export const JOB_CHAPTER_GENERATE_DONE: GenerationJobRead = {
 };
 
 /**
+ * A RUNNING book-generation job (V2 book automation). Carries `book_id`
+ * directly on the row (no scene/chapter) and the live BOOK-level progress in
+ * `output_data`: 2 chapters planned, 1 completed; 3 scenes planned, 2 done,
+ * 1 failed; per-chapter `chapters` groups each holding the SAME per-scene
+ * entries the chapter job writes. Chapter I: one done scene (with a pending
+ * revision) + one failed scene (no revision); chapter II: one done scene.
+ * These exact counts drive the book-progress assertions, and `running` makes
+ * the row cancellable.
+ */
+export const JOB_BOOK_GENERATE_RUNNING: GenerationJobRead = {
+  id: "job-bookgen-1",
+  project_id: FAROSZ_PROJECT.id,
+  scene_id: null,
+  chapter_id: null,
+  book_id: FAROSZ_BOOK.id,
+  job_type: "book_generate",
+  status: "running",
+  model_name: "ollama/llama3.2",
+  prompt_version: "1.0",
+  input_data: {
+    book_id: FAROSZ_BOOK.id,
+    chapter_ids: [CHAPTER_ONE.id, CHAPTER_TWO.id],
+    run_continuity: false,
+  },
+  output_data: {
+    total_chapters: 2,
+    completed_chapters: 1,
+    total_scenes: 3,
+    completed: 2,
+    failed: 1,
+    skipped: [],
+    chapters: [
+      {
+        chapter_id: CHAPTER_ONE.id,
+        scenes: [
+          {
+            scene_id: SCENE_FIRST.id,
+            revision_id: "rev-bookgen-first",
+            status: "done",
+            warning_count: 0,
+          },
+          {
+            scene_id: "5ce44444-4444-4444-4444-444444444444",
+            revision_id: null,
+            status: "failed",
+            warning_count: 0,
+            error: "A modell időtúllépés miatt nem válaszolt.",
+          },
+        ],
+      },
+      {
+        chapter_id: CHAPTER_TWO.id,
+        scenes: [
+          {
+            scene_id: SCENE_ACTIVE.id,
+            revision_id: "rev-bookgen-active",
+            status: "done",
+            warning_count: 0,
+          },
+        ],
+      },
+    ],
+  },
+  error_message: null,
+  created_at: "2026-06-15T11:25:00Z",
+  updated_at: "2026-06-15T11:25:30Z",
+};
+
+/**
  * Jobs newest-first, mirroring the backend `created_at desc` ordering. Note the
- * chapter-generation fixture ({@link JOB_CHAPTER_GENERATE_DONE}) is deliberately
- * NOT in this default set — its presence would change the seeded row count the
- * existing JobsScreen tests pin. T5 tests inject it via `server.use(...)`.
+ * chapter-generation fixture ({@link JOB_CHAPTER_GENERATE_DONE}) and the
+ * book-generation fixture ({@link JOB_BOOK_GENERATE_RUNNING}) are deliberately
+ * NOT in this default set — their presence would change the seeded row count
+ * the existing JobsScreen tests pin. The T5/V2 tests inject them via
+ * `server.use(...)`.
  */
 export const JOBS_FIXTURE: GenerationJobRead[] = [
   JOB_FAILED,

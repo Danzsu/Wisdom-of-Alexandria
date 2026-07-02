@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Brain,
   CheckCircle,
+  Copy,
   Eye,
   Pencil,
   Plus,
@@ -35,6 +36,7 @@ import {
   useCreatePromptTemplate,
   useDeletePromptTemplate,
   usePromptTemplates,
+  usePromptTemplateUse,
   useUpdatePromptTemplate,
 } from "@/lib/api/hooks";
 import type { PromptTemplateRead, PromptTemplateUpdate } from "@/lib/api/types";
@@ -142,6 +144,7 @@ export function PromptLibraryScreen() {
   const createMutation = useCreatePromptTemplate();
   const updateMutation = useUpdatePromptTemplate();
   const deleteMutation = useDeletePromptTemplate();
+  const useMutation = usePromptTemplateUse();
 
   const [selected, setSelected] = useState<PromptTemplateRead | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -218,6 +221,28 @@ export function PromptLibraryScreen() {
       if (selected?.id === template.id) setSelected(null);
     } catch {
       toast.error(t.deleteError);
+    }
+  }
+
+  /**
+   * "Sablon másolása": copy the template BODY to the clipboard, then register
+   * one application (`POST /{id}/use` — the atomic counter; its success
+   * invalidates the list so the refreshed count renders). Failures are honest:
+   * a clipboard failure aborts with an error toast; a failed counter POST
+   * (body already copied) surfaces the partial-error toast — never silent.
+   */
+  async function handleCopyTemplate(template: PromptTemplateRead) {
+    try {
+      await navigator.clipboard.writeText(template.body);
+    } catch {
+      toast.error(t.copyError);
+      return;
+    }
+    try {
+      await useMutation.mutateAsync(template.id);
+      toast.success(t.copySuccess);
+    } catch {
+      toast.error(t.copyCountError);
     }
   }
 
@@ -343,55 +368,72 @@ export function PromptLibraryScreen() {
         {renderList()}
       </div>
 
-      {/* Read-only detail modal. */}
+      {/* Read-only detail modal. Rendered from the FRESH list row (falling
+          back to the clicked snapshot) so the invalidate-driven refetch after
+          a "Sablon másolása" shows the new uses count while the modal is open. */}
       <Modal
         open={selected !== null}
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}
       >
-        {selected ? (
-          <ModalShell maxWidth={560}>
-            <ModalHeader
-              title={selected.name}
-              leadingIcon={
-                <span className="inline-flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-ai-muted text-ai-text">
-                  <Icon icon={iconFor(selected.icon_key)} size={17} />
-                </span>
-              }
-              closeLabel={t.modalClose}
-            />
-            <ModalBody className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-surface-muted px-[9px] py-0.5 text-[10.5px] font-semibold text-text-muted">
-                  {selected.category}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11.5px] text-text-faint">
-                  <Icon icon={Sparkles} size={12} aria-hidden />
-                  {t.usesLabel(String(selected.uses))}
-                </span>
-              </div>
+        {(() => {
+          if (!selected) return null;
+          const detail =
+            query.data?.find((p) => p.id === selected.id) ?? selected;
+          return (
+            <ModalShell maxWidth={560}>
+              <ModalHeader
+                title={detail.name}
+                leadingIcon={
+                  <span className="inline-flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-ai-muted text-ai-text">
+                    <Icon icon={iconFor(detail.icon_key)} size={17} />
+                  </span>
+                }
+                closeLabel={t.modalClose}
+              />
+              <ModalBody className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-surface-muted px-[9px] py-0.5 text-[10.5px] font-semibold text-text-muted">
+                    {detail.category}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11.5px] text-text-faint">
+                    <Icon icon={Sparkles} size={12} aria-hidden />
+                    {t.usesLabel(String(detail.uses))}
+                  </span>
+                </div>
 
-              <div>
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-text-faint">
-                  {t.modalDescription}
-                </h3>
-                <p className="m-0 text-[13.5px] leading-[1.55] text-text-soft [text-wrap:pretty]">
-                  {selected.description}
-                </p>
-              </div>
+                <div>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-text-faint">
+                    {t.modalDescription}
+                  </h3>
+                  <p className="m-0 text-[13.5px] leading-[1.55] text-text-soft [text-wrap:pretty]">
+                    {detail.description}
+                  </p>
+                </div>
 
-              <div>
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-text-faint">
-                  {t.modalTemplate}
-                </h3>
-                <pre className="m-0 whitespace-pre-wrap rounded-[12px] border border-border bg-surface-soft p-3.5 font-serif text-[13.5px] leading-[1.6] text-text">
-                  {selected.body}
-                </pre>
-              </div>
-            </ModalBody>
-          </ModalShell>
-        ) : null}
+                <div>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-text-faint">
+                    {t.modalTemplate}
+                  </h3>
+                  <pre className="m-0 whitespace-pre-wrap rounded-[12px] border border-border bg-surface-soft p-3.5 font-serif text-[13.5px] leading-[1.6] text-text">
+                    {detail.body}
+                  </pre>
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  variant="cta"
+                  leadingIcon={<Icon icon={Copy} size={14} />}
+                  loading={useMutation.isPending}
+                  onClick={() => void handleCopyTemplate(detail)}
+                >
+                  {t.copyTemplate}
+                </Button>
+              </ModalFooter>
+            </ModalShell>
+          );
+        })()}
       </Modal>
 
       {/* Create modal — POSTs a user template, then refetches the list. */}

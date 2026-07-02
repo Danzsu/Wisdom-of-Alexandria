@@ -43,7 +43,9 @@ import { useEditorStore, type SelectionSnapshot } from "@/lib/stores/editor-stor
 import {
   useApproveRevision,
   useBookProjectId,
+  useCompress,
   useCreateSnippet,
+  useExpand,
   useGenerateScene,
   useModels,
   useRewrite,
@@ -172,6 +174,8 @@ export function AiGenerationProvider({
   const activeModel = storeModel ?? models.data?.default;
 
   const rewriteMutation = useRewrite();
+  const expandMutation = useExpand();
+  const compressMutation = useCompress();
   const continueMutation = useWriteContinue();
   const generateMutation = useGenerateScene();
   const approveMutation = useApproveRevision();
@@ -183,6 +187,8 @@ export function AiGenerationProvider({
 
   const isGenerating =
     rewriteMutation.isPending ||
+    expandMutation.isPending ||
+    compressMutation.isPending ||
     continueMutation.isPending ||
     generateMutation.isPending;
 
@@ -278,6 +284,38 @@ export function AiGenerationProvider({
         toast(hu.write.toastNoSelection);
         return;
       }
+
+      // Expand / compress ride their DEDICATED endpoints: the same selection →
+      // pending-revision → approve rails as rewrite, but the backend owns the
+      // prompt — the body is `{selected_text, guidance?}` (the user's custom
+      // instruction travels as `guidance`), never a canned instruction string.
+      if (action === "expand" || action === "compress") {
+        const guidance = customInstruction?.trim();
+        const mutation =
+          action === "expand" ? expandMutation : compressMutation;
+        mutation.mutate(
+          {
+            selected_text: selection.text,
+            ...(guidance && guidance.length > 0 ? { guidance } : {}),
+            scene_id: sceneId ?? null,
+            model,
+          },
+          {
+            onSuccess: (res) =>
+              handleSingle(
+                res.revision.id,
+                res.revision.content,
+                res.revision.model_name,
+                res.revision.prompt_version,
+                { from: selection.from, to: selection.to },
+                res.context_entities,
+              ),
+            onError: (e) => setError(e),
+          },
+        );
+        return;
+      }
+
       const instruction =
         customInstruction && customInstruction.trim().length > 0
           ? customInstruction.trim()
@@ -307,6 +345,8 @@ export function AiGenerationProvider({
       activeModel,
       sceneId,
       rewriteMutation,
+      expandMutation,
+      compressMutation,
       continueMutation,
       generateMutation,
     ],

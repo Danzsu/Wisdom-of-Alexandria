@@ -5,24 +5,34 @@
  *
  * Reads the real GenerationJob records via {@link useJobs} (book-scoped on the
  * server, polled ~5s so it stays live). Each row shows the localized job type, a
- * status badge, the relative created time, the scene/chapter context, and — on a
- * failure — the sanitized error message in an expandable block. Loading shows a
- * skeleton, an empty book shows a friendly empty state, and a fetch error shows a
- * dedicated error state (never a swallowed rejection).
+ * status badge, the relative created time, the scene/chapter/book context, and —
+ * on a failure — the sanitized error message in an expandable block. Loading
+ * shows a skeleton, an empty book shows a friendly empty state, and a fetch
+ * error shows a dedicated error state (never a swallowed rejection).
+ *
+ * Long-running background jobs (chapter/book automation) additionally expose a
+ * CANCEL affordance while pending/running — an explicit ConfirmDialog, then
+ * `POST /jobs/{id}/cancel` (cooperative: the worker keeps already-generated
+ * revisions and stops before the next scene).
  *
  * Status / job-type rendering degrades gracefully: an UNKNOWN status falls back
  * to a neutral pill with the raw value, and an unknown job_type falls back to its
  * raw string — neither crashes the list.
  */
 import { useState } from "react";
-import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, ListChecks, XCircle } from "lucide-react";
 import { Card } from "@/components/kit/card";
 import { Badge, type BadgeProps } from "@/components/kit/badge";
+import { Button } from "@/components/kit/button";
+import { ConfirmDialog } from "@/components/kit/alert-dialog";
 import { Icon } from "@/components/kit/icon";
+import { toast } from "@/components/kit/toast";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/kit";
-import { useJobs } from "@/lib/api/ai-hooks";
+import { aiQueryKeys, useCancelJob, useJobs } from "@/lib/api/ai-hooks";
 import { asJobStatus, type GenerationJobRead } from "@/lib/api/ai-types";
 import { ChapterJobBody } from "./chapter-job-row";
+import { BookJobBody } from "./book-job-row";
 import { hu } from "@/lib/i18n/hu";
 
 /** Map a known job status → Badge variant + label. */
@@ -34,6 +44,7 @@ const STATUS_META: Record<
   running: { variant: "ai", label: hu.jobs.statusRunning },
   done: { variant: "success", label: hu.jobs.statusDone },
   failed: { variant: "danger", label: hu.jobs.statusFailed },
+  cancelled: { variant: "neutral", label: hu.jobs.statusCancelled },
 };
 
 /** Map a known job_type → localized label. */
@@ -44,7 +55,19 @@ const TYPE_LABEL: Record<string, string> = {
   write_continue: hu.jobs.typeWriteContinue,
   summarize: hu.jobs.typeSummarize,
   chapter_generate: hu.jobs.typeChapterGenerate,
+  book_generate: hu.jobs.typeBookGenerate,
 };
+
+/** Job types whose background run supports cooperative cancellation. */
+const CANCELLABLE_TYPES = new Set(["chapter_generate", "book_generate"]);
+
+/** A job can be cancelled while it has not reached a terminal state. */
+function isCancellable(job: GenerationJobRead): boolean {
+  return (
+    CANCELLABLE_TYPES.has(job.job_type) &&
+    (job.status === "pending" || job.status === "running")
+  );
+}
 
 /** Localized job-type label, falling back to the raw value when unknown. */
 function jobTypeLabel(jobType: string): string {
@@ -62,17 +85,76 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Context line: the scene or chapter the job belongs to (or "not bound"). */
+/** Context line: the scene/chapter/book the job belongs to (or "not bound"). */
 function JobContext({ job }: { job: GenerationJobRead }) {
   let text: string;
   if (job.scene_id) {
     text = `${hu.jobs.contextScene} · ${job.scene_id}`;
   } else if (job.chapter_id) {
     text = `${hu.jobs.contextChapter} · ${job.chapter_id}`;
+  } else if (job.book_id) {
+    text = `${hu.jobs.contextBook} · ${job.book_id}`;
   } else {
     text = hu.jobs.contextNone;
   }
   return <span className="truncate text-[12px] text-text-faint">{text}</span>;
+}
+
+/**
+ * The cancel affordance for a pending/running chapter/book job: a small button
+ * that opens an explicit {@link ConfirmDialog}; only confirming fires
+ * `POST /jobs/{id}/cancel`. On success the book's jobs list is invalidated so
+ * the row flips to "Megszakítva" without waiting for the next poll. Errors
+ * surface as an error toast (never swallowed).
+ */
+function JobCancelAction({
+  job,
+  bookId,
+}: {
+  job: GenerationJobRead;
+  bookId: string | undefined;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const cancel = useCancelJob();
+  const queryClient = useQueryClient();
+
+  const handleConfirm = () => {
+    cancel.mutate(job.id, {
+      onSuccess: () => {
+        toast.success(hu.jobs.cancelledToast);
+        if (bookId) {
+          void queryClient.invalidateQueries({
+            queryKey: aiQueryKeys.jobs(bookId),
+          });
+        }
+      },
+      onError: () => toast.error(hu.jobs.cancelErrorToast),
+    });
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size={28}
+        loading={cancel.isPending}
+        leadingIcon={<Icon icon={XCircle} size={13} />}
+        aria-label={hu.jobs.cancelAria(jobTypeLabel(job.job_type))}
+        onClick={() => setConfirmOpen(true)}
+      >
+        {hu.jobs.cancelAction}
+      </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={hu.jobs.cancelConfirmTitle}
+        description={hu.jobs.cancelConfirmBody}
+        confirmLabel={hu.jobs.cancelAction}
+        onConfirm={handleConfirm}
+      />
+    </>
+  );
 }
 
 /** A single job row (card). Failed jobs expose an expandable error block. */
@@ -86,6 +168,7 @@ function JobRow({
   const [errorOpen, setErrorOpen] = useState(false);
   const isFailed = job.status === "failed";
   const isChapterGenerate = job.job_type === "chapter_generate";
+  const isBookGenerate = job.job_type === "book_generate";
   const errorText = job.error_message?.trim() || hu.jobs.errorUnknown;
 
   return (
@@ -99,6 +182,9 @@ function JobRow({
           <span className="ml-auto text-[12px] text-text-muted">
             {hu.jobs.relativeCreated(job.created_at)}
           </span>
+          {isCancellable(job) ? (
+            <JobCancelAction job={job} bookId={bookId} />
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -111,6 +197,7 @@ function JobRow({
         </div>
 
         {isChapterGenerate ? <ChapterJobBody job={job} bookId={bookId} /> : null}
+        {isBookGenerate ? <BookJobBody job={job} bookId={bookId} /> : null}
 
         {isFailed ? (
           <div className="mt-1">

@@ -101,6 +101,7 @@ function makeQueuedJob(): GenerationJobRead {
     project_id: null,
     scene_id: null,
     chapter_id: CHAPTER_ID,
+    book_id: null,
     job_type: "chapter_generate",
     status: "pending",
     model_name: null,

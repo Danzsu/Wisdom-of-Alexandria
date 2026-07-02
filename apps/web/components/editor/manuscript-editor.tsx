@@ -161,7 +161,16 @@ export function ManuscriptEditor({
     if (!editor) return;
     const next = initialContentRef.current ?? "";
     if (editor.getText() === next) return;
-    editor.commands.setContent(textToDoc(next), { emitUpdate: false });
+    // `addToHistory: false` keeps the seed OUT of the undo stack: undoing right
+    // after a scene switch must never restore the PREVIOUS scene's text (which
+    // autosave would then persist into the new scene — cross-scene corruption).
+    // StarterKit (Tiptap v3) bundles the UndoRedo/history extension, so undo is
+    // live in this editor; see the undo-redo test suite.
+    editor
+      .chain()
+      .setMeta("addToHistory", false)
+      .setContent(textToDoc(next), { emitUpdate: false })
+      .run();
     // Seed the live word count for the new scene without scheduling a save.
     useEditorStore.getState().setWordCount(countWords(editor.getText()));
     // Depend ONLY on the editor instance + scene identity — NOT initialContent

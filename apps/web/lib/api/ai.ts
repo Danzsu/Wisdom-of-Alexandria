@@ -33,6 +33,7 @@ import { currentGenerationParams } from "@/lib/stores/generation-settings-store"
 import {
   aiDescribeResultSchema,
   aiResultSchema,
+  brainstormResultSchema,
   continuityResultSchema,
   generationJobReadSchema,
   modelsResponseSchema,
@@ -42,9 +43,14 @@ import {
   snippetReadSchema,
   type AIDescribeResult,
   type AIResult,
+  type BookGenerateRequest,
+  type BrainstormRequest,
+  type BrainstormResult,
   type ChapterGenerateRequest,
+  type CompressRequest,
   type ContinuityResult,
   type DescribeRequest,
+  type ExpandRequest,
   type GenerateSceneRequest,
   type GenerationJobRead,
   type ModelsResponse,
@@ -92,6 +98,52 @@ export async function rewrite(input: RewriteRequest): Promise<AIResult> {
     baseUrl: AI_BASE_URL,
   });
   return aiResultSchema.parse(data);
+}
+
+/**
+ * Expand the selection (add sensory detail / interiority, keep the voice).
+ * Same HITL contract as rewrite: the response carries an UNAPPROVED
+ * `Revision(revision_type="expand")` — insertion only follows an explicit
+ * approve.
+ */
+export async function expand(input: ExpandRequest): Promise<AIResult> {
+  const data = await apiFetch<unknown>("/ai/expand", {
+    method: "POST",
+    body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
+  });
+  return aiResultSchema.parse(data);
+}
+
+/**
+ * Tighten the selection (cut filler, keep meaning + voice). Same HITL contract
+ * as rewrite: the response carries an UNAPPROVED
+ * `Revision(revision_type="compress")`.
+ */
+export async function compress(input: CompressRequest): Promise<AIResult> {
+  const data = await apiFetch<unknown>("/ai/compress", {
+    method: "POST",
+    body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
+  });
+  return aiResultSchema.parse(data);
+}
+
+/**
+ * Brainstorm story ideas (ötletelés) for a topic. Ideas, NOT manuscript text:
+ * the response has NO revision (nothing is insertable/approvable) — the
+ * `brainstorm` GenerationJob is the provenance record. A `scene_id` opts into
+ * scene-scoped RAG grounding; `context_entities` lists what it grounded on.
+ */
+export async function brainstorm(
+  input: BrainstormRequest,
+): Promise<BrainstormResult> {
+  const data = await apiFetch<unknown>("/ai/brainstorm", {
+    method: "POST",
+    body: withGenerationParams(input),
+    baseUrl: AI_BASE_URL,
+  });
+  return brainstormResultSchema.parse(data);
 }
 
 /** Sensory description for one or more channels (one revision per channel). */
@@ -223,6 +275,33 @@ export async function generateChapter(
 ): Promise<GenerationJobRead> {
   const data = await apiFetch<unknown>(
     `/ai/chapters/${chapterId}/generate`,
+    { method: "POST", body: withGenerationParams(input), baseUrl: AI_BASE_URL },
+  );
+  return generationJobReadSchema.parse(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * Book automation (V2) — enqueue a chapter-by-chapter book generation
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Enqueue a BOOK-generation job: generate every selected chapter, chapter by
+ * chapter, scene by scene, as ONE background job. Returns the queued parent
+ * `GenerationJob` (status `pending`) immediately (HTTP 202); the job then
+ * surfaces live in the AI feladatok screen (book-level progress in
+ * `output_data`). Per chapter the backend auto-selects the SAFE default —
+ * EMPTY scenes with at least one beat; every generated scene becomes a
+ * `Revision(approved=false)` linked to THIS parent job (HITL preserved,
+ * nothing auto-overwrites). The AI-service route (:8001), so `AI_BASE_URL`.
+ * Generation params are attached like the other AI bodies; the result is
+ * validated before reaching the UI.
+ */
+export async function generateBook(
+  bookId: string,
+  input: BookGenerateRequest,
+): Promise<GenerationJobRead> {
+  const data = await apiFetch<unknown>(
+    `/ai/books/${bookId}/generate`,
     { method: "POST", body: withGenerationParams(input), baseUrl: AI_BASE_URL },
   );
   return generationJobReadSchema.parse(data);

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Editor } from "@tiptap/react";
+import { useEditorState, type Editor } from "@tiptap/react";
 import {
   PenLine,
   Eye,
@@ -8,6 +8,8 @@ import {
   Lightbulb,
   Sparkles,
   Database,
+  ChevronsUpDown,
+  Shrink,
   History,
   BookText,
   Image as ImageIcon,
@@ -18,6 +20,8 @@ import {
   MoreHorizontal,
   Check,
   ShieldCheck,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { Icon } from "@/components/kit/icon";
 import { IconButton } from "@/components/kit/icon-button";
@@ -44,6 +48,8 @@ export type ToolbarAction =
   | "codex-progression"
   | "describe"
   | "rewrite"
+  | "expand"
+  | "compress"
   | "brainstorm"
   | "version-history"
   | "thesaurus"
@@ -73,6 +79,20 @@ export interface AiToolbarProps {
  * into a stub toast.
  */
 export function AiToolbar({ editor, onAction }: AiToolbarProps) {
+  // Live undo/redo availability. StarterKit (Tiptap v3) bundles the UndoRedo
+  // (history) extension, so the commands exist whenever the editor does;
+  // useEditorState re-renders this toolbar on doc changes so the disabled
+  // states track `can().undo()/redo()` in real time.
+  const historyState = useEditorState({
+    editor,
+    selector: (ctx) => ({
+      canUndo: ctx.editor?.can().undo() ?? false,
+      canRedo: ctx.editor?.can().redo() ?? false,
+    }),
+  });
+  const canUndo = historyState?.canUndo ?? false;
+  const canRedo = historyState?.canRedo ?? false;
+
   const focusOn = useEditorStore((s) => s.focusOn);
   const toggleFocus = useEditorStore((s) => s.toggleFocus);
   const focusParaOn = useEditorStore((s) => s.focusParaOn);
@@ -115,6 +135,18 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
   ];
 
   const moreItems: SplitMenuItem[] = [
+    // Expand / compress — the two dedicated selection ops (they ride the same
+    // pending-revision rails as rewrite; a selection is required).
+    {
+      id: "expand",
+      label: hu.write.bubbleExpand,
+      icon: <Icon icon={ChevronsUpDown} size={14} />,
+    },
+    {
+      id: "compress",
+      label: hu.write.bubbleCompress,
+      icon: <Icon icon={Shrink} size={14} />,
+    },
     {
       id: "version-history",
       label: hu.write.versionHistory,
@@ -168,6 +200,25 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
       />
 
       <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
+
+      {/* Undo / redo — Tiptap history (StarterKit UndoRedo). Disabled states
+          come from can().undo()/redo() via useEditorState above. */}
+      <IconButton
+        aria-label={hu.write.undoAria}
+        title={hu.write.undoTitle}
+        disabled={!canUndo}
+        onClick={() => editor?.chain().focus().undo().run()}
+      >
+        <Icon icon={Undo2} size={15} />
+      </IconButton>
+      <IconButton
+        aria-label={hu.write.redoAria}
+        title={hu.write.redoTitle}
+        disabled={!canRedo}
+        onClick={() => editor?.chain().focus().redo().run()}
+      >
+        <Icon icon={Redo2} size={15} />
+      </IconButton>
 
       <FormatMenu />
 

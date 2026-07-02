@@ -10,7 +10,7 @@
  * this catalog is the pragmatic frontend step.)
  */
 
-/** The quick actions that carry a canned rewrite-family instruction. */
+/** The selection-based quick actions (each replaces the selection on accept). */
 export type RewriteActionKind =
   | "rewrite"
   | "expand"
@@ -18,11 +18,17 @@ export type RewriteActionKind =
   | "dialog"
   | "fix";
 
+/**
+ * The subset that still rides `POST /ai/rewrite` with a canned instruction.
+ * `expand` / `compress` moved to their DEDICATED endpoints (`/ai/expand`,
+ * `/ai/compress`) — the backend owns those prompts, so they carry no
+ * instruction here (an optional user `guidance` rides in the body instead).
+ */
+export type InstructionActionKind = "rewrite" | "dialog" | "fix";
+
 /** Instruction text the backend `rewrite` prompt expects for each action. */
-export const ACTION_INSTRUCTION: Record<RewriteActionKind, string> = {
+export const ACTION_INSTRUCTION: Record<InstructionActionKind, string> = {
   rewrite: "Írd át a kijelölt szöveget, megőrizve a jelentését és a stílusát.",
-  expand: "Bővítsd ki a kijelölt szöveget több részlettel és érzékletességgel.",
-  compress: "Tömörítsd a kijelölt szöveget, megtartva a lényeget.",
   dialog: "Alakítsd át a kijelölt szöveget élő, természetes párbeszéddé.",
   fix: "Javítsd a kijelölt szöveg nyelvtanát, központozását és gördülékenységét.",
 };

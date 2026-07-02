@@ -25,6 +25,7 @@ import type {
   PlotlineSceneRead as GenPlotlineSceneRead,
   ProjectRead as GenProjectRead,
   PromptTemplateRead as GenPromptTemplateRead,
+  PromptTemplateUseResult as GenPromptTemplateUseResult,
   SceneRead as GenSceneRead,
   SeriesRead as GenSeriesRead,
   StyleGuideRead as GenStyleGuideRead,
@@ -414,6 +415,17 @@ export const promptTemplateUpdateSchema = z.object({
 });
 export type PromptTemplateUpdate = z.infer<typeof promptTemplateUpdateSchema>;
 
+/**
+ * Response of `POST /prompt-templates/{id}/use` — the new `uses` count after
+ * the server atomically registered one application of the template.
+ */
+export const promptTemplateUseResultSchema = z.object({
+  uses: z.number().int().min(0),
+});
+export type PromptTemplateUseResult = z.infer<
+  typeof promptTemplateUseResultSchema
+>;
+
 /* ---------------------------------------------------------------------------
  * CodexRelation — mirrors app/schemas/codex_relation.py (UX-3a relationship
  * graph). PROJECT-scoped (`/projects/{pid}/codex-relations`). A relation is a
@@ -719,6 +731,12 @@ export type CoreContractTies = [
     MatchesContract<
       z.infer<typeof promptTemplateReadSchema>,
       GenPromptTemplateRead
+    >
+  >,
+  Expect<
+    MatchesContract<
+      z.infer<typeof promptTemplateUseResultSchema>,
+      GenPromptTemplateUseResult
     >
   >,
   Expect<

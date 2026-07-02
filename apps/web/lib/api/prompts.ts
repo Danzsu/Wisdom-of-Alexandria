@@ -19,9 +19,11 @@ import {
   promptTemplateListSchema,
   promptTemplateReadSchema,
   promptTemplateUpdateSchema,
+  promptTemplateUseResultSchema,
   type PromptTemplateCreate,
   type PromptTemplateRead,
   type PromptTemplateUpdate,
+  type PromptTemplateUseResult,
 } from "./types";
 
 /** List all prompt templates (builtins first, then user templates). */
@@ -66,4 +68,18 @@ export async function updatePromptTemplate(
 /** Delete a user prompt template (the backend answers 204). */
 export async function deletePromptTemplate(id: string): Promise<void> {
   await apiFetch<unknown>(`/prompt-templates/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Register one application of a template (`POST /prompt-templates/{id}/use`).
+ * The server atomically increments `uses` and returns the new count (works for
+ * builtins too — usage is not an edit). Fired by the "Sablon másolása" action.
+ */
+export async function registerPromptTemplateUse(
+  id: string,
+): Promise<PromptTemplateUseResult> {
+  const data = await apiFetch<unknown>(`/prompt-templates/${id}/use`, {
+    method: "POST",
+  });
+  return promptTemplateUseResultSchema.parse(data);
 }

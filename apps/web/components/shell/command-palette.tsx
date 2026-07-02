@@ -17,10 +17,15 @@ import { Icon } from "@/components/kit/icon";
 import { Avatar } from "@/components/kit/avatar";
 import { cn } from "@/lib/utils";
 import { useNavTo } from "@/lib/use-nav-to";
+import { useShellChrome } from "@/lib/use-shell-chrome";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { useBookTree, useCodexEntries } from "@/lib/api/hooks";
+import { useBookProjectId } from "@/lib/api/ai-hooks";
 import {
-  COMMAND_RESULTS,
-  filterCommands,
+  buildActionResults,
+  buildCodexResults,
+  buildSceneResults,
+  searchCommands,
   type CommandGroupKey,
   type CommandResult,
 } from "@/lib/command-data";
@@ -57,10 +62,16 @@ function ResultLeading({ result }: { result: CommandResult }) {
 /**
  * Top-anchored command palette built on Radix Dialog (modal, focus-trapped,
  * Esc-to-close). Open state lives in the shared UI store; a global Cmd/Ctrl+K
- * handler (see CommandPaletteHotkey) toggles it. The live query filters static
- * placeholder results into the Jelenetek / Codex / Műveletek groups; a result
- * navigates (or runs an action) and closes. Empty matches show the no-results
- * state with a "Létrehozás" affordance.
+ * handler (see CommandPaletteHotkey) toggles it.
+ *
+ * REAL search (gap-fix #1): inside a book the palette searches the actual book
+ * tree (scenes + chapter context) and the project's codex entries, merged with
+ * the actions group; outside a book only the actions are offered. Data loading
+ * is gated on the palette being OPEN — the palette is mounted on every route,
+ * so it must not fetch the tree/codex just by existing. Ranking is prefix >
+ * substring (accent-insensitive); a scene navigates to its Write route, a codex
+ * entry to the codex route with `?entry=` preselected. Empty matches show the
+ * no-results state with a "Létrehozás" affordance.
  */
 export function CommandPalette() {
   const commandOpen = useUIStore((s) => s.commandOpen);
@@ -69,9 +80,32 @@ export function CommandPalette() {
   const openHowItWorks = useUIStore((s) => s.openHowItWorks);
   const navTo = useNavTo();
   const { resolvedTheme, setTheme } = useTheme();
+  const { bookId } = useShellChrome();
   const [query, setQuery] = useState("");
 
-  const results = useMemo(() => filterCommands(COMMAND_RESULTS, query), [query]);
+  // Fetch only while the palette is open (undefined ids disable the queries);
+  // TanStack keeps the results cached for subsequent opens.
+  const activeBookId = commandOpen && bookId ? bookId : undefined;
+  const tree = useBookTree(activeBookId);
+  const projectIdQuery = useBookProjectId(activeBookId);
+  const codexQuery = useCodexEntries(
+    commandOpen ? projectIdQuery.data : undefined,
+  );
+
+  const allResults = useMemo(() => {
+    const out: CommandResult[] = [];
+    if (bookId) {
+      out.push(...buildSceneResults(tree.chapters, bookId));
+      out.push(...buildCodexResults(codexQuery.data ?? [], bookId));
+    }
+    out.push(...buildActionResults(bookId));
+    return out;
+  }, [bookId, tree.chapters, codexQuery.data]);
+
+  const results = useMemo(
+    () => searchCommands(allResults, query),
+    [allResults, query],
+  );
   const hasResults = results.length > 0;
 
   const grouped = useMemo(() => {

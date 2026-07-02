@@ -15,6 +15,7 @@ import type {
   AIContextEntity as GenAIContextEntity,
   AIDescribeResult as GenAIDescribeResult,
   AIResult as GenAIResult,
+  BrainstormResult as GenBrainstormResult,
   ContinuityResult as GenContinuityResult,
   ContinuityWarning as GenContinuityWarning,
   Expect,
@@ -65,6 +66,11 @@ export const generationJobReadSchema = z.object({
   project_id: idString.nullable(),
   scene_id: idString.nullable(),
   chapter_id: idString.nullable(),
+  // Set for book-level jobs (`book_generate`) — drives the book-scoped jobs
+  // listing + the context line. `.default(null)` so a response from an older
+  // AI service (before the column existed) still parses (same tolerance
+  // discipline as `context_entities` below).
+  book_id: idString.nullable().default(null),
   job_type: z.string(),
   status: z.string(),
   model_name: z.string().nullable(),
@@ -80,11 +86,18 @@ export type GenerationJobRead = z.infer<typeof generationJobReadSchema>;
 /**
  * The job statuses the AI service writes, verbatim from the backend `JobStatus`
  * class (`alexandria_core/models/generation_job.py`): pending / running / done
- * / failed. `failed` is the attention status that drives the nav warning badge.
+ * / failed / cancelled. `failed` is the attention status that drives the nav
+ * warning badge; `cancelled` is the user-requested stop (POST /jobs/{id}/cancel).
  * An unknown status (e.g. legacy data) is rendered with a neutral fallback —
  * the union is for the colour/label maps, NOT a parse gate.
  */
-export const JOB_STATUSES = ["pending", "running", "done", "failed"] as const;
+export const JOB_STATUSES = [
+  "pending",
+  "running",
+  "done",
+  "failed",
+  "cancelled",
+] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /** Narrow an arbitrary status string to a known {@link JobStatus}, or null. */
@@ -212,6 +225,22 @@ export const researchResultSchema = z.object({
 export type ResearchResult = z.infer<typeof researchResultSchema>;
 
 /* ---------------------------------------------------------------------------
+ * Brainstorm (ötletelés) — mirrors apps/ai ai.py BrainstormResult.
+ *
+ * Ideas, NOT manuscript text: there is NO revision (nothing insertable, nothing
+ * to approve). `ideas` is the parsed idea list; `job` is the `brainstorm`
+ * GenerationJob provenance record (`null` only for the whitespace-topic
+ * short-circuit). `context_entities` reuses the shared RAG-context shape.
+ * `ideas` and `job` are tolerant (`.default`) so a lean response still parses.
+ * ------------------------------------------------------------------------- */
+export const brainstormResultSchema = z.object({
+  ideas: z.array(z.string()).default([]),
+  job: generationJobReadSchema.nullable().default(null),
+  context_entities: contextEntitiesField,
+});
+export type BrainstormResult = z.infer<typeof brainstormResultSchema>;
+
+/* ---------------------------------------------------------------------------
  * Snippet — mirrors app/schemas/snippet.py (SnippetCreate / SnippetRead).
  * Snippets are project-scoped (`/projects/{project_id}/snippets`).
  * ------------------------------------------------------------------------- */
@@ -284,6 +313,44 @@ export interface DescribeRequest extends GenerationParams {
   model?: string | null;
 }
 
+/**
+ * Body for `POST /ai/expand` — expand a selection (sensory detail /
+ * interiority, voice preserved). HITL like rewrite: the response is a standard
+ * `AIResult` with an unapproved `Revision(revision_type="expand")`. `guidance`
+ * is the optional user steer (the backend defaults it to "").
+ */
+export interface ExpandRequest extends GenerationParams {
+  selected_text: string;
+  guidance?: string;
+  scene_id?: string | null;
+  model?: string | null;
+}
+
+/**
+ * Body for `POST /ai/compress` — tighten a selection (cut filler, keep meaning
+ * + voice). HITL like rewrite: the response is a standard `AIResult` with an
+ * unapproved `Revision(revision_type="compress")`.
+ */
+export interface CompressRequest extends GenerationParams {
+  selected_text: string;
+  guidance?: string;
+  scene_id?: string | null;
+  model?: string | null;
+}
+
+/**
+ * Body for `POST /ai/brainstorm` (ötletelés). `topic` is required (1–8000
+ * chars); `count` is the number of ideas requested (1–10, backend default 5).
+ * A `scene_id` opts into scene-scoped RAG grounding. NO revision comes back —
+ * see {@link brainstormResultSchema}.
+ */
+export interface BrainstormRequest extends GenerationParams {
+  topic: string;
+  count?: number;
+  scene_id?: string | null;
+  model?: string | null;
+}
+
 export interface GenerateSceneRequest extends GenerationParams {
   beats: string[];
   characters?: string;
@@ -311,6 +378,21 @@ export interface WriteContinueRequest extends GenerationParams {
  */
 export interface ChapterGenerateRequest extends GenerationParams {
   scene_ids: string[];
+  run_continuity: boolean;
+  model?: string | null;
+}
+
+/**
+ * Body for `POST /ai/books/{book_id}/generate` (book automation, V2).
+ * `chapter_ids` is the user-selected subset of the book's chapters (the UI
+ * always sends the explicit selection; the backend re-resolves it to story
+ * order and treats `null` as "all chapters" — the dialog never relies on
+ * that). Per chapter the backend auto-selects the SAFE default: scenes that
+ * are EMPTY and have at least one beat. `run_continuity` opts into a per-scene
+ * continuity pass. Mirrors the backend `BookGenerateRequest`.
+ */
+export interface BookGenerateRequest extends GenerationParams {
+  chapter_ids: string[];
   run_continuity: boolean;
   model?: string | null;
 }
@@ -368,6 +450,9 @@ export type AIContractTies = [
   >,
   Expect<
     MatchesContract<z.infer<typeof researchResultSchema>, GenResearchResult>
+  >,
+  Expect<
+    MatchesContract<z.infer<typeof brainstormResultSchema>, GenBrainstormResult>
   >,
   Expect<MatchesContract<z.infer<typeof modelInfoSchema>, GenModelInfo>>,
   Expect<

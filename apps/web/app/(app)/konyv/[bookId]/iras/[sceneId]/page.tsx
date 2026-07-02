@@ -57,6 +57,7 @@ export default function IrasPage() {
   const setWordCount = useEditorStore((s) => s.setWordCount);
   const setBeatState = useEditorStore((s) => s.setBeatState);
   const setInspectorTab = useEditorStore((s) => s.setInspectorTab);
+  const setAiPanelView = useEditorStore((s) => s.setAiPanelView);
   const resetForScene = useEditorStore((s) => s.resetForScene);
 
   // Real AI generation flow + the active (config-driven) model.
@@ -103,9 +104,12 @@ export default function IrasPage() {
     (action: AiActionKind) => {
       captureSelection(editor);
       setInspectorTab("ai");
+      // Land on the main AI panel so the generating card / result is visible
+      // even if a sub-panel (describe / brainstorm) was left open.
+      setAiPanelView("main");
       gen.trigger(action);
     },
-    [editor, setInspectorTab, gen],
+    [editor, setInspectorTab, setAiPanelView, gen],
   );
 
   const handleToolbarAction = useCallback(
@@ -121,13 +125,21 @@ export default function IrasPage() {
         case "rewrite":
           triggerAi("rewrite");
           break;
+        case "expand":
+        case "compress":
+          triggerAi(action);
+          break;
         case "describe":
           // Open the inspector AI tab; the Describe sub-panel is selected there.
           captureSelection(editor);
           setInspectorTab("ai");
           break;
         case "brainstorm":
-          if (bookId) navTo(routes.book(bookId, "chat"));
+          // Open the inspector's Ötletelés panel (the topic prefills from the
+          // captured selection) — brainstorm lives HERE now, not in chat.
+          captureSelection(editor);
+          setInspectorTab("ai");
+          setAiPanelView("brainstorm");
           break;
         case "codex-progression":
           if (bookId) navTo(routes.book(bookId, "codex"));
@@ -173,7 +185,16 @@ export default function IrasPage() {
           break;
       }
     },
-    [editor, bookId, navTo, triggerAi, setInspectorTab, setBeatState, setRevOpen],
+    [
+      editor,
+      bookId,
+      navTo,
+      triggerAi,
+      setInspectorTab,
+      setAiPanelView,
+      setBeatState,
+      setRevOpen,
+    ],
   );
 
   const handleBubbleAction = useCallback(
@@ -199,7 +220,10 @@ export default function IrasPage() {
           triggerAi("rewrite");
           break;
         case "expand":
-          triggerAi("expand");
+        case "compress":
+          // Dedicated endpoints (/ai/expand, /ai/compress) on the same
+          // selection → pending-revision → approve rails as rewrite.
+          triggerAi(action);
           break;
         default:
           break;

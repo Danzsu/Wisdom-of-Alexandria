@@ -91,6 +91,7 @@ import {
   createPromptTemplate,
   deletePromptTemplate,
   listPromptTemplates,
+  registerPromptTemplateUse,
   updatePromptTemplate,
 } from "./prompts";
 import type {
@@ -123,6 +124,7 @@ import type {
   PromptTemplateCreate,
   PromptTemplateRead,
   PromptTemplateUpdate,
+  PromptTemplateUseResult,
   SceneCreate,
   SceneRead,
   SceneUpdate,
@@ -1706,6 +1708,26 @@ export function useDeletePromptTemplate(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deletePromptTemplate(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates }),
+  });
+}
+
+/**
+ * Register one application of a template (`POST /prompt-templates/{id}/use` —
+ * the atomic `uses` counter). Fired by "Sablon másolása"; invalidates the list
+ * on success so the refreshed count renders on the card + the detail modal.
+ * Works for builtins too (usage is not an edit). Errors propagate via the
+ * mutation (never swallowed).
+ */
+export function usePromptTemplateUse(): UseMutationResult<
+  PromptTemplateUseResult,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => registerPromptTemplateUse(id),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.promptTemplates }),
   });

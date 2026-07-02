@@ -90,6 +90,7 @@ export const hu = {
     statusRunning: "Folyamatban",
     statusDone: "Kész",
     statusFailed: "Sikertelen",
+    statusCancelled: "Megszakítva",
     /** Job-type labels (backend job_type values). */
     typeRewrite: "Átírás",
     typeDescribe: "Érzéki leírás",
@@ -97,6 +98,7 @@ export const hu = {
     typeWriteContinue: "Folytatás",
     typeSummarize: "Összefoglalás",
     typeChapterGenerate: "Fejezet generálása",
+    typeBookGenerate: "Könyv generálása",
     /* ---- Chapter-generate job: live progress + per-scene review (T5). ---- */
     /**
      * Compact progress line from `output_data`, e.g. "3/5 kész · 1 sikertelen ·
@@ -133,9 +135,41 @@ export const hu = {
     chapterSceneAcceptErrorToast: "Nem sikerült elfogadni a revíziót.",
     /** Fallback title for a scene row when only the id is known. */
     chapterSceneFallbackTitle: "Jelenet",
-    /** Context line: which scene/chapter the job belongs to. */
+    /**
+     * Success state once EVERY generated scene is done AND every revision has
+     * been human-approved — replaces the pending review list on the job row.
+     */
+    chapterDoneAll: "Fejezet kész — minden jelenet jóváhagyva",
+    /* ---- Book-generate job: book-level progress + per-chapter review. ---- */
+    /**
+     * Chapter-level progress line from the book job's `output_data`, e.g.
+     * "2/3 fejezet kész". Rendered alongside the per-scene counts line
+     * ({@link chapterProgress} is reused for the scene tally).
+     */
+    bookChaptersProgress: (completed: number, total: number): string =>
+      `${completed}/${total} fejezet kész`,
+    /** Accessible name for the book-progress bar (scene-level counts). */
+    bookProgressAria: (completed: number, total: number): string =>
+      `Könyv generálása: ${completed} / ${total} jelenet kész`,
+    /** Fallback title for a per-chapter group when only the id is known. */
+    bookChapterFallbackTitle: "Fejezet",
+    /** Accessible name of a per-chapter collapsible group's toggle. */
+    bookChapterToggleAria: (chapterTitle: string): string =>
+      `Fejezet jelenetei: ${chapterTitle}`,
+    /** Scene tally inside a per-chapter group header. */
+    bookChapterSceneCount: (n: number): string => `${n} jelenet`,
+    /* ---- Cancel (pending/running chapter + book jobs). ---- */
+    cancelAction: "Megszakítás",
+    cancelAria: (jobLabel: string): string => `Feladat megszakítása: ${jobLabel}`,
+    cancelConfirmTitle: "Feladat megszakítása",
+    cancelConfirmBody:
+      "A generálás a következő jelenet előtt leáll; az eddig elkészült revíziók megmaradnak.",
+    cancelledToast: "Feladat megszakítva.",
+    cancelErrorToast: "Nem sikerült megszakítani a feladatot.",
+    /** Context line: which scene/chapter/book the job belongs to. */
     contextScene: "Jelenet",
     contextChapter: "Fejezet",
+    contextBook: "Könyv",
     contextNone: "Nincs jelenethez kötve",
     /** Model + prompt-version meta line. */
     modelLabel: "Modell",
@@ -249,6 +283,11 @@ export const hu = {
     fmSeparatorLabel: "Jelenetelválasztó",
     fmSeparatorModify: "Módosítás",
     // Toolbar icon buttons.
+    /** Undo/redo (a Tiptap StarterKit UndoRedo/history bővítménye hajtja). */
+    undoAria: "Visszavonás",
+    undoTitle: "Visszavonás (Ctrl+Z)",
+    redoAria: "Újra",
+    redoTitle: "Újra (Ctrl+Shift+Z)",
     focusAria: "Fókusz mód",
     focusTitle: "Fókusz mód (zavarmentes írás)",
     // Continuity-checker shortcut (opens the Figyelmeztetések inspector tab).
@@ -295,6 +334,7 @@ export const hu = {
     bubbleRewrite: "Átírás",
     bubbleDescribe: "Leírás",
     bubbleExpand: "Bővítés",
+    bubbleCompress: "Tömörítés",
     bubbleVisualize: "Vizualizáció",
     bubbleAiAria: "AI generálás",
     bubbleCodex: "Codexbe",
@@ -400,6 +440,7 @@ export const hu = {
     actCompress: "Tömörítés",
     actDialog: "Párbeszéd",
     actFix: "Javítás",
+    actBrainstorm: "Ötletelés",
     customInstructionPlaceholder:
       "Egyéni utasítás… (pl. legyen feszültebb a ritmus)",
     customInstructionAria: "Egyéni utasítás",
@@ -436,6 +477,20 @@ export const hu = {
     channelGenerating: "Generálás…",
     channelError: "A csatorna generálása sikertelen",
     saveSnippet: "Snippet mentése",
+    // Ötletelés (brainstorm) sub-panel — ideas, never manuscript text.
+    brainstormTitle: "Ötletelés",
+    brainstormBackAria: "Vissza az AI panelre",
+    brainstormTopicLabel: "Téma / kérdés",
+    brainstormTopicAria: "Ötletelés témája",
+    brainstormTopicPlaceholder:
+      "Miről ötleteljünk? (pl. hogyan folytatódjon a jelenet)",
+    brainstormCountLabel: "Ötletek száma",
+    brainstormRun: "Ötletek generálása",
+    brainstormIdeasLabel: "Ötletek",
+    brainstormCopy: "Másolás",
+    brainstormError: "Az ötletelés sikertelen",
+    brainstormFootnote:
+      "Az ötletek sosem íródnak a kéziratba — másold ki, vagy mentsd Snippetként.",
     // Codex tab.
     codexInSceneLabel: "Ebben a jelenetben",
     codexOpenInCodex: "Megnyitás a Codexben →",
@@ -547,6 +602,7 @@ export const hu = {
     seriesManageHint:
       "A sorozatok több könyvön átívelő szereplőket és helyszíneket csoportosítanak egy projekten belül.",
     seriesNewLabel: "Új sorozat",
+    seriesNameLabel: "Sorozat neve",
     seriesNamePlaceholder: "Sorozat neve…",
     seriesCreate: "Létrehozás",
     seriesRename: "Átnevezés",
@@ -1608,6 +1664,8 @@ export const hu = {
     slashMenu: "Parancsmenü a szerkesztőben",
     bold: "Félkövér",
     italic: "Dőlt",
+    undo: "Visszavonás",
+    redo: "Újra",
     aiRewrite: "Kijelölés átírása",
     aiContinue: "Folytatás írása",
   },
@@ -2194,6 +2252,13 @@ export const hu = {
     editSubmit: "Mentés",
     updateError: "Nem sikerült módosítani a promptot.",
     updateSuccess: "Prompt módosítva",
+    /** Detail-modal copy action (clipboard + the atomic `uses` counter). */
+    copyTemplate: "Sablon másolása",
+    copySuccess: "Sablon a vágólapra másolva",
+    copyError: "Nem sikerült a vágólapra másolni.",
+    /** Honest partial failure: the body was copied, the counter POST failed. */
+    copyCountError:
+      "A sablon a vágólapra került, de a használat rögzítése nem sikerült.",
   },
   /**
    * Chapter automation (V2) — the "Fejezet generálása" selection modal that
@@ -2229,6 +2294,33 @@ export const hu = {
     toastStarted: (n: number) =>
       `Fejezet generálása elindítva — ${n} jelenet`,
     toastError: "Nem sikerült elindítani a fejezet generálását.",
+  },
+  /** Book automation (V2) — the "Könyv generálása" dialog on Áttekintés. */
+  bookGen: {
+    /** Trigger button in the Áttekintés hero. */
+    trigger: "Könyv generálása",
+    /** Modal title + intro. */
+    title: "Könyv generálása",
+    subtitle:
+      "Válaszd ki, mely fejezeteket generálja az AI. Fejezetenként az üres, beatekkel rendelkező jelenetek készülnek el — minden generált jelenet jóváhagyásra váró revízió lesz, semmi sem íródik felül automatikusan.",
+    /** Loading / empty / error states for the chapter list. */
+    loading: "Fejezetek betöltése…",
+    error: "Nem sikerült betölteni a fejezeteket",
+    /** The book has no chapters at all. */
+    emptyNoChapters: "Ennek a könyvnek nincs még fejezete.",
+    /** Per-row hints: how many scenes the backend would generate. */
+    hintGeneratable: (n: number) => `${n} generálható jelenet`,
+    /** 0-generatable chapter: disabled row hint. */
+    hintNone: "nincs generálható jelenet (üres jelenet legalább egy beattel)",
+    /** The continuity toggle. */
+    continuityLabel: "folytonosság-ellenőrzéssel",
+    /** Submit button + its loading caption. */
+    submit: "Generálás",
+    submitting: "Indítás…",
+    /** Success / error toasts. */
+    toastStarted: (n: number) =>
+      `Könyv generálása elindítva — ${n} fejezet`,
+    toastError: "Nem sikerült elindítani a könyv generálását.",
   },
   /** Genre options for the wizard Select (sourced from the prototype default). */
   genres: [
