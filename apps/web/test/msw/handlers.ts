@@ -24,9 +24,11 @@ import {
   SCENE_BEATS_FIXTURE,
   SCENES_BY_CHAPTER,
   SERIES_FIXTURE,
+  SZELENE_PROGRESSIONS,
   makeAiResult,
   makeChapter,
   makeCodexEntry,
+  makeCodexProgression,
   makeCodexRelation,
   makeContinuityResult,
   makeDescribeResult,
@@ -51,6 +53,9 @@ import type {
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
+  CodexProgressionCreate,
+  CodexProgressionRead,
+  CodexProgressionUpdate,
   CodexRelationCreate,
   CodexRelationRead,
   CodexRelationUpdate,
@@ -409,6 +414,86 @@ relationStore.seed();
 /** Reset the in-memory CodexRelation store (call in a test's beforeEach). */
 export function resetRelationStore(): void {
   relationStore.reset();
+}
+
+/* ---------------------------------------------------------------------------
+ * In-memory CodexProgression store (Progresszió tab) — stateful CRUD keyed by
+ * `(entity_type, entity_id)` so the tab tests exercise real list → create →
+ * edit → delete round-trips. Seeded from SZELENE_PROGRESSIONS. The list mimics
+ * the backend CRUD ordering (`created_at desc`) — story-order sorting is the
+ * FRONTEND's job, which the order tests pin. Call `resetProgressionStore()` in
+ * a test's beforeEach for isolation.
+ * ------------------------------------------------------------------------- */
+const progressionStore = {
+  byEntity: new Map<string, CodexProgressionRead[]>(),
+
+  key(entityType: string, entityId: string): string {
+    return `${entityType}|${entityId}`;
+  },
+
+  seed(): void {
+    this.byEntity = new Map<string, CodexProgressionRead[]>();
+    this.byEntity.set(
+      this.key("codex", "codex-szelene"),
+      SZELENE_PROGRESSIONS.map((p) => ({ ...p })),
+    );
+  },
+
+  reset(): void {
+    this.seed();
+  },
+
+  list(entityType: string, entityId: string): CodexProgressionRead[] {
+    const rows = this.byEntity.get(this.key(entityType, entityId)) ?? [];
+    // Backend CRUD returns created_at DESC — mirror it so a frontend that
+    // forgets to story-sort renders a visibly wrong order.
+    return [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  },
+
+  create(body: CodexProgressionCreate): CodexProgressionRead {
+    const created = makeCodexProgression(body);
+    const key = this.key(created.entity_type, created.entity_id);
+    const rows = this.byEntity.get(key) ?? [];
+    rows.push(created);
+    this.byEntity.set(key, rows);
+    return created;
+  },
+
+  update(
+    progressionId: string,
+    patch: CodexProgressionUpdate,
+  ): CodexProgressionRead | undefined {
+    for (const rows of this.byEntity.values()) {
+      const index = rows.findIndex((p) => p.id === progressionId);
+      if (index !== -1) {
+        const merged: CodexProgressionRead = {
+          ...rows[index],
+          ...patch,
+          updated_at: "2026-06-14T17:00:00Z",
+        };
+        rows[index] = merged;
+        return merged;
+      }
+    }
+    return undefined;
+  },
+
+  remove(progressionId: string): boolean {
+    for (const rows of this.byEntity.values()) {
+      const index = rows.findIndex((p) => p.id === progressionId);
+      if (index !== -1) {
+        rows.splice(index, 1);
+        return true;
+      }
+    }
+    return false;
+  },
+};
+progressionStore.seed();
+
+/** Reset the in-memory CodexProgression store (call in a test's beforeEach). */
+export function resetProgressionStore(): void {
+  progressionStore.reset();
 }
 
 /* ---------------------------------------------------------------------------
@@ -1634,6 +1719,56 @@ export const handlers = [
     },
   ),
 
+  /* ---- CodexProgressions (Progresszió tab). FLAT router, listed via
+   * `?entity_type=&entity_id=` query params. ---- */
+  http.get(`${base}/codex-progressions`, ({ request }) => {
+    const url = new URL(request.url);
+    const entityType = url.searchParams.get("entity_type");
+    const entityId = url.searchParams.get("entity_id");
+    if (!entityType || !entityId) {
+      return HttpResponse.json(
+        { detail: "entity_type and entity_id are required" },
+        { status: 422 },
+      );
+    }
+    return HttpResponse.json(progressionStore.list(entityType, entityId));
+  }),
+
+  http.post(`${base}/codex-progressions`, async ({ request }) => {
+    const body = (await request.json()) as CodexProgressionCreate;
+    const created = progressionStore.create(body);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.patch(
+    `${base}/codex-progressions/:progressionId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as CodexProgressionUpdate;
+      const updated = progressionStore.update(
+        String(params.progressionId),
+        body,
+      );
+      if (!updated) {
+        return HttpResponse.json(
+          { detail: "Codex progression not found" },
+          { status: 404 },
+        );
+      }
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.delete(`${base}/codex-progressions/:progressionId`, ({ params }) => {
+    const ok = progressionStore.remove(String(params.progressionId));
+    if (!ok) {
+      return HttpResponse.json(
+        { detail: "Codex progression not found" },
+        { status: 404 },
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   /* ---- Plotlines (Plotline-b Cselekményszálak). Project-scoped CRUD + a flat
    * scene-link router (attach/detach/list). ---- */
   http.get(`${base}/projects/:projectId/plotlines`, ({ params }) =>
@@ -1823,6 +1958,45 @@ export const handlers = [
       { status: 201 },
     );
   }),
+  http.patch(
+    `${base}/scenes/:sceneId/beats/:beatId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      const existing = SCENE_BEATS_FIXTURE.find((b) => b.id === params.beatId);
+      return HttpResponse.json({
+        ...(existing ?? {
+          description: "",
+          beat_type: null,
+          order_index: 0,
+          notes: null,
+          created_at: "2026-06-14T16:00:00Z",
+          updated_at: "2026-06-14T16:00:00Z",
+        }),
+        ...body,
+        id: String(params.beatId),
+        scene_id: String(params.sceneId),
+      });
+    },
+  ),
+  http.delete(
+    `${base}/scenes/:sceneId/beats/:beatId`,
+    () => new HttpResponse(null, { status: 204 }),
+  ),
+  http.post(
+    `${base}/scenes/:sceneId/beats/reorder`,
+    async ({ params, request }) => {
+      const { order } = (await request.json()) as { order: string[] };
+      const byId = new Map(SCENE_BEATS_FIXTURE.map((b) => [b.id, b]));
+      return HttpResponse.json(
+        order.flatMap((id, i) => {
+          const beat = byId.get(id);
+          return beat
+            ? [{ ...beat, scene_id: String(params.sceneId), order_index: i }]
+            : [];
+        }),
+      );
+    },
+  ),
 
   /* ---- Export (Markdown — real endpoint, scope: book/chapter/scene — P1.3) ---- */
   http.post(`${base}/books/:bookId/exports`, ({ params, request }) => {

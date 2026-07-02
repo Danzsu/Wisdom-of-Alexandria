@@ -28,9 +28,9 @@
  *   the cache updates flow through the shared mutation, reflecting the new
  *   status, then the modal closes.
  * - "Megnyitás a szerkesztőben" → navigate to the Write route for the scene.
- * - "Beatek" → navigate to the scene's editor (the beats inspector lives in the
- *   Write view); a dedicated standalone beats route does not exist, so this is
- *   the cleanest existing destination.
+ * - "Beatek" → pre-select the inspector's Beatek tab (the SceneBeatsPanel beat
+ *   editor lives in the Write view's inspector), then navigate to the scene's
+ *   editor — the panel is focused on arrival.
  */
 import { Check, PenLine, TriangleAlert } from "lucide-react";
 import {
@@ -46,6 +46,7 @@ import { routes } from "@/lib/routes";
 import { useNavTo } from "@/lib/use-nav-to";
 import { sceneStatusPresentation } from "@/lib/scene-status";
 import { useSceneBeats, useUpdateScene } from "@/lib/api/hooks";
+import { useEditorStore } from "@/lib/stores/editor-store";
 import { povBadgeClass } from "./pov-badge-class";
 import type { PlanScene } from "./types";
 
@@ -104,6 +105,13 @@ export function SceneMetadataModal({
   function handleOpenInEditor() {
     onOpenChange(false);
     navTo(routes.scene(bookId, scene.id));
+  }
+
+  function handleOpenBeats() {
+    // Land on the Write view with the inspector already on the Beatek tab, so
+    // the beat editor (SceneBeatsPanel) is what greets the writer.
+    useEditorStore.getState().setInspectorTab("beats");
+    handleOpenInEditor();
   }
 
   return (
@@ -199,7 +207,7 @@ export function SceneMetadataModal({
             </button>
             <button
               type="button"
-              onClick={handleOpenInEditor}
+              onClick={handleOpenBeats}
               className="inline-flex h-[42px] items-center justify-center rounded-[11px] border border-border bg-surface px-4 text-[13.5px] font-semibold text-text hover:border-border-strong"
             >
               {hu.sceneMeta.beats}

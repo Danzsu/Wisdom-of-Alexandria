@@ -38,6 +38,7 @@ const sceneEmpty: SceneRead = {
   status: "draft",
   word_count: 0,
   pov_character_id: null,
+  location_id: null,
   created_at: NOW,
   updated_at: NOW,
 };
@@ -52,6 +53,7 @@ const sceneFull: SceneRead = {
   status: "draft",
   word_count: 42,
   pov_character_id: null,
+  location_id: null,
   created_at: NOW,
   updated_at: NOW,
 };
@@ -66,6 +68,7 @@ const sceneNoBeats: SceneRead = {
   status: "draft",
   word_count: 0,
   pov_character_id: null,
+  location_id: null,
   created_at: NOW,
   updated_at: NOW,
 };

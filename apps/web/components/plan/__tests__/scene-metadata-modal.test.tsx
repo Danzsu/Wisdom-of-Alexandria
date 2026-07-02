@@ -16,6 +16,7 @@ import { server } from "@/test/msw/server";
 import { renderWithProviders } from "@/test/test-utils";
 import { expectNoA11yViolations } from "@/test/a11y";
 import { API_BASE_URL } from "@/lib/api/client";
+import { useEditorStore } from "@/lib/stores/editor-store";
 import type { PlanScene } from "../types";
 import type { BeatRead, SceneRead } from "@/lib/api/types";
 
@@ -44,6 +45,7 @@ function makeRaw(overrides: Partial<SceneRead> = {}): SceneRead {
     status: "in_progress",
     word_count: 1234,
     pov_character_id: "char-eszter",
+    location_id: null,
     created_at: "2026-06-01T00:00:00Z",
     updated_at: "2026-06-01T00:00:00Z",
     ...overrides,
@@ -195,6 +197,20 @@ describe("SceneMetadataModal", () => {
     expect(navMock).toHaveBeenCalledWith(
       `/konyv/${BOOK_ID}/iras/${SCENE_ID}`,
     );
+  });
+
+  it("Beatek repoints the inspector to the Beatek tab and opens the editor", async () => {
+    useEditorStore.setState({ inspectorTab: "ai" });
+    const user = userEvent.setup();
+    renderModal();
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Beatek" }));
+
+    // Navigates to the scene's Write route AND pre-selects the Beatek tab, so
+    // the beat editor panel is focused on arrival.
+    expect(navMock).toHaveBeenCalledWith(`/konyv/${BOOK_ID}/iras/${SCENE_ID}`);
+    expect(useEditorStore.getState().inspectorTab).toBe("beats");
   });
 
   it("traps focus and closes on Esc", async () => {

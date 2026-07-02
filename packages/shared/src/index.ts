@@ -40,6 +40,7 @@ export type SceneRead = ApiSchemas["SceneRead"];
 export type BeatRead = ApiSchemas["BeatRead"];
 export type CodexEntryRead = ApiSchemas["CodexEntryRead"];
 export type CodexRelationRead = ApiSchemas["CodexRelationRead"];
+export type CodexProgressionRead = ApiSchemas["CodexProgressionRead"];
 export type PlotlineRead = ApiSchemas["PlotlineRead"];
 export type PlotlineSceneRead = ApiSchemas["PlotlineSceneRead"];
 export type SnippetRead = ApiSchemas["SnippetRead"];

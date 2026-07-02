@@ -35,6 +35,7 @@ function scene(id: string, partial: Partial<SceneRead>): SceneRead {
     status: "draft",
     word_count: 0,
     pov_character_id: null,
+    location_id: null,
     created_at: NOW,
     updated_at: NOW,
     ...partial,

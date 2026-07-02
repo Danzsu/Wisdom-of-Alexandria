@@ -151,6 +151,7 @@ describe("ChapterTree", () => {
               status: "draft",
               word_count: 0,
               pov_character_id: null,
+              location_id: null,
               created_at: "2026-06-14T18:00:00Z",
               updated_at: "2026-06-14T18:00:00Z",
             },

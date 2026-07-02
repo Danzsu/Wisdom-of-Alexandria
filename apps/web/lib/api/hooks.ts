@@ -52,7 +52,13 @@ import {
   reorderScenes,
   updateScene,
 } from "./scenes";
-import { createBeat, listBeats } from "./beats";
+import {
+  createBeat,
+  deleteBeat,
+  listBeats,
+  reorderBeats,
+  updateBeat,
+} from "./beats";
 import {
   createCodexEntry,
   deleteCodexEntry,
@@ -60,6 +66,12 @@ import {
   listCodexEntries,
   updateCodexEntry,
 } from "./codex";
+import {
+  createCodexProgression,
+  deleteCodexProgression,
+  listCodexProgressions,
+  updateCodexProgression,
+} from "./codex-progressions";
 import {
   createCodexRelation,
   deleteCodexRelation,
@@ -84,6 +96,7 @@ import {
 import type {
   BeatCreate,
   BeatRead,
+  BeatUpdate,
   BookCreate,
   BookRead,
   BookUpdate,
@@ -93,6 +106,9 @@ import type {
   CodexEntryCreate,
   CodexEntryRead,
   CodexEntryUpdate,
+  CodexProgressionCreate,
+  CodexProgressionRead,
+  CodexProgressionUpdate,
   CodexRelationCreate,
   CodexRelationRead,
   CodexRelationUpdate,
@@ -145,6 +161,10 @@ export const queryKeys = {
   scene: (chapterId: string, sceneId: string) =>
     ["chapters", chapterId, "scenes", sceneId] as const,
   sceneBeats: (sceneId: string) => ["scenes", sceneId, "beats"] as const,
+  // Progresszió tab — one entity's progression rows (flat router, keyed by the
+  // polymorphic entity binding; for generic codex entries the type is "codex").
+  codexProgressions: (entityType: string, entityId: string) =>
+    ["codex-progressions", entityType, entityId] as const,
   // Prompt Library — GLOBAL (workspace-wide, no project scope).
   promptTemplates: ["prompt-templates"] as const,
 };
@@ -1025,6 +1045,114 @@ export function useCreateBeat(): UseMutationResult<
   });
 }
 
+/** Input for the beat-update mutation (scene + beat id + partial body). */
+export interface UpdateBeatInput {
+  sceneId: string;
+  beatId: string;
+  patch: BeatUpdate;
+}
+
+/** Patch a beat; invalidates the scene's beat list on success. */
+export function useUpdateBeat(): UseMutationResult<
+  BeatRead,
+  Error,
+  UpdateBeatInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, beatId, patch }: UpdateBeatInput) =>
+      updateBeat(sceneId, beatId, patch),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.sceneBeats(updated.scene_id),
+      }),
+  });
+}
+
+/** Input for the beat-delete mutation (scene + beat id). */
+export interface DeleteBeatInput {
+  sceneId: string;
+  beatId: string;
+}
+
+/** Delete a beat; invalidates the scene's beat list on success. */
+export function useDeleteBeat(): UseMutationResult<
+  void,
+  Error,
+  DeleteBeatInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, beatId }: DeleteBeatInput) =>
+      deleteBeat(sceneId, beatId),
+    onSuccess: (_void, { sceneId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.sceneBeats(sceneId),
+      }),
+  });
+}
+
+/** Input for the beat-reorder mutation (scene id + the new id sequence). */
+export interface ReorderBeatsInput {
+  sceneId: string;
+  /** FULL list of the scene's beat ids in their new order. */
+  order: string[];
+}
+
+/** Snapshot kept across the optimistic beat-reorder for rollback. */
+interface ReorderBeatsContext {
+  previous: BeatRead[] | undefined;
+}
+
+/**
+ * Reorder a scene's beats with an optimistic cache update + rollback —
+ * mirrors {@link useReorderScenes}. The cached beat list is reordered to
+ * `order` immediately WITH `order_index` rewritten by position (consumers sort
+ * by `order_index`, so reordering the array alone would not move anything on
+ * screen), then the server persists; on error the snapshot is restored and
+ * `onSettled` invalidates so the cache re-syncs with the server order either
+ * way.
+ */
+export function useReorderBeats(): UseMutationResult<
+  BeatRead[],
+  Error,
+  ReorderBeatsInput,
+  ReorderBeatsContext
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, order }: ReorderBeatsInput) =>
+      reorderBeats(sceneId, order),
+    onMutate: async ({ sceneId, order }) => {
+      const key = queryKeys.sceneBeats(sceneId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<BeatRead[]>(key);
+      if (previous) {
+        queryClient.setQueryData<BeatRead[]>(
+          key,
+          reorderByIds(previous, order).map((beat, i) => ({
+            ...beat,
+            order_index: i,
+          })),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, { sceneId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          queryKeys.sceneBeats(sceneId),
+          context.previous,
+        );
+      }
+    },
+    onSettled: (_data, _err, { sceneId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.sceneBeats(sceneId),
+      }),
+  });
+}
+
 /* ---------------------------------------------------------------------------
  * Codex (read-only — M4 CodexMention popover; full CRUD is M6)
  * ------------------------------------------------------------------------- */
@@ -1254,6 +1382,103 @@ export function useDeleteCodexRelation(): UseMutationResult<
     onSuccess: (_data, { projectId }) =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectRelations(projectId),
+      }),
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * CodexProgression hooks (Progresszió tab). Flat router, keyed by the
+ * polymorphic `(entity_type, entity_id)` binding — for the generic codex
+ * entries the type is ALWAYS "codex" (the key the AI-context filter reads).
+ * Every mutation invalidates the entity's progression list so the tab
+ * re-renders. Errors propagate via the query/mutation `error` (never
+ * swallowed).
+ * ------------------------------------------------------------------------- */
+
+/** List one entity's progressions. Disabled until both keys are present. */
+export function useCodexProgressions(
+  entityType: string | undefined,
+  entityId: string | undefined,
+): UseQueryResult<CodexProgressionRead[], Error> {
+  return useQuery({
+    queryKey: queryKeys.codexProgressions(
+      entityType ?? "__none__",
+      entityId ?? "__none__",
+    ),
+    queryFn: () =>
+      listCodexProgressions(entityType as string, entityId as string),
+    enabled: Boolean(entityType) && Boolean(entityId),
+  });
+}
+
+/**
+ * Create a progression; invalidates the entity's progression list on success
+ * so the tab picks up the new row. Returns the created progression.
+ */
+export function useCreateCodexProgression(): UseMutationResult<
+  CodexProgressionRead,
+  Error,
+  CodexProgressionCreate
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CodexProgressionCreate) => createCodexProgression(data),
+    onSuccess: (created) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.codexProgressions(
+          created.entity_type,
+          created.entity_id,
+        ),
+      }),
+  });
+}
+
+/** Input for the progression-update mutation (row id + patch). */
+export interface UpdateCodexProgressionInput {
+  progressionId: string;
+  patch: CodexProgressionUpdate;
+}
+
+/** Patch a progression's anchor/note; invalidates the entity's list. */
+export function useUpdateCodexProgression(): UseMutationResult<
+  CodexProgressionRead,
+  Error,
+  UpdateCodexProgressionInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ progressionId, patch }: UpdateCodexProgressionInput) =>
+      updateCodexProgression(progressionId, patch),
+    onSuccess: (updated) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.codexProgressions(
+          updated.entity_type,
+          updated.entity_id,
+        ),
+      }),
+  });
+}
+
+/** Input for the progression-delete mutation (entity binding for the cache). */
+export interface DeleteCodexProgressionInput {
+  progressionId: string;
+  entityType: string;
+  entityId: string;
+}
+
+/** Delete a progression; invalidates the entity's list on success. */
+export function useDeleteCodexProgression(): UseMutationResult<
+  void,
+  Error,
+  DeleteCodexProgressionInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ progressionId }: DeleteCodexProgressionInput) =>
+      deleteCodexProgression(progressionId),
+    onSuccess: (_data, { entityType, entityId }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.codexProgressions(entityType, entityId),
       }),
   });
 }

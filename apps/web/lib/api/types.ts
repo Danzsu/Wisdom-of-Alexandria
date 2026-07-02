@@ -16,6 +16,7 @@ import type {
   BookRead as GenBookRead,
   ChapterRead as GenChapterRead,
   CodexEntryRead as GenCodexEntryRead,
+  CodexProgressionRead as GenCodexProgressionRead,
   CodexRelationRead as GenCodexRelationRead,
   Expect,
   MatchesContract,
@@ -233,6 +234,10 @@ export const sceneReadSchema = z.object({
   status: z.string(),
   word_count: z.number().int(),
   pov_character_id: idString.nullable(),
+  // Scene location (concurrent backend slice): the Codex location the scene
+  // takes place at, nullable. Mirrored here to keep the FE↔BE contract tie
+  // green after the OpenAPI regeneration added it to SceneRead.
+  location_id: idString.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -292,6 +297,7 @@ export const sceneUpdateSchema = z.object({
   order_index: z.number().int().optional(),
   status: z.string().optional(),
   pov_character_id: idString.nullable().optional(),
+  location_id: idString.nullable().optional(),
 });
 export type SceneUpdate = z.infer<typeof sceneUpdateSchema>;
 
@@ -461,6 +467,60 @@ export type CodexRelationUpdate = z.infer<typeof codexRelationUpdateSchema>;
 export const codexRelationListSchema = z.array(codexRelationReadSchema);
 
 /* ---------------------------------------------------------------------------
+ * CodexProgression — mirrors app/schemas/codex_progression.py (Progresszió
+ * tab). FLAT router (`/codex-progressions`, listed via `?entity_type=&
+ * entity_id=`). A progression records an entity's state change, optionally
+ * anchored to a chapter and/or scene; anchorless rows are the entity's
+ * project-global baseline. For the generic Codex entries the `entity_type` is
+ * ALWAYS `"codex"` — that is the key the RAG index / AI-context filter uses
+ * (see apps/ai progression_service + embedding_service), so any other value
+ * would create rows the AI never reads.
+ * ------------------------------------------------------------------------- */
+
+/** A codex progression as returned by the API (`CodexProgressionRead`). */
+export const codexProgressionReadSchema = z.object({
+  id: idString,
+  entity_type: z.string(),
+  entity_id: idString,
+  chapter_id: idString.nullable(),
+  scene_id: idString.nullable(),
+  note: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type CodexProgressionRead = z.infer<typeof codexProgressionReadSchema>;
+
+/** Request body for creating a progression (`CodexProgressionCreate`). */
+export const codexProgressionCreateSchema = z.object({
+  entity_type: z.string().min(1).max(100),
+  entity_id: idString,
+  chapter_id: idString.nullable().optional(),
+  scene_id: idString.nullable().optional(),
+  note: z.string().nullable().optional(),
+});
+export type CodexProgressionCreate = z.infer<
+  typeof codexProgressionCreateSchema
+>;
+
+/**
+ * Request body for patching a progression (`CodexProgressionUpdate`). The
+ * entity binding (`entity_type`/`entity_id`) is immutable; the anchor + note
+ * can change. The edit modal always sends all three fields explicitly so
+ * clearing an anchor (→ `null`) actually persists (the backend PATCH applies
+ * `exclude_unset`).
+ */
+export const codexProgressionUpdateSchema = z.object({
+  chapter_id: idString.nullable().optional(),
+  scene_id: idString.nullable().optional(),
+  note: z.string().nullable().optional(),
+});
+export type CodexProgressionUpdate = z.infer<
+  typeof codexProgressionUpdateSchema
+>;
+
+export const codexProgressionListSchema = z.array(codexProgressionReadSchema);
+
+/* ---------------------------------------------------------------------------
  * Plotline — mirrors app/schemas/plotline.py (Plotline-a; Cselekményszálak).
  * PROJECT-scoped (`/projects/{pid}/plotlines`) with an OPTIONAL `book_id` scope
  * (null = project-wide). `plotline_type` + `status` are stored as plain strings
@@ -576,6 +636,24 @@ export const beatCreateSchema = z.object({
 });
 export type BeatCreate = z.infer<typeof beatCreateSchema>;
 
+/** Partial update body for a beat (`BeatUpdate`). Every field optional. */
+export const beatUpdateSchema = z.object({
+  description: z.string().min(1).optional(),
+  beat_type: z.string().max(100).nullable().optional(),
+  order_index: z.number().int().optional(),
+  notes: z.string().nullable().optional(),
+});
+export type BeatUpdate = z.infer<typeof beatUpdateSchema>;
+
+/**
+ * Body for the beat-reorder endpoint (`BeatReorder`): the FULL beat-id
+ * sequence of the scene in its new order.
+ */
+export const beatReorderSchema = z.object({
+  order: z.array(idString),
+});
+export type BeatReorder = z.infer<typeof beatReorderSchema>;
+
 export const beatListSchema = z.array(beatReadSchema);
 
 /* ---------------------------------------------------------------------------
@@ -647,6 +725,12 @@ export type CoreContractTies = [
     MatchesContract<
       z.infer<typeof codexRelationReadSchema>,
       GenCodexRelationRead
+    >
+  >,
+  Expect<
+    MatchesContract<
+      z.infer<typeof codexProgressionReadSchema>,
+      GenCodexProgressionRead
     >
   >,
   Expect<MatchesContract<z.infer<typeof plotlineReadSchema>, GenPlotlineRead>>,

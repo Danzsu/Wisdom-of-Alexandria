@@ -15,8 +15,11 @@
  *     for it; the real AI gate is `ai_visible`), AI-context radios, and the
  *     `ai_visible` spoiler toggle → ai_visible persists via the update mutation.
  *
- * V1 placeholders (honest empty states, no faked engine):
- *   - Kutatás (AI Q&A / RAG), Kapcsolatok (relations), Progresszió.
+ * Kapcsolatok: the entry's relations in both directions (list + create/delete,
+ * reusing the graph screen's modal). Progresszió: the entry's state timeline in
+ * story order (anchor picker + note; the AI pulls the state "as of scene N").
+ *
+ * V1 placeholder (honest empty state, no faked engine): Kutatás (AI Q&A / RAG).
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -54,6 +57,8 @@ import { cn, countWords } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { CodexEntryAvatar } from "./codex-meta";
 import { ImagePanel } from "./image-panel";
+import { ProgressionTab } from "./progression-tab";
+import { RelationsTab } from "./relations-tab";
 
 type DetailTab =
   | "details"
@@ -185,20 +190,14 @@ export function CodexDetail({
           <MentionsTab tree={tree} needles={needles} />
         ) : tab === "tracking" ? (
           <TrackingTab entry={entry} onPatch={patch} />
-        ) : tab === "research" ? (
+        ) : tab === "relations" ? (
+          <RelationsTab entry={entry} projectId={projectId} />
+        ) : tab === "progress" ? (
+          <ProgressionTab entry={entry} tree={tree} />
+        ) : (
           <V1Placeholder
             title={hu.codex.researchV1Title}
             hint={hu.codex.researchV1Hint}
-          />
-        ) : tab === "relations" ? (
-          <V1Placeholder
-            title={hu.codex.relationsV1Title}
-            hint={hu.codex.relationsV1Hint}
-          />
-        ) : (
-          <V1Placeholder
-            title={hu.codex.progressV1Title}
-            hint={hu.codex.progressV1Hint}
           />
         )}
       </div>

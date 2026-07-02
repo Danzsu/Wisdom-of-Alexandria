@@ -92,6 +92,7 @@ function scene(
     status,
     word_count: wordCount,
     pov_character_id: null,
+    location_id: null,
     created_at: "2026-06-14T14:32:00Z",
     updated_at: "2026-06-14T14:32:00Z",
   };

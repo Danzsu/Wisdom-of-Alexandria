@@ -483,6 +483,38 @@ export const hu = {
     metaUnknown: "—",
   },
   /**
+   * Scene Beats panel — the full beat editor behind the inspector "Beatek"
+   * tab (SceneBeatsPanel): ordered list + add + edit + delete + drag-reorder.
+   * Beats drive the chapter-automation flow, so every state is honest.
+   */
+  beats: {
+    heading: "Jelenet beatek",
+    listAria: "Jelenet beatek listája",
+    loadError: "Nem sikerült betölteni a beateket",
+    empty: "Ehhez a jelenethez még nincs beat.",
+    emptyHint:
+      "Írd le az első beatet — a fejezetgenerálás ezekből a lépésekből dolgozik.",
+    noScene: "Nyiss meg egy jelenetet a beatek szerkesztéséhez.",
+    // Composer (appends a new beat at the end).
+    composerLabel: "Új beat leírása",
+    composerPlaceholder: "Mi történjen ebben a beatben?",
+    addButton: "Új beat",
+    addError: "A beat létrehozása sikertelen",
+    // Row affordances (1-based display position in the aria-labels).
+    dragHandleAria: (position: number) => `${position}. beat átrendezése`,
+    editAria: (position: number) => `${position}. beat szerkesztése`,
+    deleteAria: (position: number) => `${position}. beat törlése`,
+    // Edit-in-place form.
+    editLabel: "Beat leírása",
+    save: "Mentés",
+    cancel: "Mégse",
+    updateError: "A beat mentése sikertelen",
+    // Delete + reorder feedback.
+    toastDeleted: "Beat törölve",
+    deleteError: "A beat törlése sikertelen",
+    reorderError: "A beatek átrendezése sikertelen",
+  },
+  /**
    * Codex screen (`Alexandria App.dc.html` showcodex sidebar ~line 330,
    * Character Detail ~line 941, New-Codex modal ~line 2948). Copy is verbatim
    * from the prototype; the backend Codex is a generic card so aliases + role
@@ -631,16 +663,10 @@ export const hu = {
     trackingDefaultTag: "Alapértelmezett",
     trackingHidden: "Rejtett az AI-tól",
     trackingHiddenHint: "(spoiler-védelem)",
-    // Kutatás / Kapcsolatok / Progresszió — honest V1 placeholders.
+    // Kutatás — honest V1 placeholder (Kapcsolatok + Progresszió are live).
     researchV1Title: "A Kutatás (AI Q&A) a V1-ben érkezik",
     researchV1Hint:
       "Itt kérdezhetsz majd az AI-tól a bejegyzésről — a válaszok a kéziratból és a Codexből merítenek (RAG).",
-    relationsV1Title: "A Kapcsolatok a V1-ben érkezik",
-    relationsV1Hint:
-      "A szereplők közötti kapcsolatok (szövetséges, mentor, ellenség) itt jelennek majd meg.",
-    progressV1Title: "A Progresszió a V1-ben érkezik",
-    progressV1Hint:
-      "A karakter állapota a történet előrehaladtával — az AI a jelenet idejének megfelelő állapotot húzza be.",
     // Delete.
     deleteAria: "Bejegyzés törlése",
     deleteTitle: "Bejegyzés törlése",
@@ -681,6 +707,78 @@ export const hu = {
     lightboxNoImage: "Nincs kép ehhez a bejegyzéshez",
     /** Surfaced if the image binary fails to load. */
     lightboxLoadError: "A kép betöltése nem sikerült.",
+  },
+  /**
+   * Kapcsolatok tab — the codex entry detail's relations list. Lists the
+   * entry's relations in BOTH directions (where it is source or target),
+   * showing the other endpoint's name + the relation type. The create modal is
+   * the shared {@link relations} NewRelationModal (same copy as the graph).
+   */
+  codexRelations: {
+    listAria: "A bejegyzés kapcsolatai",
+    error: "Nem sikerült betölteni a kapcsolatokat",
+    emptyTitle: "Még nincs kapcsolat",
+    emptyHint:
+      "Kösd össze ezt a bejegyzést a Codex többi szereplőjével és helyszínével — szövetséges, mentor, ellenség. A kapcsolatháló nézetben is megjelenik.",
+    emptyCta: "Új kapcsolat",
+    addNew: "Új kapcsolat",
+    /** Direction hint on a row (this entry is the source / the target). */
+    directionOutgoing: "innen indul",
+    directionIncoming: "ide mutat",
+    /** Fallback when the OTHER endpoint's codex entry no longer exists. */
+    missingEntity: "Ismeretlen bejegyzés",
+    deleteAria: (relationType: string) =>
+      `Kapcsolat törlése: ${relationType}`,
+    deletedToast: "Kapcsolat törölve",
+    deleteError: "A kapcsolat törlése sikertelen",
+  },
+  /**
+   * Progresszió tab — the codex entry detail's progression timeline. A
+   * progression records the entity's state at a story position (anchorless =
+   * project-global baseline; chapter = from that chapter's start; scene = from
+   * that scene). Listed in STORY ORDER, mirroring the AI-context linearization
+   * (apps/ai progression_service) — the AI pulls the state "as of scene N".
+   */
+  codexProgressions: {
+    listAria: "A bejegyzés progressziója",
+    error: "Nem sikerült betölteni a progressziót",
+    emptyTitle: "Még nincs progresszió",
+    emptyHint:
+      "Rögzítsd, hogyan változik ez a bejegyzés a történet során — az AI mindig a jelenet idejének megfelelő állapotot húzza be a kontextusba.",
+    emptyCta: "Új progresszió",
+    addNew: "Új progresszió",
+    /** Anchor label for an anchorless (project-global baseline) row. */
+    anchorGlobal: "Globális alapállapot",
+    /** Anchor label for a scene-anchored row (chapter · scene). */
+    anchorScene: (chapter: string, scene: string) => `${chapter} · ${scene}`,
+    /** Fallback when the anchor chapter/scene is not in this book's tree. */
+    anchorUnknown: "Ismeretlen horgony",
+    /** Fallback body when a progression has no note. */
+    noNote: "Nincs jegyzet",
+    editAria: (note: string) => `Progresszió szerkesztése: ${note}`,
+    deleteAria: (note: string) => `Progresszió törlése: ${note}`,
+    deletedToast: "Progresszió törölve",
+    deleteError: "A progresszió törlése sikertelen",
+    /* ---- Create / edit modal ---- */
+    modalTitleNew: "Új progresszió",
+    modalTitleEdit: "Progresszió szerkesztése",
+    modalAnchorLabel: "Horgony (fejezet)",
+    modalAnchorHint:
+      "Mikortól érvényes ez az állapot — globális alapállapot, egy fejezet eleje vagy egy konkrét jelenet.",
+    modalAnchorGlobal: "Globális alapállapot (nincs horgony)",
+    modalSceneLabel: "Jelenet",
+    modalSceneChapterStart: "A fejezet eleje (nincs jelenet)",
+    modalNoteLabel: "Állapotjegyzet",
+    modalNotePlaceholder:
+      "pl. Megsérült a bal karján; már tud a rejtett jelekről…",
+    modalNoteRequired: "A jegyzet megadása kötelező.",
+    modalCancel: "Mégse",
+    modalCreate: "Progresszió létrehozása",
+    modalSave: "Mentés",
+    createdToast: "Progresszió létrehozva",
+    createError: "Nem sikerült létrehozni a progressziót",
+    updatedToast: "Progresszió mentve",
+    updateError: "Nem sikerült menteni a progressziót",
   },
   /**
    * Képek — the AI image panel inside a Codex character/location detail

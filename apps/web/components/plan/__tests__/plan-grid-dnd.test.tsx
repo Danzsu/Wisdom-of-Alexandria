@@ -77,6 +77,7 @@ function scene(id: string, chapterId: string, index: number): PlanScene {
       status: "draft",
       word_count: 0,
       pov_character_id: null,
+      location_id: null,
       created_at: "2026-06-15T10:00:00Z",
       updated_at: "2026-06-15T10:00:00Z",
     },

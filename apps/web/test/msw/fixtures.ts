@@ -8,6 +8,7 @@ import type {
   BookRead,
   ChapterRead,
   CodexEntryRead,
+  CodexProgressionRead,
   CodexRelationRead,
   PlotlineCreate,
   PlotlineRead,
@@ -161,6 +162,7 @@ export const SCENE_ACTIVE: SceneRead = {
   status: "draft",
   word_count: 13,
   pov_character_id: null,
+  location_id: null,
   created_at: "2026-06-14T14:32:00Z",
   updated_at: "2026-06-14T14:32:00Z",
 };
@@ -175,6 +177,7 @@ export const SCENE_FIRST: SceneRead = {
   status: "complete",
   word_count: 4,
   pov_character_id: null,
+  location_id: null,
   created_at: "2026-06-14T14:32:00Z",
   updated_at: "2026-06-14T14:32:00Z",
 };
@@ -241,6 +244,7 @@ export function makeScene(
     status: body.status ?? "draft",
     word_count: fixtureWordCount(body.content),
     pov_character_id: body.pov_character_id ?? null,
+    location_id: null,
     created_at: NOW,
     updated_at: NOW,
   };
@@ -377,6 +381,78 @@ export function makeCodexRelation(
     to_entity_id: body.to_entity_id ?? "",
     relation_type: body.relation_type ?? "kapcsolat",
     description: body.description ?? null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/* ---------------------------------------------------------------------------
+ * CodexProgression fixtures (Progresszió tab). Three progressions for the
+ * Szelene codex entry (`entity_type: "codex"` — the RAG/AI-context key for the
+ * generic codex entries). STORY order is: global baseline → chapter-one anchor
+ * → scene anchor (chapter two). The `created_at` stamps are deliberately
+ * chosen so that NEITHER created_at asc NOR desc equals story order, and the
+ * array order differs from story order too — a sort mutation cannot pass the
+ * order assertions by accident.
+ *
+ *   story order:      prog-global,  prog-chapter, prog-scene
+ *   created_at desc:  prog-chapter, prog-global,  prog-scene   (handler order)
+ *   created_at asc:   prog-scene,   prog-global,  prog-chapter
+ * ------------------------------------------------------------------------- */
+export const SZELENE_PROGRESSIONS: CodexProgressionRead[] = [
+  {
+    id: "prog-chapter",
+    entity_type: "codex",
+    entity_id: "codex-szelene",
+    // Chapter-anchored (no scene): applies from CHAPTER_ONE's start.
+    chapter_id: CHAPTER_ONE.id,
+    scene_id: null,
+    note: "A kikötőben szolgál, gyanút fog.",
+    created_at: "2026-06-14T12:00:00Z",
+    updated_at: "2026-06-14T12:00:00Z",
+  },
+  {
+    id: "prog-global",
+    entity_type: "codex",
+    entity_id: "codex-szelene",
+    // Anchorless: the project-global baseline — story-FIRST.
+    chapter_id: null,
+    scene_id: null,
+    note: "Alapállapot: éjszakai írnok a Nagykönyvtárban.",
+    created_at: "2026-06-14T11:00:00Z",
+    updated_at: "2026-06-14T11:00:00Z",
+  },
+  {
+    id: "prog-scene",
+    entity_type: "codex",
+    entity_id: "codex-szelene",
+    // Scene-anchored: CHAPTER_TWO / SCENE_ACTIVE — story-LAST.
+    chapter_id: CHAPTER_TWO.id,
+    scene_id: SCENE_ACTIVE.id,
+    note: "Már tud a rejtett jelekről.",
+    created_at: "2026-06-14T10:00:00Z",
+    updated_at: "2026-06-14T10:00:00Z",
+  },
+];
+
+let progressionSeq = 0;
+
+/** Build a `CodexProgressionRead` echo for a POST /codex-progressions body. */
+export function makeCodexProgression(body: {
+  entity_type?: string;
+  entity_id?: string;
+  chapter_id?: string | null;
+  scene_id?: string | null;
+  note?: string | null;
+}): CodexProgressionRead {
+  progressionSeq += 1;
+  return {
+    id: `prog-new-${progressionSeq}`,
+    entity_type: body.entity_type ?? "codex",
+    entity_id: body.entity_id ?? "",
+    chapter_id: body.chapter_id ?? null,
+    scene_id: body.scene_id ?? null,
+    note: body.note ?? null,
     created_at: NOW,
     updated_at: NOW,
   };
