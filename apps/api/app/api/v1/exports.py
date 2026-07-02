@@ -16,6 +16,7 @@ from app.services.export_service import (
     export_book_markdown,
     export_chapter_markdown,
     export_scene_markdown,
+    resolve_book_cover_path,
 )
 from app.services.pandoc import (
     PandocConversionError,
@@ -73,15 +74,25 @@ def _markdown_response(content: str, title: str) -> Response:
     )
 
 
-def _pandoc_response(markdown: str, title: str, fmt: PandocFormat) -> Response:
+def _pandoc_response(
+    markdown: str,
+    title: str,
+    fmt: PandocFormat,
+    cover_path: str | None = None,
+) -> Response:
     """Convert `markdown` to docx/epub/pdf via pandoc and wrap it in a download.
 
     pandoc-missing OR pdf-engine-missing -> 503 (actionable), conversion failure
     -> 502 (sanitized). Neither becomes a silent empty download nor a raw 500
-    traceback.
+    traceback. `cover_path` (book-scope EPUB/PDF only) is forwarded to pandoc
+    ONLY when a cover resolved — without one the invocation is exactly as
+    before.
     """
+    cover_kwargs: dict[str, str] = (
+        {"cover_path": cover_path} if cover_path is not None else {}
+    )
     try:
-        data = convert_markdown(markdown, fmt, title=title)
+        data = convert_markdown(markdown, fmt, title=title, **cover_kwargs)
     except (PandocUnavailableError, PdfEngineUnavailableError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
@@ -99,11 +110,16 @@ def _pandoc_response(markdown: str, title: str, fmt: PandocFormat) -> Response:
     )
 
 
-def _export_response(content: str, title: str, fmt: ExportFormat) -> Response:
+def _export_response(
+    content: str,
+    title: str,
+    fmt: ExportFormat,
+    cover_path: str | None = None,
+) -> Response:
     """Dispatch the generated Markdown to the right format response."""
     if fmt == "md":
         return _markdown_response(content, title)
-    return _pandoc_response(content, title, fmt)
+    return _pandoc_response(content, title, fmt, cover_path=cover_path)
 
 
 async def _get_book_or_404(book_id: uuid.UUID, db: AsyncSession) -> Book:
@@ -171,7 +187,15 @@ async def export_book(
 
     if scope == "book":
         content = await export_book_markdown(db, book)
-        return _export_response(content, book.title, format)
+        # The cover is a BOOK-level artifact and only EPUB/PDF can embed one:
+        # chapter/scene excerpts and DOCX/MD never even resolve it. A missing /
+        # non-canonical / non-ready cover resolves to None -> export as before.
+        cover_path = (
+            await resolve_book_cover_path(db, book.id)
+            if format in ("epub", "pdf")
+            else None
+        )
+        return _export_response(content, book.title, format, cover_path=cover_path)
 
     if target_id is None:
         raise HTTPException(

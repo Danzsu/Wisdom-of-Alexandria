@@ -480,6 +480,265 @@ async def test_export_scene_wrong_book_is_404_for_epub(
     assert resp.status_code == 404
 
 
+# --- Cover embedding (canonical cover -> EPUB/PDF) ------------------------- #
+#
+# The cover GENERATOR (apps/ai) stores covers as MediaAsset rows
+# (entity_type="cover", entity_id=book.id) with the PNG on disk under
+# media_dir. The export path resolves the book's CANONICAL ready cover and
+# hands its file path to pandoc (EPUB flag / PDF cover page). These tests mock
+# `convert_markdown` at the endpoint boundary (like the format tests above) and
+# assert exactly WHAT cover_path the endpoint passes — or that it passes none.
+
+
+async def _build_minimal_book(client, auth_headers):
+    """Create a project + one book; return (project_id, book_id) as strings."""
+    proj = (
+        await client.post(
+            "/api/v1/projects", json={"title": "P"}, headers=auth_headers
+        )
+    ).json()
+    book = (
+        await client.post(
+            f"/api/v1/projects/{proj['id']}/books",
+            json={"title": "Borítós könyv"},
+            headers=auth_headers,
+        )
+    ).json()
+    return proj["id"], book["id"]
+
+
+async def _seed_cover(
+    db_session,
+    project_id: str,
+    book_id: str,
+    file_path: str,
+    *,
+    canonical: bool = True,
+    status: str = "ready",
+):
+    """Insert a cover MediaAsset row directly (the generator lives in apps/ai)."""
+    from alexandria_core.models.media_asset import MediaAsset
+
+    asset = MediaAsset(
+        project_id=uuid.UUID(project_id),
+        entity_type="cover",
+        entity_id=uuid.UUID(book_id),
+        status=status,
+        file_path=file_path,
+        mime="image/png",
+        is_canonical=canonical,
+    )
+    db_session.add(asset)
+    await db_session.commit()
+    return asset
+
+
+def _capturing_convert(seen):
+    """A convert_markdown fake that records every kwarg it was invoked with."""
+
+    def fake_convert(markdown, target, *, title=None, **kwargs):
+        seen["markdown"] = markdown
+        seen["target"] = target
+        seen["title"] = title
+        seen["kwargs"] = kwargs
+        return b"PKfake"
+
+    return fake_convert
+
+
+async def test_export_epub_with_canonical_cover_passes_cover_path(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """A canonical ready cover WITH a real file -> pandoc gets that exact path."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, book_id, str(cover))
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.content == b"PKfake"
+    # The RIGHT path — the seeded asset's file — not merely "some" cover kwarg.
+    assert seen["kwargs"].get("cover_path") == str(cover)
+    assert seen["target"] == "epub"
+
+
+async def test_export_pdf_with_canonical_cover_passes_cover_path(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """PDF export also receives the canonical cover path (cover page injection)."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, book_id, str(cover))
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=pdf", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert seen["kwargs"].get("cover_path") == str(cover)
+    assert seen["target"] == "pdf"
+
+
+async def test_export_epub_without_cover_omits_cover_path(
+    client: AsyncClient, auth_headers: dict, monkeypatch
+):
+    """No cover asset at all -> the invocation is EXACTLY as before (no kwarg)."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    _, book_id = await _build_minimal_book(client, auth_headers)
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
+async def test_export_epub_cover_file_missing_skips_cover_and_succeeds(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path, caplog
+):
+    """Cover ROW exists but the file is gone from disk -> export still succeeds,
+    no cover is passed, and a warning is logged (never fail an export over a
+    cover)."""
+    import logging
+
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    await _seed_cover(db_session, proj_id, book_id, str(tmp_path / "gone.png"))
+
+    with caplog.at_level(logging.WARNING, logger="app.services.export_service"):
+        resp = await client.post(
+            f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+        )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+    assert any("cover" in rec.message.lower() for rec in caplog.records)
+
+
+async def test_export_epub_non_canonical_cover_is_ignored(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """A ready cover that is NOT canonical must not be embedded."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, book_id, str(cover), canonical=False)
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
+async def test_export_epub_non_ready_cover_is_ignored(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """A canonical cover still `generating` (or failed) must not be embedded."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, book_id, str(cover), status="generating")
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
+async def test_export_epub_other_books_cover_is_ignored(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """A canonical cover belonging to a DIFFERENT book must not leak in."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, other_book_id = await _build_minimal_book(client, auth_headers)
+    _, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, other_book_id, str(cover))
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=epub", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
+async def test_export_chapter_scope_epub_does_not_embed_cover(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """The cover is a BOOK-level artifact: chapter/scene excerpts stay coverless."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj = (
+        await client.post("/api/v1/projects", json={"title": "P"}, headers=auth_headers)
+    ).json()
+    book = (
+        await client.post(
+            f"/api/v1/projects/{proj['id']}/books",
+            json={"title": "K"},
+            headers=auth_headers,
+        )
+    ).json()
+    ch = (
+        await client.post(
+            f"/api/v1/books/{book['id']}/chapters",
+            json={"title": "Ch"},
+            headers=auth_headers,
+        )
+    ).json()
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj["id"], book["id"], str(cover))
+
+    resp = await client.post(
+        f"/api/v1/books/{book['id']}/exports?scope=chapter&target_id={ch['id']}&format=epub",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
+async def test_export_docx_does_not_resolve_cover(
+    client: AsyncClient, auth_headers: dict, db_session, monkeypatch, tmp_path
+):
+    """DOCX has no pandoc cover support -> the endpoint never passes one."""
+    seen = {}
+    monkeypatch.setattr("app.api.v1.exports.convert_markdown", _capturing_convert(seen))
+
+    proj_id, book_id = await _build_minimal_book(client, auth_headers)
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+    await _seed_cover(db_session, proj_id, book_id, str(cover))
+
+    resp = await client.post(
+        f"/api/v1/books/{book_id}/exports?format=docx", headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert "cover_path" not in seen["kwargs"]
+
+
 async def test_export_invalid_format_is_422(client: AsyncClient, auth_headers: dict):
     """An unknown format value is rejected by the Literal query validation."""
     book_id, _, _ = await _build_book(client, auth_headers)

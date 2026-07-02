@@ -68,6 +68,10 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      # Same absolute path as the ai/worker services: exports READ the cover
+      # binaries the AI image generator WRITES (media_assets.file_path is
+      # stored under MEDIA_DIR, so it must resolve identically everywhere).
+      MEDIA_DIR: /data/media
     ports:
       - "8000:8000"
     depends_on:
@@ -75,6 +79,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - media_data:/data/media
 
   ai:
     build:
@@ -91,6 +97,11 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      # Absolute + shared with api/worker: generated image binaries land here
+      # and their stored file_path must be readable from the api container too
+      # (cover embedding in EPUB/PDF exports). The default "./media" would be
+      # container-local AND relative to each service's own workdir.
+      MEDIA_DIR: /data/media
     ports:
       - "8001:8001"
     depends_on:
@@ -100,6 +111,7 @@ services:
         condition: service_healthy
     volumes:
       - ./packages/prompts:/app/prompts:ro
+      - media_data:/data/media
 
   worker:
     build:
@@ -118,6 +130,8 @@ services:
       PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
       DEFAULT_LOCAL_MODEL: ${DEFAULT_LOCAL_MODEL:-ollama/llama3.2}
+      # Same shared media volume as ai/api (image jobs run on this worker).
+      MEDIA_DIR: /data/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,6 +139,7 @@ services:
         condition: service_healthy
     volumes:
       - ./packages/prompts:/app/prompts:ro
+      - media_data:/data/media
 
   web:
     # Next.js frontend (App Router). Runs the dev server from the mounted
@@ -166,3 +181,4 @@ volumes:
   postgres_data:
   redis_data:
   ollama_data:
+  media_data:

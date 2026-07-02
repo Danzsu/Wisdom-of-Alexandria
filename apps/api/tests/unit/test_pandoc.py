@@ -222,6 +222,134 @@ def test_pdf_nonzero_exit_raises_conversion_error_sanitized(monkeypatch):
     assert "<path>" in message
 
 
+# --- Cover embedding (EPUB flag / PDF cover page) --------------------------- #
+
+
+def _fake_run_writing_output(seen):
+    """Build a fake subprocess.run that records cmd + the input.md content and
+    writes the -o target so convert_markdown's read_bytes succeeds."""
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        # cmd[1] is the input file (see convert_markdown's argv layout); read it
+        # NOW — the temp dir is destroyed after convert_markdown returns.
+        with open(cmd[1], encoding="utf-8") as fh:
+            seen["input_md"] = fh.read()
+        out_index = cmd.index("-o") + 1
+        with open(cmd[out_index], "wb") as fh:
+            fh.write(b"PKfake-bytes")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    return fake_run
+
+
+def test_epub_cover_path_adds_epub_cover_image_flag(monkeypatch, tmp_path):
+    """EPUB + cover_path -> a single `--epub-cover-image=<path>` argv element.
+
+    The path deliberately contains a SPACE: because the invocation is an argv
+    list (no shell), the whole flag must survive as ONE element — no quoting
+    or splitting.
+    """
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+    cover_dir = tmp_path / "my covers"
+    cover_dir.mkdir()
+    cover = cover_dir / "cover art.png"
+    cover.write_bytes(b"\x89PNGfake")
+
+    seen = {}
+    monkeypatch.setattr(pandoc.subprocess, "run", _fake_run_writing_output(seen))
+
+    convert_markdown("# Cím", "epub", title="A könyv", cover_path=str(cover))
+
+    assert f"--epub-cover-image={cover}" in seen["cmd"]
+    # The body itself is untouched (the cover goes in via the flag, not markup).
+    assert seen["input_md"] == "# Cím"
+
+
+def test_epub_without_cover_has_no_cover_flag(monkeypatch):
+    """No cover_path -> the argv contains NO --epub-cover-image element."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+    seen = {}
+    monkeypatch.setattr(pandoc.subprocess, "run", _fake_run_writing_output(seen))
+
+    convert_markdown("# Cím", "epub", title="t")
+
+    assert not any(arg.startswith("--epub-cover-image") for arg in seen["cmd"])
+
+
+def test_docx_ignores_cover_path(monkeypatch, tmp_path):
+    """DOCX has no pandoc cover concept: no flag, and the markdown is unchanged."""
+    monkeypatch.setattr(pandoc.shutil, "which", lambda _: "/usr/bin/pandoc")
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+
+    seen = {}
+    monkeypatch.setattr(pandoc.subprocess, "run", _fake_run_writing_output(seen))
+
+    convert_markdown("# Cím\n\nbody", "docx", title="t", cover_path=str(cover))
+
+    assert not any(arg.startswith("--epub-cover-image") for arg in seen["cmd"])
+    assert seen["input_md"] == "# Cím\n\nbody"
+
+
+def test_pdf_cover_page_prepended_with_file_uri(monkeypatch, tmp_path):
+    """PDF + cover_path -> a raw-HTML cover page (file:// img + page break) is
+    prepended to the markdown handed to pandoc/weasyprint; the original body
+    follows it. No EPUB flag leaks into the PDF invocation."""
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        pandoc.shutil,
+        "which",
+        lambda name: "/usr/bin/pandoc" if name == "pandoc" else "/usr/bin/weasyprint",
+    )
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"\x89PNGfake")
+
+    seen = {}
+    monkeypatch.setattr(pandoc.subprocess, "run", _fake_run_writing_output(seen))
+
+    convert_markdown("# Cím\n\nbody", "pdf", title="t", cover_path=str(cover))
+
+    input_md = seen["input_md"]
+    expected_uri = Path(cover).resolve().as_uri()
+    # The image is referenced by its file:// URI inside an <img> tag …
+    assert f'src="{expected_uri}"' in input_md
+    # … on a page of its own (weasyprint honours the CSS page break) …
+    assert "page-break-after" in input_md
+    # … BEFORE the original body, which is intact after it.
+    assert input_md.index("page-break-after") < input_md.index("# Cím")
+    assert input_md.endswith("# Cím\n\nbody")
+    assert not any(arg.startswith("--epub-cover-image") for arg in seen["cmd"])
+
+
+def test_pdf_cover_path_with_spaces_is_uri_escaped(monkeypatch, tmp_path):
+    """A cover path with spaces cannot break the injected HTML: the src is a
+    percent-encoded file URI (no raw space inside the attribute)."""
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        pandoc.shutil,
+        "which",
+        lambda name: "/usr/bin/pandoc" if name == "pandoc" else "/usr/bin/weasyprint",
+    )
+    cover_dir = tmp_path / "my covers"
+    cover_dir.mkdir()
+    cover = cover_dir / "cover art.png"
+    cover.write_bytes(b"\x89PNGfake")
+
+    seen = {}
+    monkeypatch.setattr(pandoc.subprocess, "run", _fake_run_writing_output(seen))
+
+    convert_markdown("body", "pdf", title="t", cover_path=str(cover))
+
+    expected_uri = Path(cover).resolve().as_uri()
+    assert "%20" in expected_uri  # the URI form really did escape the spaces
+    assert f'src="{expected_uri}"' in seen["input_md"]
+    # The raw (space-containing) path never appears inside the src attribute.
+    assert f'src="{cover}"' not in seen["input_md"]
+
+
 # --- DOCX -> Markdown (import direction, #2b) ------------------------------ #
 
 

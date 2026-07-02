@@ -113,11 +113,30 @@ def pdf_engine_available() -> bool:
     return pandoc_available() and shutil.which(_PDF_ENGINE) is not None
 
 
+def _pdf_cover_page(cover_path: str) -> str:
+    """Build the raw-HTML cover page prepended to the PDF Markdown body.
+
+    WeasyPrint renders the Markdown via HTML, so a raw `<div>` block travels
+    through pandoc untouched. The image is referenced by its percent-encoded
+    ``file://`` URI (`Path.as_uri()`), so spaces/unicode in the path cannot
+    break the ``src`` attribute, and `page-break-after: always` puts the cover
+    on a page of its own before the manuscript.
+    """
+    cover_uri = Path(cover_path).resolve().as_uri()
+    return (
+        '<div style="page-break-after: always;">\n'
+        f'<img src="{cover_uri}" alt="Cover"'
+        ' style="width: 100%; height: 100%; object-fit: contain;" />\n'
+        "</div>\n\n"
+    )
+
+
 def convert_markdown(
     markdown: str,
     target: PandocFormat,
     *,
     title: str | None = None,
+    cover_path: str | None = None,
 ) -> bytes:
     """Convert `markdown` to `target` (docx/epub) bytes via the pandoc CLI.
 
@@ -132,6 +151,12 @@ def convert_markdown(
         title:    document title — passed as pandoc metadata (EPUB requires a
                   title; DOCX uses it for document properties). Falls back to a
                   neutral default so EPUB never emits its "no title" warning.
+        cover_path: optional on-disk path of the book's cover image. EPUB embeds
+                  it via pandoc's `--epub-cover-image` flag; PDF prepends a raw
+                  HTML cover page (file:// img + page break) to the Markdown.
+                  DOCX has no pandoc cover concept, so the path is ignored.
+                  Callers pass an already-VALIDATED path (existence is checked
+                  upstream so a stale cover can never fail an export).
 
     Raises:
         PandocUnavailableError: pandoc is not installed (PATH miss) -> 503.
@@ -160,6 +185,12 @@ def convert_markdown(
     # EPUB/PDF always need a title; DOCX benefits from one. Never empty.
     doc_title = (title or "").strip() or "Untitled"
 
+    # PDF cover: prepend the raw-HTML cover page so WeasyPrint renders it on a
+    # page of its own before the body. (EPUB uses the pandoc flag below; DOCX
+    # ignores the cover entirely.)
+    if cover_path and target == "pdf":
+        markdown = _pdf_cover_page(cover_path) + markdown
+
     with tempfile.TemporaryDirectory(prefix="woa-export-") as tmp:
         tmp_dir = Path(tmp)
         input_path = tmp_dir / "input.md"
@@ -181,6 +212,10 @@ def convert_markdown(
         # For PDF, tell pandoc which engine to drive (resolved above).
         if target == "pdf":
             cmd += [f"--pdf-engine={_PDF_ENGINE}"]
+        # EPUB cover: a single argv element — the invocation is an argv list
+        # (no shell), so a path with spaces/unicode needs no quoting.
+        if cover_path and target == "epub":
+            cmd += [f"--epub-cover-image={cover_path}"]
 
         try:
             result = subprocess.run(  # noqa: S603 — fixed argv, no shell, pandoc resolved via which

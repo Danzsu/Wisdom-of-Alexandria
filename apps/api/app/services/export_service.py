@@ -1,8 +1,55 @@
+import logging
+import uuid
+from pathlib import Path
+
 from alexandria_core.models.book import Book
 from alexandria_core.models.chapter import Chapter
+from alexandria_core.models.media_asset import MediaAsset
 from alexandria_core.models.scene import Scene, SceneStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+
+async def resolve_book_cover_path(
+    db: AsyncSession, book_id: uuid.UUID
+) -> str | None:
+    """Resolve the book's canonical READY cover to its on-disk file path.
+
+    The cover generator (apps/ai) stores covers as MediaAsset rows
+    (entity_type="cover", entity_id=book.id) with the binary under the shared
+    media_dir. Only a cover that is canonical AND ready AND actually present on
+    disk is embeddable. Every miss returns None — an export must NEVER fail
+    over a cover:
+
+      * no matching row              -> None (export exactly as before)
+      * row exists, file missing     -> WARNING logged + None (graceful skip)
+    """
+    result = await db.execute(
+        select(MediaAsset)
+        .where(
+            MediaAsset.entity_type == "cover",
+            MediaAsset.entity_id == book_id,
+            MediaAsset.is_canonical.is_(True),
+            MediaAsset.status == "ready",
+            MediaAsset.file_path.is_not(None),
+        )
+        .order_by(MediaAsset.created_at.desc())
+    )
+    asset = result.scalars().first()
+    if asset is None or not asset.file_path:
+        return None
+    if not Path(asset.file_path).is_file():
+        logger.warning(
+            "Canonical cover %s for book %s points to a missing file (%s); "
+            "exporting without a cover.",
+            asset.id,
+            book_id,
+            asset.file_path,
+        )
+        return None
+    return asset.file_path
 
 
 async def _fetch_chapters(db: AsyncSession, book_id) -> list[Chapter]:
