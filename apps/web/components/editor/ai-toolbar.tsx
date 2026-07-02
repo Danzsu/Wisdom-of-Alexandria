@@ -371,10 +371,10 @@ export function AiToolbar({ editor, onAction }: AiToolbarProps) {
 
 /** Compact save-state indicator shown at the end of the toolbar. */
 function SaveIndicator({ saveState }: { saveState: string }) {
-  if (saveState === "saving") {
+  if (saveState === "saving" || saveState === "retrying") {
     return (
       <span className="flex items-center gap-1 text-[12px] text-text-muted">
-        {hu.statusbar.saving}
+        {saveState === "retrying" ? hu.statusbar.retrying : hu.statusbar.saving}
       </span>
     );
   }

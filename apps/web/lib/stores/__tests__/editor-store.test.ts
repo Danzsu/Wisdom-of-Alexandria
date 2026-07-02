@@ -107,6 +107,18 @@ describe("modes + signals", () => {
     expect(s.wordCount).toBe(0);
     expect(s.beatState).toBe("hidden");
   });
+
+  it("setRetrySave registers/clears the manual-retry bridge; resetForScene keeps it", () => {
+    const retry = () => {};
+    useEditorStore.getState().setRetrySave(retry);
+    expect(useEditorStore.getState().retrySave).toBe(retry);
+    // A scene switch must NOT drop the bridge — the autosave hook stays
+    // mounted across scenes and a failed old-scene save must stay retryable.
+    useEditorStore.getState().resetForScene();
+    expect(useEditorStore.getState().retrySave).toBe(retry);
+    useEditorStore.getState().setRetrySave(null);
+    expect(useEditorStore.getState().retrySave).toBeNull();
+  });
 });
 
 describe("style resolvers", () => {

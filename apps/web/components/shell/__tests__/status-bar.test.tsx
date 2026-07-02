@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Providers } from "@/test/test-utils";
 import { useEditorStore } from "@/lib/stores/editor-store";
 import { FAROSZ_BOOK, SCENE_ACTIVE, CHAPTER_TWO } from "@/test/msw/fixtures";
@@ -22,6 +22,7 @@ describe("StatusBar", () => {
       wordCount: 0,
       saveState: "saved",
       activeModel: null,
+      retrySave: null,
     });
   });
 
@@ -72,6 +73,50 @@ describe("StatusBar", () => {
       </Providers>,
     );
     expect(screen.getByText("Mentve")).toBeInTheDocument();
+  });
+
+  it("shows the retrying state while a failed save is auto-retried", () => {
+    useEditorStore.setState({ saveState: "retrying" });
+    render(
+      <Providers>
+        <StatusBar />
+      </Providers>,
+    );
+    expect(screen.getByText("Újrapróbálkozás…")).toBeInTheDocument();
+    // Retrying is not yet the give-up state — no manual retry button.
+    expect(
+      screen.queryByRole("button", { name: "Mentés újrapróbálása" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("error state offers a WORKING manual retry button (Mentés sikertelen — Újra)", () => {
+    const retry = vi.fn();
+    useEditorStore.setState({ saveState: "error", retrySave: retry });
+    render(
+      <Providers>
+        <StatusBar />
+      </Providers>,
+    );
+    expect(screen.getByText("Mentés sikertelen")).toBeInTheDocument();
+    const button = screen.getByRole("button", {
+      name: "Mentés újrapróbálása",
+    });
+    expect(button).toHaveTextContent("Újra");
+    fireEvent.click(button);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("error state without a registered retry bridge renders no dead button", () => {
+    useEditorStore.setState({ saveState: "error", retrySave: null });
+    render(
+      <Providers>
+        <StatusBar />
+      </Providers>,
+    );
+    expect(screen.getByText("Mentés sikertelen")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mentés újrapróbálása" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the active (config-driven) model badge", async () => {

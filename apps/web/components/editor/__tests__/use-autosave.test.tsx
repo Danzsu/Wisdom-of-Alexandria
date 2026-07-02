@@ -100,10 +100,14 @@ describe("useAutosave", () => {
     expect(useEditorStore.getState().saveState).toBe("saved");
   });
 
-  it("sets the error state when the save fails (not swallowed)", async () => {
+  it("surfaces a failed save as retrying (never swallowed), then recovers via the auto-retry", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let fail = true;
     server.use(
       http.patch(`${base}/chapters/:chapterId/scenes/:sceneId`, () =>
-        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+        fail
+          ? HttpResponse.json({ detail: "boom" }, { status: 500 })
+          : HttpResponse.json({ ...SCENE_ACTIVE, content: "hello", word_count: 1 }),
       ),
     );
     const { result } = renderHook(
@@ -113,14 +117,29 @@ describe("useAutosave", () => {
 
     act(() => result.current.scheduleSave("hello"));
     await settleSave();
-    expect(useEditorStore.getState().saveState).toBe("error");
+    // A failed save enters the auto-retry cycle (exhaustion → `error` is
+    // covered in autosave-retry.test.tsx).
+    expect(useEditorStore.getState().saveState).toBe("retrying");
+
+    // Let the ~2s backoff elapse with the network back → saved (also leaves
+    // no armed retry timer behind for the next test).
+    fail = false;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    await settleSave();
+    expect(useEditorStore.getState().saveState).toBe("saved");
+    errorSpy.mockRestore();
   });
 
   it("logs the failure to the console (visible in dev, not only the StatusBar)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let fail = true;
     server.use(
       http.patch(`${base}/chapters/:chapterId/scenes/:sceneId`, () =>
-        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+        fail
+          ? HttpResponse.json({ detail: "boom" }, { status: 500 })
+          : HttpResponse.json({ ...SCENE_ACTIVE, content: "hello", word_count: 1 }),
       ),
     );
     const { result } = renderHook(
@@ -136,7 +155,13 @@ describe("useAutosave", () => {
       "Autosave failed",
       expect.objectContaining({ sceneId: SCENE_ACTIVE.id }),
     );
-    expect(useEditorStore.getState().saveState).toBe("error");
+    // Drive the retry to success so no backoff timer leaks past the test.
+    fail = false;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    await settleSave();
+    expect(useEditorStore.getState().saveState).toBe("saved");
     errorSpy.mockRestore();
   });
 

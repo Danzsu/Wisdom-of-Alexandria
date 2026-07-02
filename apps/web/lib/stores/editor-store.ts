@@ -23,8 +23,13 @@ export type EditorWidth = "narrow" | "normal" | "wide";
 /** Line-height preset (stored as the literal multiplier the prototype uses). */
 export type EditorSpacing = "1.5" | "1.75" | "2.1";
 
-/** Autosave lifecycle, surfaced in the StatusBar + AI toolbar. */
-export type SaveState = "idle" | "saving" | "saved" | "error";
+/**
+ * Autosave lifecycle, surfaced in the StatusBar + AI toolbar. `retrying` is a
+ * failed save inside its automatic backoff ladder (~2s/5s/10s); `error` means
+ * the ladder is exhausted and only the manual "Újra" retry (or a new
+ * keystroke) can re-fire it.
+ */
+export type SaveState = "idle" | "saving" | "retrying" | "saved" | "error";
 
 /** Inline scene-beat card lifecycle (hidden→config→generating→ready→applied). */
 export type BeatState =
@@ -134,6 +139,15 @@ interface EditorState {
    * across the route boundary — can reach the editor without prop-drilling.
    */
   applySuggestion: ApplySuggestionFn | null;
+  /**
+   * Bridge the autosave hook registers so the StatusBar's "Újra" button —
+   * rendered by the shell, across the route boundary — can re-fire a failed
+   * save (same pattern as {@link applySuggestion}). `null` while the Write
+   * view is unmounted. Deliberately NOT cleared by {@link resetForScene}: the
+   * hook stays mounted across scene switches and a failed old-scene save must
+   * remain retryable.
+   */
+  retrySave: (() => void) | null;
 
   /* ---- Format actions ---- */
   setFont: (font: EditorFont) => void;
@@ -169,6 +183,8 @@ interface EditorState {
   setAiSelection: (selection: SelectionSnapshot | null) => void;
   /** Register / clear the editor's insert bridge (editor mount / unmount). */
   setApplySuggestion: (fn: ApplySuggestionFn | null) => void;
+  /** Register / clear the autosave manual-retry bridge (hook mount / unmount). */
+  setRetrySave: (fn: (() => void) | null) => void;
 
   /** Reset transient signals when the active scene changes / on unmount. */
   resetForScene: () => void;
@@ -211,6 +227,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   activeModel: null,
   aiSelection: null,
   applySuggestion: null,
+  retrySave: null,
 
   setFont: (font) => set({ msFont: font }),
   decFontSize: () =>
@@ -237,6 +254,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setActiveModel: (model) => set({ activeModel: model }),
   setAiSelection: (selection) => set({ aiSelection: selection }),
   setApplySuggestion: (fn) => set({ applySuggestion: fn }),
+  setRetrySave: (fn) => set({ retrySave: fn }),
 
   resetForScene: () =>
     set({

@@ -212,6 +212,12 @@ export const hu = {
     saved: "Mentve",
     saving: "Mentés…",
     error: "Mentés sikertelen",
+    /** Autosave failed and is inside its automatic backoff-retry ladder. */
+    retrying: "Újrapróbálkozás…",
+    /** Manual retry button label after autosave gave up ("… — Újra"). */
+    retry: "Újra",
+    /** Accessible name for the manual retry button. */
+    retryAria: "Mentés újrapróbálása",
     // M4 placeholder — live word count arrives with the editor.
     wordCountPlaceholder: "1 482 szó",
     // M4 placeholder — live chapter/scene location arrives with the editor.

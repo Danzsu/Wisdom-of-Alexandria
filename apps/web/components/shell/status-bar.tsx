@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { Check, Cpu } from "lucide-react";
+import { Button } from "@/components/kit/button";
 import { Icon } from "@/components/kit/icon";
 import { Spinner } from "@/components/kit/spinner";
 import {
@@ -29,6 +30,7 @@ export function StatusBar() {
   const tree = useBookTree(bookId);
   const wordCount = useEditorStore((s) => s.wordCount);
   const saveState = useEditorStore((s) => s.saveState);
+  const retrySave = useEditorStore((s) => s.retrySave);
   const models = useInspectorModels();
   const activeModel = models.value || hu.inspector.metaUnknown;
 
@@ -52,7 +54,7 @@ export function StatusBar() {
       <div className="flex-1" />
       {/* Live region so autosave failures ("Mentés sikertelen") are announced. */}
       <span role="status" aria-live="polite" className="flex items-center">
-        <SaveState saveState={saveState} />
+        <SaveState saveState={saveState} onRetry={retrySave} />
       </span>
       <div className="flex-1" />
       <span className="flex h-5 items-center gap-1.5 rounded-full bg-ai-muted px-2 text-[11px] font-semibold text-ai-text">
@@ -64,19 +66,44 @@ export function StatusBar() {
 }
 
 /** The save-state segment of the status bar. */
-function SaveState({ saveState }: { saveState: string }) {
-  if (saveState === "saving") {
+function SaveState({
+  saveState,
+  onRetry,
+}: {
+  saveState: string;
+  /** Manual-retry bridge from the autosave hook; `null` off the Write view. */
+  onRetry: (() => void) | null;
+}) {
+  if (saveState === "saving" || saveState === "retrying") {
     return (
       <span className="flex items-center gap-1.5 text-text-muted">
         <Spinner size={11} />
-        {hu.statusbar.saving}
+        {saveState === "retrying" ? hu.statusbar.retrying : hu.statusbar.saving}
       </span>
     );
   }
   if (saveState === "error") {
+    // Auto-retries are exhausted — "Mentés sikertelen — Újra" with a live
+    // manual retry (the button re-fires the failed payload via the store
+    // bridge the autosave hook registered).
     return (
-      <span className="flex items-center gap-1 text-danger-text">
+      <span className="flex items-center gap-1.5 text-danger-text">
         {hu.statusbar.error}
+        {onRetry ? (
+          <>
+            <span aria-hidden="true">—</span>
+            <Button
+              variant="ghost"
+              shape="pill"
+              size={28}
+              aria-label={hu.statusbar.retryAria}
+              onClick={onRetry}
+              className="h-5 px-1.5 text-[12px] font-semibold text-danger-text hover:bg-danger-muted hover:text-danger-text"
+            >
+              {hu.statusbar.retry}
+            </Button>
+          </>
+        ) : null}
       </span>
     );
   }

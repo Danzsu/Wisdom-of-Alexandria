@@ -38,6 +38,17 @@ describe("AiToolbar", () => {
     expect(screen.getByText("Mentve")).toBeInTheDocument();
   });
 
+  it("shows the retrying save state (never mislabels a failing save as Mentve)", () => {
+    useEditorStore.setState({ saveState: "retrying" });
+    render(
+      <Providers>
+        <AiToolbar editor={null} onAction={vi.fn()} />
+      </Providers>,
+    );
+    expect(screen.getByText("Újrapróbálkozás…")).toBeInTheDocument();
+    expect(screen.queryByText("Mentve")).not.toBeInTheDocument();
+  });
+
   it("fires onAction for the rewrite pill (stubbed in the page)", async () => {
     const user = userEvent.setup();
     const onAction = vi.fn();
