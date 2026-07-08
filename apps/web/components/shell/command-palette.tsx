@@ -25,9 +25,13 @@ import {
   buildActionResults,
   buildCodexResults,
   buildSceneResults,
+  pushRecentCommand,
+  readRecentCommands,
+  recentCommandResults,
   searchCommands,
   type CommandGroupKey,
   type CommandResult,
+  type RecentCommand,
 } from "@/lib/command-data";
 import { hu } from "@/lib/i18n/hu";
 
@@ -38,6 +42,13 @@ const GROUP_LABEL: Record<CommandGroupKey, string> = {
 };
 
 const GROUP_ORDER: CommandGroupKey[] = ["scenes", "codex", "actions"];
+
+/** One rendered result section: the default groups, plus "recents" on top. */
+interface CommandSection {
+  key: string;
+  label: string;
+  items: CommandResult[];
+}
 
 /** Leading visual for a result row. */
 function ResultLeading({ result }: { result: CommandResult }) {
@@ -72,6 +83,11 @@ function ResultLeading({ result }: { result: CommandResult }) {
  * substring (accent-insensitive); a scene navigates to its Write route, a codex
  * entry to the codex route with `?entry=` preselected. Empty matches show the
  * no-results state with a "Létrehozás" affordance.
+ *
+ * RECENTS (design pushRecent parity): every selection is persisted to
+ * localStorage ("woa-recent-cmds", max 6, dedup by label, newest first); an
+ * empty query leads with the "Legutóbbiak" group, whose rows re-execute their
+ * original target (a stale route after a deletion just navigates — no crash).
  */
 export function CommandPalette() {
   const commandOpen = useUIStore((s) => s.commandOpen);
@@ -106,14 +122,36 @@ export function CommandPalette() {
     () => searchCommands(allResults, query),
     [allResults, query],
   );
-  const hasResults = results.length > 0;
 
-  const grouped = useMemo(() => {
-    return GROUP_ORDER.map((key) => ({
+  // Persisted recents (design pushRecent parity): re-read on every OPEN so a
+  // selection made moments ago is already in the list next time. localStorage
+  // is only touched while the palette is actually used.
+  const [recents, setRecents] = useState<RecentCommand[]>([]);
+  useEffect(() => {
+    if (commandOpen) setRecents(readRecentCommands());
+  }, [commandOpen]);
+
+  // Render sections: on an EMPTY query the "Legutóbbiak" group leads (recents
+  // render like normal results — their original group drives the leading
+  // visual), then the default groups. Any query hides the recents.
+  const grouped = useMemo<CommandSection[]>(() => {
+    const base: CommandSection[] = GROUP_ORDER.map((key) => ({
       key,
+      label: GROUP_LABEL[key],
       items: results.filter((r) => r.group === key),
     })).filter((g) => g.items.length > 0);
-  }, [results]);
+    if (query.trim() === "" && recents.length > 0) {
+      return [
+        {
+          key: "recents",
+          label: hu.command.groupRecents,
+          items: recentCommandResults(recents),
+        },
+        ...base,
+      ];
+    }
+    return base;
+  }, [results, recents, query]);
 
   // Flatten the grouped results in render order so Up/Down roving and the
   // active highlight share one index space across the groups.
@@ -121,6 +159,7 @@ export function CommandPalette() {
     () => grouped.flatMap((g) => g.items),
     [grouped],
   );
+  const hasResults = flatResults.length > 0;
 
   // Roving active index into `flatResults`. Reset whenever the query changes
   // (the result set changes) so the highlight never points past the list.
@@ -160,6 +199,17 @@ export function CommandPalette() {
   }
 
   function runResult(result: CommandResult) {
+    // No target at all: close defensively rather than no-op silently — and do
+    // NOT record it (a recent must always be re-executable).
+    if (!result.href && !result.action) {
+      closeCommand();
+      setQuery("");
+      return;
+    }
+    // Record BEFORE executing (mock pushRecent parity: every selection counts,
+    // scene/codex/action alike). A stale target later is fine — navigating to
+    // a deleted scene's route is acceptable; it must just never crash here.
+    pushRecentCommand(result);
     if (result.action === "theme") {
       setTheme(resolvedTheme === "dark" ? "light" : "dark");
       closeCommand();
@@ -237,7 +287,7 @@ export function CommandPalette() {
               {grouped.map((group) => (
                 <div key={group.key} className="flex flex-col gap-px">
                   <p className="mb-[3px] mt-[5px] px-[9px] text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
-                    {GROUP_LABEL[group.key]}
+                    {group.label}
                   </p>
                   {group.items.map((result) => {
                     const flatIndex = flatResults.indexOf(result);

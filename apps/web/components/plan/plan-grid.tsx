@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import {
   DndContext,
@@ -17,6 +17,7 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { Icon } from "@/components/kit/icon";
+import { cn } from "@/lib/utils";
 import { hu } from "@/lib/i18n/hu";
 import { ChapterColumn } from "./chapter-column";
 import { computeReorder } from "./reorder-logic";
@@ -48,8 +49,19 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
 
   const { chapters, reorderChapters, reorderScenes, moveScene } = controller;
 
+  // Design drag polish: while ANY drag is live (scene or chapter) the columns
+  // wrapper carries `.woa-drag-active`, which (a) draws the gold dashed
+  // drop-target outline on every `[data-col]` chapter column and (b) suspends
+  // the scene cards' content-visibility containment so the pointer-following
+  // card, its lifted shadow and the siblings' shift previews paint unclipped
+  // (see globals.css). Purely visual — the reorder dispatch is untouched.
+  const [dragActive, setDragActive] = useState(false);
+  const handleDragStart = useCallback(() => setDragActive(true), []);
+  const handleDragCancel = useCallback(() => setDragActive(false), []);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      setDragActive(false);
       const result = computeReorder(chapters, {
         active: { id: event.active.id },
         over: event.over ? { id: event.over.id } : null,
@@ -96,13 +108,20 @@ export function PlanGrid({ controller, density }: PlanGridProps) {
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
         <SortableContext
           items={chapters.map((c) => c.id)}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex items-start gap-3.5">
+          <div
+            className={cn(
+              "flex items-start gap-3.5",
+              dragActive && "woa-drag-active",
+            )}
+          >
             {chapters.map((chapter) => (
               <ChapterColumn
                 key={chapter.id}

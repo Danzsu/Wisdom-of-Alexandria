@@ -26,14 +26,19 @@ export function TooltipProvider({
 export const TooltipRoot = TooltipPrimitive.Root;
 export const TooltipTrigger = TooltipPrimitive.Trigger;
 
+// Parchment tooltip (design [data-tip], MOTION/polish pass): surface bg,
+// border, popover shadow, 11.5px/500 text, 5x10px padding, 8px radius. The
+// `woa-tip` class (globals.css) plays a .16s var(--ease-soft) fade + 4px
+// slide from the trigger's side, keyed off Radix's data-state/data-side —
+// reduced-motion safe via the global prefers-reduced-motion block.
 const tooltipContentVariants = cva(
-  "z-50 max-w-xs rounded-lg border px-2.5 py-1.5 text-tiny leading-snug shadow-popover " +
-    "data-[state=delayed-open]:[animation:woaFade_.12s_ease-out]",
+  "woa-tip z-50 max-w-xs rounded-lg border px-2.5 py-[5px] text-[11.5px] " +
+    "font-medium leading-snug shadow-popover",
   {
     variants: {
       tone: {
-        // Light surface tooltip (default).
-        surface: "border-border bg-surface text-text-soft",
+        // Light parchment tooltip (default).
+        surface: "border-border bg-surface text-text",
         // Inverted dark tooltip (text-coloured bg).
         dark: "border-text bg-text text-bg",
       },

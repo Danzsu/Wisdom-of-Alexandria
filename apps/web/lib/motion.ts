@@ -6,9 +6,12 @@
  * flashy) and is reduced-motion-safe in one place.
  *
  * Brand constraints baked in here:
- *   - ease-out ONLY (expo / quint cubic-beziers) — NO bounce/elastic/spring
- *     overshoot. The curves below never go above 1 / below 0.
- *   - short durations (120–260ms).
+ *   - entrances/reveals are ease-out ONLY (expo / quint cubic-beziers) with no
+ *     overshoot. One sanctioned exception (2026-07 MOTION pass): a SUBTLE
+ *     spring (micro-overshoot) for micro-interactions — hover-lift, toast
+ *     enter, key presses — via the `--ease-spring` / `--ease-key` CSS tokens
+ *     in app/globals.css (mirrored below as EASE_SPRING / EASE_KEY).
+ *   - short durations (120–260ms; the spring micro-interactions run 340ms).
  *   - only `transform` (translate/scale) + `opacity` are ever animated — never
  *     layout props (width/height/top/left/margin), which jank.
  *
@@ -28,6 +31,27 @@ export const EASE_OUT_EXPO: [number, number, number, number] = [0.16, 1, 0.3, 1]
 export const EASE_OUT_QUINT: [number, number, number, number] = [
   0.22, 1, 0.36, 1,
 ];
+
+/* ----------------------------------------------------------------------------
+ * CSS motion-token mirrors (single source: app/globals.css :root).
+ *   --ease-soft   === EASE_OUT_QUINT (settles, no overshoot)
+ *   --ease-spring / --ease-key carry a SUBTLE overshoot (y1 > 1) — reserved
+ *   for micro-interactions only (hover-lift, toast enter, key presses).
+ * Use the array forms for Framer Motion `ease`; use EASE_VAR.* wherever a CSS
+ * string is needed (inline style / animation shorthand) so the app keeps
+ * pointing at the one token definition.
+ * -------------------------------------------------------------------------- */
+export const EASE_SPRING: [number, number, number, number] = [
+  0.34, 1.56, 0.64, 1,
+];
+export const EASE_KEY: [number, number, number, number] = [0.34, 1.4, 0.64, 1];
+
+/** CSS `var()` references for the globals.css easing tokens. */
+export const EASE_VAR = {
+  soft: "var(--ease-soft)",
+  spring: "var(--ease-spring)",
+  key: "var(--ease-key)",
+} as const;
 
 /* ----------------------------------------------------------------------------
  * Duration tokens (seconds — FM uses seconds). All inside the calm 120–260ms

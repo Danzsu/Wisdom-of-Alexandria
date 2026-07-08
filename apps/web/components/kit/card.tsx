@@ -20,7 +20,7 @@ const EDGE_CLASS: Record<CardAccentEdge, string> = {
 };
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Hover-lift affordance: translate up + panel shadow + stronger border. */
+  /** Hover-lift affordance: spring lift (woa-lift) + panel shadow + stronger border. */
   interactive?: boolean;
   /** Selected state: accent ring + accent-muted background. */
   selected?: boolean;
@@ -65,8 +65,11 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         !hasCover && "p-4",
         hasCover && "overflow-hidden",
         accentEdge && EDGE_CLASS[accentEdge],
-        interactive &&
-          "transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-panel",
+        // Spring hover-lift (MOTION pass): .woa-lift owns the transition
+        // (transform springs via --ease-spring, shadow settles via --ease-soft)
+        // + the hover translateY(-4px) scale(1.014); the hover shadow/border
+        // COLOURS stay Tailwind-side here.
+        interactive && "woa-lift hover:border-border-strong hover:shadow-panel",
         selected && "border-accent ring-2 ring-accent bg-accent-muted",
         className,
       )}

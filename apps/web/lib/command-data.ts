@@ -109,6 +109,120 @@ export function buildCodexResults(
   }));
 }
 
+/* ----------------------------------------------------------------------------
+   Persisted recents (design pushRecent parity — 2026-07 canvas refresh).
+   The mock keeps the last 6 selected commands in localStorage
+   ("woa-recent-cmds"), dedup by label, newest first, and shows them as a
+   group on empty query. Our stored shape keeps enough to RE-EXECUTE the row:
+   group (leading visual), href OR action (the target). Scene/codex hrefs can
+   go stale after a deletion — navigating to a stale route is acceptable, so
+   no liveness data is stored and none is checked.
+   -------------------------------------------------------------------------- */
+
+/** localStorage key for the persisted command-palette recents (mock parity). */
+export const RECENT_COMMANDS_KEY = "woa-recent-cmds";
+
+/** Cap on stored recents (mock parity). */
+export const RECENT_COMMANDS_MAX = 6;
+
+/** One persisted recent — label for display + dedup, group + target to re-run. */
+export interface RecentCommand {
+  label: string;
+  group: CommandGroupKey;
+  href?: string;
+  action?: CommandResult["action"];
+}
+
+const GROUP_KEYS: readonly CommandGroupKey[] = ["scenes", "codex", "actions"];
+const ACTION_KINDS: readonly NonNullable<CommandResult["action"]>[] = [
+  "export",
+  "theme",
+  "shortcuts",
+  "howItWorks",
+];
+
+/**
+ * Read the persisted recents. Malformed storage (bad JSON, non-array, junk
+ * items) degrades gracefully: junk entries are dropped, an unknown group is
+ * coerced to "actions" (only the leading visual depends on it), non-string
+ * targets are discarded, and the list is capped at {@link RECENT_COMMANDS_MAX}.
+ */
+export function readRecentCommands(): RecentCommand[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(RECENT_COMMANDS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (item): item is Record<string, unknown> =>
+          typeof item === "object" &&
+          item !== null &&
+          typeof (item as Record<string, unknown>).label === "string" &&
+          (item as Record<string, unknown>).label !== "",
+      )
+      .map((item) => ({
+        label: item.label as string,
+        group: GROUP_KEYS.includes(item.group as CommandGroupKey)
+          ? (item.group as CommandGroupKey)
+          : "actions",
+        ...(typeof item.href === "string" ? { href: item.href } : {}),
+        ...(ACTION_KINDS.includes(
+          item.action as NonNullable<CommandResult["action"]>,
+        )
+          ? { action: item.action as CommandResult["action"] }
+          : {}),
+      }))
+      .slice(0, RECENT_COMMANDS_MAX);
+  } catch {
+    // Bad JSON or storage access denied — behave as "no recents".
+    return [];
+  }
+}
+
+/**
+ * Push an executed result onto the persisted recents (mock pushRecent parity):
+ * dedup by label, unshift, cap at {@link RECENT_COMMANDS_MAX}. Storage errors
+ * (quota, privacy mode) are swallowed — recents are a convenience, never a
+ * reason to break the selection itself.
+ */
+export function pushRecentCommand(result: CommandResult): void {
+  if (typeof window === "undefined") return;
+  const entry: RecentCommand = {
+    label: result.label,
+    group: result.group,
+    ...(result.href ? { href: result.href } : {}),
+    ...(result.action ? { action: result.action } : {}),
+  };
+  const next = [
+    entry,
+    ...readRecentCommands().filter((r) => r.label !== entry.label),
+  ].slice(0, RECENT_COMMANDS_MAX);
+  try {
+    window.localStorage.setItem(RECENT_COMMANDS_KEY, JSON.stringify(next));
+  } catch {
+    // Quota/privacy failures: the selection still executes, just unrecorded.
+  }
+}
+
+/**
+ * Render the stored recents as palette rows. Ids are index-based
+ * (`recent-N`) so a recent NEVER collides with the live row for the same
+ * target when both are on screen (empty query shows recents + defaults).
+ */
+export function recentCommandResults(
+  recents: RecentCommand[],
+): CommandResult[] {
+  return recents.map((recent, index) => ({
+    id: `recent-${index}`,
+    group: recent.group,
+    label: recent.label,
+    href: recent.href,
+    action: recent.action,
+  }));
+}
+
 /** Lowercase + strip combining marks, so "arnyek" matches "Árnyék". */
 export function normalizeForSearch(value: string): string {
   return value

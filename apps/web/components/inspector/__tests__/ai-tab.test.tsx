@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { AI_BASE_URL, API_BASE_URL } from "@/lib/api/client";
 import { Providers } from "@/test/test-utils";
+import { expectNoA11yViolations } from "@/test/a11y";
 import {
   useEditorStore,
   type ApplySuggestionFn,
@@ -90,6 +91,30 @@ describe("AI Inspector tab — human-in-the-loop flow", () => {
     // Model chip (config-driven) + prompt version badge from the revision.
     expect(screen.getByText("ollama/llama3.2")).toBeInTheDocument();
     expect(screen.getByText("1.0")).toBeInTheDocument();
+  });
+
+  it("exposes the AI zone as a polite live region and mounts the result inside it", async () => {
+    const user = userEvent.setup();
+    renderAiTab();
+
+    // The AI-zone landmark (design: role="region" aria-label="AI segéd"
+    // aria-live="polite") — a named <section> whose polite live announcements
+    // let screen-readers hear the generating→ready flow.
+    const region = screen.getByRole("region", { name: "AI segéd" });
+    expect(region).toHaveAttribute("aria-live", "polite");
+
+    await waitFor(() => expect(screen.getByText("llama3.2")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Átírás" }));
+
+    // The result card arrives INSIDE the live region, so its mount is announced.
+    const result = await screen.findByText(AI_GENERATED_TEXT);
+    expect(region).toContainElement(result);
+  });
+
+  it("axe: the AI tab (idle, with selection) has no violations", async () => {
+    const { container } = renderAiTab();
+    await waitFor(() => expect(screen.getByText("llama3.2")).toBeInTheDocument());
+    await expectNoA11yViolations(container);
   });
 
   it("renders the retrieved RAG context as chips on the result card", async () => {

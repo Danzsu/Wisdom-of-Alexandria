@@ -61,6 +61,9 @@ describe("CommandPalette — real search", () => {
   beforeEach(() => {
     push.mockClear();
     setThemeMock.mockClear();
+    // Selections now persist recents (localStorage "woa-recent-cmds"); clear
+    // them so earlier tests' picks never prepend a "Legutóbbiak" group here.
+    localStorage.clear();
     pathname = `/konyv/${FAROSZ_BOOK.id}/terv`;
     useUIStore.setState({
       openMenu: null,

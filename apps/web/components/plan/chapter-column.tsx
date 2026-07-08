@@ -63,6 +63,10 @@ export function ChapterColumn({
   return (
     <section
       ref={setNodeRef}
+      // Drop-target affordance hook: while ANY drag is active the grid root
+      // carries `.woa-drag-active`, and `.woa-drag-active [data-col]` draws a
+      // gold dashed outline on every column (see globals.css).
+      data-col=""
       style={{
         transform: dndTransformToCss(transform),
         transition,

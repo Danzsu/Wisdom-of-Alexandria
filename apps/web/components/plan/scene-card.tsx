@@ -92,6 +92,19 @@ export function SceneCard({
   const showPov = density !== "slim";
   const padding = DENSITY_PADDING[density];
 
+  // Design drag polish: the dragged card carries `.woa-dragging` (opacity .4 +
+  // tilt + lifted shadow + grabbing cursor, see globals.css). There is NO
+  // DragOverlay — this in-list node follows the pointer via dnd-kit's inline
+  // transform, so the design tilt is COMPOSED into that inline transform (an
+  // inline `transform` would otherwise override the class's). Before the first
+  // pointer movement dnd-kit reports no transform yet — then the class's own
+  // scale/rotate applies. Static states only: reduced-motion safe by nature.
+  const dragTransform = dndTransformToCss(transform);
+  const cardTransform =
+    isDragging && dragTransform
+      ? `${dragTransform} scale(0.97) rotate(-1.4deg)`
+      : dragTransform;
+
   return (
     <>
       {/*
@@ -123,13 +136,13 @@ export function SceneCard({
       <div
         ref={setNodeRef}
         style={{
-          transform: dndTransformToCss(transform),
+          transform: cardTransform,
           transition,
-          opacity: isDragging ? 0.5 : undefined,
         }}
         className={cn(
           "flex flex-col gap-2 rounded-xl border border-border bg-surface shadow-card",
           padding,
+          isDragging && "woa-dragging",
           isOver && "woa-scene-over",
         )}
       >

@@ -81,6 +81,16 @@
   /* Font stacks wired by next/font in the root layout. */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
+  /* --------------------------------------------------------------------------
+     Motion easing tokens (design canvas MOTION pass). Theme-invariant — the
+     dark block inherits these from :root. `soft` settles without overshoot
+     (same curve as lib/motion.ts EASE_OUT_QUINT); `spring`/`key` carry a
+     SUBTLE overshoot reserved for micro-interactions (hover-lift, toast
+     enter, key presses) — never for large surface entrances.
+     ---------------------------------------------------------------------- */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-key: cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 [data-woa="dark"] {
@@ -809,6 +819,152 @@ select:focus-visible,
   background-size: 920px 100%;
   animation: woaShimmer 1.4s linear infinite;
   border-radius: 7px;
+}
+
+/* ============================================================================
+   MOTION-TOKEN + micro-polish pass (2026-07 design canvas refresh).
+   Owned block — consumes the --ease-* tokens defined in :root above.
+   Reduced motion: fully covered by the global block at the end of this file
+   (animation/transition durations collapse to 0.01ms).
+   ========================================================================== */
+
+/* Hover-lift spring (design .woa-lift): the transform springs up with a
+   micro-overshoot while the shadow settles softly. Applied by the kit Card's
+   `interactive` modifier; the hover shadow/border COLOURS stay Tailwind-side
+   on the component (hover:shadow-panel hover:border-border-strong). */
+.woa-lift {
+  transition:
+    transform 0.34s var(--ease-spring),
+    box-shadow 0.34s var(--ease-soft),
+    border-color 0.22s;
+}
+.woa-lift:hover {
+  transform: translateY(-4px) scale(1.014);
+}
+
+/* Toast spring-in (design .woa-toast): rises 14px and settles with a subtle
+   overshoot. Referenced by components/kit/toast.tsx as
+   `woaToastSpring .34s var(--ease-spring)` (no fill mode — sonner's own
+   stacking transform takes over once the entrance finishes). */
+@keyframes woaToastSpring {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Active-tab gold underline (design .woa-ul): a STATIC gold gradient bar with
+   a soft glow (no animation), replacing the flat accent border-bottom on the
+   active horizontal kit Tab. Sits 1px below the button box so it overlaps the
+   TabBar's border, exactly like the design's bottom:-1px bar. */
+.woa-tab-ul {
+  position: relative;
+}
+.woa-tab-ul::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--gold-deep),
+    var(--gold),
+    var(--gold-deep)
+  );
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+/* Parchment tooltip slide-in (design [data-tip]): fade + 4px slide from the
+   trigger's side, keyed off Radix's data-side. Only the DELAYED open animates
+   — skimming across neighbouring triggers (instant-open) must not re-play the
+   slide. Class applied by components/kit/tooltip.tsx. */
+@keyframes woaTipFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes woaTipFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+@keyframes woaTipFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes woaTipFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.woa-tip[data-state="delayed-open"][data-side="right"] {
+  animation: woaTipFromLeft 0.16s var(--ease-soft);
+}
+.woa-tip[data-state="delayed-open"][data-side="left"] {
+  animation: woaTipFromRight 0.16s var(--ease-soft);
+}
+.woa-tip[data-state="delayed-open"][data-side="bottom"] {
+  animation: woaTipFromTop 0.16s var(--ease-soft);
+}
+.woa-tip[data-state="delayed-open"][data-side="top"] {
+  animation: woaTipFromBottom 0.16s var(--ease-soft);
+}
+
+/* ============================================================================
+   Plan-board drag visuals (2026-07 design canvas refresh — drag polish).
+   Owned block. Static states only (opacity/outline/shadow — no animation or
+   transition), so reduced motion needs no special-casing here.
+   ========================================================================== */
+
+/* The dragged scene card (design .woa-dragging, verbatim): faded + tilted with
+   a lifted shadow and a grabbing cursor. Our board has NO DragOverlay — the
+   in-list original follows the pointer, so this one node carries the whole
+   treatment. The tilt also lives composed into the inline drag transform in
+   scene-card.tsx (the inline pointer-follow transform would otherwise override
+   this class's transform); the rule below still covers the pre-movement frame,
+   when dnd-kit has not emitted a transform yet. The !important mirrors the
+   prototype so the lifted shadow wins over `shadow-card` and, being later in
+   the file, over a simultaneous `woa-scene-over`. */
+.woa-dragging {
+  opacity: 0.4;
+  transform: scale(0.97) rotate(-1.4deg);
+  box-shadow: 0 22px 46px -16px rgba(0, 0, 0, 0.55) !important;
+  cursor: grabbing;
+}
+
+/* Drop-target affordance (design .woa-drag-active [data-col], verbatim):
+   while ANY drag is active (scene or chapter), every chapter column shows a
+   subtle gold dashed outline. PlanGrid toggles `.woa-drag-active` on the
+   columns wrapper from DndContext's onDragStart/onDragEnd/onDragCancel;
+   ChapterColumn carries the `data-col` hook. */
+.woa-drag-active [data-col] {
+  outline: 1.5px dashed color-mix(in srgb, var(--gold) 42%, transparent);
+  outline-offset: -5px;
+  border-radius: 14px;
+}
+
+/* While a drag is active, suspend the scene cards' content-visibility
+   containment. `content-visibility: auto` implies `contain: paint`, which
+   clips descendant painting to the wrapper's bounds (+4px bleed) — verified
+   in real Chromium: the pointer-following card literally disappears once it
+   leaves its slot, and the lifted 46px shadow plus the siblings' shift
+   previews are clipped too. `visible` drops the containment for the drag's
+   duration only; the woa-card-cv padding/negative-margin bleed cancels out,
+   so nothing shifts, and an idle board keeps the full skip-render win. */
+.woa-drag-active .woa-card-cv {
+  content-visibility: visible;
 }
 
 /* ----------------------------------------------------------------------------

@@ -32,7 +32,11 @@ describe("Tab", () => {
     );
     const active = screen.getByRole("tab", { name: "Részletek" });
     expect(active).toHaveAttribute("aria-selected", "true");
-    expect(active.className).toContain("border-b-accent");
+    // Horizontal active indicator: the gold gradient underline bar
+    // (.woa-tab-ul ::after in globals.css — MOTION/polish pass), NOT the old
+    // flat accent border.
+    expect(active.className).toContain("woa-tab-ul");
+    expect(active.className).not.toContain("border-b-accent");
     expect(active.className).toContain("text-accent-text");
 
     const inactive = screen.getByRole("tab", { name: "Megemlítések" });
@@ -48,6 +52,17 @@ describe("Tab", () => {
     );
     expect(screen.getByTestId("icon")).toBeInTheDocument();
     expect(screen.getByRole("tab").className).toContain("flex-col");
+  });
+
+  it("vertical active keeps the flat accent border (no gold bar)", () => {
+    render(
+      <Tab orientation="vertical" active>
+        AI
+      </Tab>,
+    );
+    const tab = screen.getByRole("tab");
+    expect(tab.className).toContain("border-b-accent");
+    expect(tab.className).not.toContain("woa-tab-ul");
   });
 
   it("TabBar exposes a tablist", () => {

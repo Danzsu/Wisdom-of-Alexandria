@@ -79,6 +79,14 @@ describe("a11y: shell drawers (open)", () => {
       screen.getByRole("button", { name: "AI segéd megnyitása" }),
     );
     await screen.findByRole("dialog", { name: "AI segéd" });
-    await expectNoA11yViolations(document);
+    // `landmark-unique` is scoped off for THIS scan only (documented jsdom
+    // false-positive): the docked inspector (`max-lg:hidden`) and the drawer
+    // copy each expose the "AI segéd" live-region landmark (AI-zone a11y
+    // pass), and jsdom computes no responsive CSS, so axe sees both at once.
+    // In a real browser exactly one exists per breakpoint — the drawer
+    // toggles are CSS-hidden ≥ lg — so the landmarks can never coexist.
+    await expectNoA11yViolations(document, {
+      rules: { "landmark-unique": { enabled: false } },
+    });
   });
 });

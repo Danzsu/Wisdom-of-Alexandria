@@ -81,7 +81,16 @@ export function AiTab() {
   };
 
   return (
-    <div className="flex flex-col gap-3.5">
+    // AI-zone live region (design: role="region" aria-label="AI segéd"
+    // aria-live="polite"): a named <section> landmark (implicit region role)
+    // whose polite announcements let screen-readers hear the generating→ready
+    // flow — the GeneratingCard announces the start via its own role="status",
+    // and the RESULT card's arrival is announced by this region on mount.
+    <section
+      aria-label={hu.inspector.panelAria}
+      aria-live="polite"
+      className="flex flex-col gap-3.5"
+    >
       {/* Section header: "AI segéd" label (per design). Model shown in selector below. */}
       <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.07em] text-ai-text">
         {hu.inspector.panelAria}
@@ -195,6 +204,6 @@ export function AiTab() {
           {hu.inspector.disclaimer}
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

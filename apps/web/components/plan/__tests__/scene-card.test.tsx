@@ -115,7 +115,12 @@ describe("SceneCard mount animation", () => {
     const cardNode = title.closest("div.rounded-xl") as HTMLElement;
     expect(cardNode).not.toBeNull();
     expect(cardNode.style.transform).toContain("translate3d");
-    // Dragging dims the card via the inline opacity, untouched by the wrapper.
-    expect(cardNode.style.opacity).toBe("0.5");
+    // Design drag polish: the tilt is COMPOSED into the same inline transform
+    // (dnd-kit's pointer-follow keeps working) and the fade moved from an
+    // inline opacity to the `.woa-dragging` class (opacity .4 in globals.css)
+    // — an inline value would override the class, so none may remain.
+    expect(cardNode.style.transform).toContain("scale(0.97) rotate(-1.4deg)");
+    expect(cardNode.classList.contains("woa-dragging")).toBe(true);
+    expect(cardNode.style.opacity).toBe("");
   });
 });

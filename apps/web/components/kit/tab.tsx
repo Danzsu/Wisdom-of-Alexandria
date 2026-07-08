@@ -26,6 +26,16 @@ const tabVariants = cva(
     },
     compoundVariants: [
       {
+        // Horizontal active: gold gradient underline bar with glow (design
+        // .woa-ul, MOTION/polish pass) via the woa-tab-ul ::after — the 2px
+        // border-bottom stays transparent so both states keep the same box.
+        orientation: "horizontal",
+        active: true,
+        className: "woa-tab-ul font-semibold text-accent-text",
+      },
+      {
+        // Vertical (icon-over-label) active keeps the flat accent border.
+        orientation: "vertical",
         active: true,
         className: "border-b-accent font-semibold text-accent-text",
       },
@@ -47,8 +57,9 @@ export interface TabProps
 
 /**
  * A single tab. `horizontal` is the underline tab; `vertical` is the
- * icon-over-label inspector tab. The `active` prop applies the accent
- * underline + accent text.
+ * icon-over-label inspector tab. The `active` prop applies accent text plus
+ * the indicator: a gold gradient underline bar (woa-tab-ul) on `horizontal`,
+ * a flat accent border on `vertical`.
  */
 export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab(
   { className, orientation, active, icon, type, tabIndex, children, ...props },

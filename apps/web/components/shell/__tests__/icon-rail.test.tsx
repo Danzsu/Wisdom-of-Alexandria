@@ -111,6 +111,27 @@ describe("IconRail", () => {
     expect(terv).not.toHaveAttribute("aria-current");
   });
 
+  it("shows the parchment tooltip with the item label on hover (a11y name intact)", async () => {
+    renderRail("terv");
+    const trigger = screen.getByRole("button", { name: "Codex" });
+    await userEvent.hover(trigger);
+    // Radix opens after the provider delay; findBy* waits it out. The
+    // role="tooltip" node is Radix's visually-hidden aria bridge — its text is
+    // what screen-readers read via aria-describedby.
+    const bridge = await screen.findByRole("tooltip");
+    expect(bridge).toHaveTextContent("Codex");
+    // The VISIBLE content carries the parchment styling hook (.woa-tip,
+    // globals.css) and sits to the RIGHT of the rail — data-side drives the
+    // slide-in direction.
+    const content = document.querySelector(".woa-tip");
+    expect(content).not.toBeNull();
+    expect(content).toHaveTextContent("Codex");
+    expect(content).toHaveAttribute("data-side", "right");
+    // The trigger's own aria-label stays (tooltip never replaces it).
+    expect(trigger).toHaveAttribute("aria-label", "Codex");
+    await userEvent.unhover(trigger);
+  });
+
   it("navigates and fires the sparkfield on item click", async () => {
     renderRail("terv");
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));

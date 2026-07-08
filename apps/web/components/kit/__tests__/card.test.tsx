@@ -13,9 +13,19 @@ describe("Card", () => {
     expect(card.className).toContain("shadow-card");
   });
 
-  it("applies the interactive hover-lift modifier", () => {
+  it("applies the interactive hover-lift modifier (woa-lift spring)", () => {
     render(<Card interactive>x</Card>);
-    expect(screen.getByText("x").className).toContain("hover:-translate-y-0.5");
+    const card = screen.getByText("x");
+    // The spring lift transition + hover transform live on .woa-lift
+    // (globals.css, MOTION pass); the hover shadow/border colours stay here.
+    expect(card.className).toContain("woa-lift");
+    expect(card.className).toContain("hover:shadow-panel");
+    expect(card.className).toContain("hover:border-border-strong");
+  });
+
+  it("does NOT apply the hover-lift classes without `interactive`", () => {
+    render(<Card>x</Card>);
+    expect(screen.getByText("x").className).not.toContain("woa-lift");
   });
 
   it("applies the selected ring + accent-muted modifier", () => {

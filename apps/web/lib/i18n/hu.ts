@@ -1578,6 +1578,8 @@ export const hu = {
     groupScenes: "Jelenetek",
     groupCodex: "Codex",
     groupActions: "Műveletek",
+    /** Empty-query group of the last selected commands (persisted, max 6). */
+    groupRecents: "Legutóbbiak",
     noResultsPrefix: "Nincs találat erre: ",
     noResultsHint:
       "Próbálj más kulcsszót, vagy hozz létre új jelenetet / Codex-bejegyzést ezzel a névvel.",
