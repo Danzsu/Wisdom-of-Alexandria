@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 /**
  * Shared helpers for the journey specs.
@@ -75,4 +75,71 @@ export async function createFirstChapterIntoEditor(page: Page) {
   const editor = page.getByRole("textbox", { name: "Kézirat szerkesztő" });
   await expect(editor).toBeVisible();
   return editor;
+}
+
+/**
+ * Type into the (visible) manuscript editor, then wait until the text has
+ * REALLY been persisted before returning.
+ *
+ * Why the response waiter: the StatusBar save state INITIALIZES to "Mentve"
+ * (editor-store `saveState: "saved"`), so asserting the "Mentve" text alone is
+ * meaningless before a save has fired. The first journey CI run did exactly
+ * that — the assertion passed instantly on the idle text and `page.reload()`
+ * raced ahead of the 800ms autosave debounce, so the PATCH never fired and the
+ * post-reload editor came back empty. Arming a waiter for the scene PATCH
+ * BEFORE typing (the debounce fires ~800ms after the last keystroke, so the
+ * waiter cannot miss it) and requiring an ok() response guarantees the content
+ * reached the API; `ok()` also rides out transient failures, because the
+ * autosave retry ladder re-PATCHes and the waiter resolves on the attempt
+ * that lands.
+ */
+export async function typeAndAwaitAutosave(
+  page: Page,
+  editor: Locator,
+  text: string,
+): Promise<void> {
+  // The Write route is /konyv/{bookId}/iras/{sceneId} — the autosave PATCHes
+  // /chapters/{chapterId}/scenes/{sceneId}, so the scene id anchors the waiter.
+  const sceneId = page.url().match(/\/iras\/([^/?#]+)/)?.[1];
+  expect(sceneId, "typeAndAwaitAutosave must run on a Write route").toBeTruthy();
+
+  // Focus via a real click (places the ProseMirror caret), gated on focus
+  // actually landing in the contenteditable before any key is sent.
+  await editor.click();
+  await expect(editor).toBeFocused();
+
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      new URL(response.url()).pathname.endsWith(`/scenes/${sceneId}`) &&
+      response.ok(),
+  );
+
+  await editor.pressSequentially(text, { delay: 15 });
+  await expect(editor).toContainText(text);
+  await saved;
+
+  // Scoped to the contentinfo landmark (the StatusBar <footer>): the editor
+  // area renders a second role="status" inside <main>, so an unscoped
+  // getByRole("status") is a strict-mode violation. After the awaited PATCH
+  // this text reflects a real completed save, not the idle default.
+  await expect(
+    page
+      .getByRole("contentinfo")
+      .getByRole("status")
+      .filter({ hasText: "Mentve" }),
+  ).toBeVisible();
+}
+
+/**
+ * From the Write route, return to the Plan board via the TopBar's centered
+ * scene breadcrumb — the ONLY Plan affordance there: on `iras` the left pane
+ * is the chapter tree, so the icon rail (with its Terv/Codex/Export buttons)
+ * does not exist on this route. The breadcrumb's copy is the static prototype
+ * text "II. fejezet › 3. jelenet — Rejtett jelek" (hu.topbar.breadcrumb*), so
+ * match on its distinctive tail rather than the full punctuation-heavy name.
+ */
+export async function gotoPlanBoardViaBreadcrumb(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Rejtett jelek" }).click();
+  await page.waitForURL(/\/konyv\/[^/]+\/terv/);
 }

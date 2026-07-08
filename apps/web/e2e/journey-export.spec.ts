@@ -1,13 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { createBookViaWizard, createFirstChapterIntoEditor, loginViaApi } from "./support";
+import {
+  createBookViaWizard,
+  createFirstChapterIntoEditor,
+  gotoPlanBoardViaBreadcrumb,
+  loginViaApi,
+  typeAndAwaitAutosave,
+} from "./support";
 
 /**
  * Journey C — Markdown export downloads a real file:
  *
- *   create a book → first chapter + scene → write a line (wait for "Mentve"
- *   so the export has content) → Export screen → Markdown (default format) →
- *   "Exportálás" → a browser download event fires with an .md filename.
+ *   create a book → first chapter + scene → write a line (await the autosave
+ *   PATCH so the export has content) → breadcrumb to the Plan board → icon
+ *   rail "Export" → Markdown (default format) → "Exportálás" → a browser
+ *   download event fires with an .md filename.
  *
  * Same CI contract as the other journeys (empty DB, admin/changeme).
  */
@@ -20,21 +27,17 @@ test("export: the Markdown export triggers a real .md download", async ({
 
   const bookId = await createBookViaWizard(page, `E2E export-próba ${Date.now()}`);
 
-  // Give the book real content so the export is not an empty shell.
+  // Give the book real content so the export is not an empty shell. The
+  // helper awaits the autosave PATCH ok() — the idle StatusBar already reads
+  // "Mentve", so the text alone proves nothing about persistence.
   const editor = await createFirstChapterIntoEditor(page);
-  await editor.click();
-  await editor.pressSequentially("Az apály aznap egy órával korábban jött.", { delay: 15 });
-  // Scoped to the contentinfo landmark (the StatusBar <footer>): the editor
-  // area renders a second role="status" with the same text inside <main>, so
-  // an unscoped getByRole("status") is a strict-mode violation.
-  await expect(
-    page
-      .getByRole("contentinfo")
-      .getByRole("status")
-      .filter({ hasText: "Mentve" }),
-  ).toBeVisible({ timeout: 15_000 });
+  await typeAndAwaitAutosave(page, editor, "Az apály aznap egy órával korábban jött.");
 
   // --- Export screen via the icon rail. ---
+  // The rail only renders on non-Write book routes (on `iras` the left pane is
+  // the chapter tree), so first return to the Plan board via the TopBar
+  // breadcrumb, then click the rail's Export button (aria-label "Export").
+  await gotoPlanBoardViaBreadcrumb(page);
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.waitForURL(new RegExp(`/konyv/${bookId}/export`));
 
@@ -44,11 +47,12 @@ test("export: the Markdown export triggers a real .md download", async ({
   ).toHaveAttribute("aria-pressed", "true");
 
   // --- Trigger the export and capture the real browser download. ---
-  // "Exportálás" names both the screen tab and the primary CTA; the CTA sits
-  // below the tab strip in DOM order, so .last() targets it either way (and
-  // if the tabs expose role="tab" instead of button, .last() is a no-op).
+  // The screen's "Exportálás" tab is role="tab" (kit Tab), so the button query
+  // uniquely matches the primary CTA. The download itself is an anchor+blob
+  // click (downloadBlob in lib/api/export-hooks), which fires a real
+  // Playwright download event.
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Exportálás", exact: true }).last().click();
+  await page.getByRole("button", { name: "Exportálás", exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.md$/);
 });

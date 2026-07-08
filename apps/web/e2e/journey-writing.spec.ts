@@ -1,13 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { createBookViaWizard, createFirstChapterIntoEditor, loginViaApi } from "./support";
+import {
+  createBookViaWizard,
+  createFirstChapterIntoEditor,
+  gotoPlanBoardViaBreadcrumb,
+  loginViaApi,
+  typeAndAwaitAutosave,
+} from "./support";
 
 /**
  * Journey A — the core writing loop, driven end to end against the real stack:
  *
  *   dashboard → New Book wizard (real fields) → Plan board → first chapter +
- *   scene → Write editor → type → autosave reaches "Mentve" → content survives
- *   a reload → the chapter/scene show up on the Plan board.
+ *   scene → Write editor → type → the autosave PATCH lands (+ "Mentve") →
+ *   content survives a reload → breadcrumb back to the Plan board, which
+ *   shows the created chapter/scene.
  *
  * Assumes the CI e2e contract: web on :3000, api on :8000 (admin/changeme),
  * empty database. Auth is injected via localStorage (no login UI exists).
@@ -27,35 +34,28 @@ test("core writing loop: wizard → plan board → editor → autosave 'Mentve'"
   // The CTA creates chapter #1 + scene #1 and drops us into the editor.
   const editor = await createFirstChapterIntoEditor(page);
 
-  // --- Write: type real text into the Tiptap manuscript editor. ---
+  // --- Write: type into the Tiptap editor and wait for the REAL save. ---
+  // The StatusBar's idle state already reads "Mentve", so asserting that text
+  // alone is meaningless — the first CI run raced page.reload() ahead of the
+  // 800ms autosave debounce and lost the content. The helper types (focus-
+  // gated click + pressSequentially), then awaits the scene PATCH ok()
+  // response before trusting the contentinfo-scoped "Mentve".
   const manuscript = "A móló kövei még őrizték az éjszaka hidegét.";
-  await editor.click();
-  await editor.pressSequentially(manuscript, { delay: 15 });
-  await expect(editor).toContainText(manuscript);
-
-  // --- Autosave: the StatusBar's live region must reach "Mentve". ---
-  // Scoped to the contentinfo landmark (the StatusBar <footer>): the editor
-  // area renders a second role="status" with the same text inside <main>, so
-  // an unscoped getByRole("status") is a strict-mode violation.
-  // (Debounce is 800ms + a PATCH round-trip; the default expect timeout
-  // comfortably covers it. "Mentve" does not substring-match the error state
-  // "Mentés sikertelen", so this cannot false-positive on a failed save.)
-  await expect(
-    page
-      .getByRole("contentinfo")
-      .getByRole("status")
-      .filter({ hasText: "Mentve" }),
-  ).toBeVisible({ timeout: 15_000 });
+  await typeAndAwaitAutosave(page, editor, manuscript);
 
   // --- Persistence proof: the content survives a full reload. ---
+  // Post-reload the app re-hydrates and the book-tree query must resolve
+  // before the editor mounts with the saved content — give it CI headroom.
   await page.reload();
   await expect(
     page.getByRole("textbox", { name: "Kézirat szerkesztő" }),
-  ).toContainText(manuscript);
+  ).toContainText(manuscript, { timeout: 15_000 });
 
   // --- Plan board reflects the created structure. ---
-  await page.getByRole("button", { name: "Terv" }).click();
-  await page.waitForURL(/\/konyv\/[^/]+\/terv/);
+  // On the Write route the left pane is the chapter tree — the icon rail (and
+  // any button named "Terv") does not exist here; the TopBar breadcrumb is the
+  // route's real Plan affordance.
+  await gotoPlanBoardViaBreadcrumb(page);
   await expect(page.getByText("1. fejezet").first()).toBeVisible();
   await expect(page.getByText("1. jelenet").first()).toBeVisible();
 });
