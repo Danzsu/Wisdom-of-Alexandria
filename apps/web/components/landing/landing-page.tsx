@@ -18,6 +18,11 @@ import {
 import { hu } from "@/lib/i18n/hu";
 import { routes } from "@/lib/routes";
 import { EmbersCanvas } from "./embers-canvas";
+import {
+  useHeroTilt,
+  useMagnetic,
+  useParallaxGlow,
+} from "./use-landing-motion";
 
 const t = hu.landing;
 
@@ -84,13 +89,14 @@ function useReveal() {
 
 /**
  * Reveal target classes. Base state is VISIBLE; the hidden start-state
- * (`opacity-0` + 26px translate) applies only inside an armed root and only
+ * (`opacity-0` + 22px translate) applies only inside an armed root and only
  * until the node gains `data-reveal-in`. So with no JS, content shows normally;
  * with JS, it fades up as it scrolls into view. The global reduced-motion CSS
- * rule neutralises the transition.
+ * rule neutralises the transition. Timing follows the design's tuned `.reveal`
+ * (22px / .82s / --ease-soft).
  */
 const revealClass =
-  "transition-[transform,opacity] duration-[900ms] ease-[cubic-bezier(.22,1,.36,1)] [[data-reveal-armed]_&:not([data-reveal-in])]:translate-y-[26px] [[data-reveal-armed]_&:not([data-reveal-in])]:opacity-0";
+  "transition-[transform,opacity] duration-[820ms] ease-[var(--ease-soft)] [[data-reveal-armed]_&:not([data-reveal-in])]:translate-y-[22px] [[data-reveal-armed]_&:not([data-reveal-in])]:opacity-0";
 
 function ThemeButton() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -143,6 +149,16 @@ function StarTile({ size = 34 }: Readonly<{ size?: number }>) {
 
 export function LandingPage() {
   const rootRef = useReveal();
+  // Micro-interaction pass (design canvas): magnetic CTAs, hero tilt,
+  // parallax glow. All of them are hard no-ops under prefers-reduced-motion.
+  const navCtaRef = useMagnetic<HTMLAnchorElement>();
+  const heroCtaRef = useMagnetic<HTMLAnchorElement>();
+  const footerCtaRef = useMagnetic<HTMLAnchorElement>();
+  const { zoneRef: heroZoneRef, tiltRef: heroTiltRef } = useHeroTilt<
+    HTMLElement,
+    HTMLDivElement
+  >();
+  const glowRef = useParallaxGlow<HTMLDivElement>();
 
   const scrollToShowcase = useCallback(() => {
     document
@@ -160,6 +176,18 @@ export function LandingPage() {
         @keyframes woaLandFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
         @keyframes woaLandCaret{0%,49%{opacity:1}50%,100%{opacity:0}}
         @keyframes woaLandBar{0%{transform:translateX(-130%)}100%{transform:translateX(360%)}}
+      `}</style>
+      {/* Stagger reveal (design `.stagger`): the PARENT carries the reveal
+          trigger; children rise 16px with 80ms incremental delays. Same
+          fail-safe as revealClass — hidden only inside an armed root until
+          the parent gains data-reveal-in, so content is never lost. */}
+      <style>{`
+        .woa-land-stagger>*{transition:transform .6s var(--ease-soft),opacity .6s var(--ease-soft)}
+        .woa-land-stagger>*:nth-child(2){transition-delay:80ms}
+        .woa-land-stagger>*:nth-child(3){transition-delay:160ms}
+        .woa-land-stagger>*:nth-child(4){transition-delay:240ms}
+        [data-reveal-armed] .woa-land-stagger:not([data-reveal-in])>*{transform:translateY(16px);opacity:0}
+        @media (prefers-reduced-motion:reduce){.woa-land-stagger>*{transition:none;transition-delay:0ms}}
       `}</style>
 
       {/* ── sticky top nav ───────────────────────────────────────────── */}
@@ -199,9 +227,12 @@ export function LandingPage() {
         </nav>
         <div className="flex-1" />
         <ThemeButton />
+        {/* Magnetic CTA — the JS lerp replaces the CSS hover-lift (a CSS
+            transition on transform would fight the per-frame writes). */}
         <Link
+          ref={navCtaRef}
           href={routes.projects()}
-          className="flex h-[38px] items-center gap-2 rounded-[10px] bg-text px-[18px] text-[13.5px] font-semibold text-bg no-underline transition-transform hover:-translate-y-px active:scale-[.97]"
+          className="flex h-[38px] items-center gap-2 rounded-[10px] bg-text px-[18px] text-[13.5px] font-semibold text-bg no-underline active:scale-[.97]"
         >
           {t.enterApp}
           <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
@@ -210,14 +241,19 @@ export function LandingPage() {
 
       <main>
         {/* ── hero ───────────────────────────────────────────────────── */}
-        <section className="relative overflow-hidden px-7">
+        {/* The section is the tilt "zone": pointer movement anywhere over the
+            hero drives the editor mock's 3D tilt. */}
+        <section ref={heroZoneRef} className="relative overflow-hidden px-7">
           {/* drifting gold embers behind the hero (reduced-motion aware) */}
           <EmbersCanvas className="z-0" />
+          {/* radial glow — drifts at a fraction of scroll speed (parallax) */}
           <div
+            ref={glowRef}
+            data-hero-glow
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(120%_70%_at_78%_-6%,var(--gold-soft)_0%,transparent_42%),radial-gradient(90%_60%_at_8%_8%,var(--accent-muted)_0%,transparent_46%)]"
+            className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(120%_70%_at_78%_-6%,var(--gold-soft)_0%,transparent_42%),radial-gradient(90%_60%_at_8%_8%,var(--accent-muted)_0%,transparent_46%)] will-change-transform"
           />
-          <div className="relative z-[1] mx-auto grid max-w-[1200px] items-center gap-[54px] px-0 pt-[78px] pb-24 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="relative z-[1] mx-auto grid max-w-[1200px] items-center gap-[54px] px-0 pt-[78px] pb-24 [perspective:1400px] lg:grid-cols-[1.05fr_.95fr]">
             {/* left column */}
             <div data-reveal className={revealClass}>
               <span className="inline-flex items-center gap-2 rounded-full border border-gold-line bg-surface px-[13px] py-1.5 text-[12px] font-semibold tracking-[.04em] text-gold-text shadow-card">
@@ -244,8 +280,9 @@ export function LandingPage() {
                     the white label clears WCAG-AA (≥4.5:1) across the whole
                     button face; still theme-aware via --gold-deep. */}
                 <Link
+                  ref={heroCtaRef}
                   href={routes.projects()}
-                  className="flex h-[50px] items-center gap-[9px] rounded-[12px] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--gold-deep)_94%,black)_0%,color-mix(in_srgb,var(--gold-deep)_78%,black)_100%)] px-[26px] text-[15px] font-semibold text-white no-underline shadow-[0_8px_24px_color-mix(in_srgb,var(--gold)_38%,transparent)] transition-transform hover:-translate-y-px active:scale-[.97]"
+                  className="flex h-[50px] items-center gap-[9px] rounded-[12px] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--gold-deep)_94%,black)_0%,color-mix(in_srgb,var(--gold-deep)_78%,black)_100%)] px-[26px] text-[15px] font-semibold text-white no-underline shadow-[0_8px_24px_color-mix(in_srgb,var(--gold)_38%,transparent)] active:scale-[.97]"
                 >
                   {t.heroCtaPrimary}
                   <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
@@ -295,7 +332,16 @@ export function LandingPage() {
             </div>
 
             {/* right column — floating editor mock */}
-            <div data-reveal className={`relative ${revealClass}`}>
+            <div data-reveal className={revealClass}>
+              {/* Tilt wrapper (design #woaHeroTilt): the JS lerp writes
+                  rotateY/rotateX here; the .4s soft transition adds the
+                  mock's extra smoothing. Separate from the reveal element so
+                  the two transforms never fight. */}
+              <div
+                ref={heroTiltRef}
+                data-hero-tilt
+                className="relative transition-transform duration-[400ms] ease-[var(--ease-soft)] will-change-transform [transform-style:preserve-3d]"
+              >
               {/* floating AI-suggestion popover — decorative; hidden below sm
                   where it would otherwise overlap the manuscript-card title */}
               <div className="absolute -top-[26px] -right-2 z-[2] hidden w-[228px] flex-col gap-[9px] rounded-[14px] border border-ai-muted bg-surface p-[14px] shadow-popover motion-safe:animate-[woaLandFloat_6s_ease-in-out_infinite] sm:flex">
@@ -354,6 +400,7 @@ export function LandingPage() {
                   </p>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         </section>
@@ -403,7 +450,12 @@ export function LandingPage() {
               {t.featuresTitleLine2}
             </h2>
           </div>
-          <div className="mt-[44px] grid gap-[18px] sm:grid-cols-2">
+          {/* Stagger reveal: ONE trigger on the grid; the cards rise with
+              incremental delays (see the .woa-land-stagger style block). */}
+          <div
+            data-reveal
+            className="woa-land-stagger mt-[44px] grid gap-[18px] sm:grid-cols-2"
+          >
             {t.pillars.map((pillar, i) => {
               // Crash-proof: if the i18n pillar list ever grows past the icon
               // tuple, fall back to a known icon instead of rendering undefined.
@@ -411,8 +463,7 @@ export function LandingPage() {
               return (
                 <div
                   key={pillar.title}
-                  data-reveal
-                  className={`woa-lift rounded-[16px] border border-border bg-surface p-[26px] shadow-card ${revealClass}`}
+                  className="woa-lift rounded-[16px] border border-border bg-surface p-[26px] shadow-card"
                 >
                   <span className="flex h-[46px] w-[46px] items-center justify-center rounded-[12px] bg-surface-muted text-accent-text">
                     <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
@@ -544,8 +595,9 @@ export function LandingPage() {
               {t.footerCtaBody}
             </p>
             <Link
+              ref={footerCtaRef}
               href={routes.projects()}
-              className="mt-[30px] inline-flex h-[52px] items-center gap-[9px] rounded-[12px] bg-text px-[30px] text-[15px] font-semibold text-bg no-underline transition-transform hover:-translate-y-px active:scale-[.97]"
+              className="mt-[30px] inline-flex h-[52px] items-center gap-[9px] rounded-[12px] bg-text px-[30px] text-[15px] font-semibold text-bg no-underline active:scale-[.97]"
             >
               {t.enterApp}
               <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />

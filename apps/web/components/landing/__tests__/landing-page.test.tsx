@@ -18,6 +18,7 @@ vi.mock("next-themes", () => ({
 }));
 
 import { LandingPage } from "../landing-page";
+import { PARALLAX_FACTOR } from "../use-landing-motion";
 
 function renderPage() {
   return render(
@@ -25,6 +26,64 @@ function renderPage() {
       <LandingPage />
     </Providers>,
   );
+}
+
+/* ── deterministic rAF harness for the motion-wiring tests ──────────────── */
+
+let rafQueue: Map<number, FrameRequestCallback>;
+let rafSeq = 0;
+
+/** Replace rAF with a manual queue; call BEFORE renderPage(). */
+function stubRaf() {
+  rafQueue = new Map();
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    rafQueue.set(++rafSeq, cb);
+    return rafSeq;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    rafQueue.delete(id);
+  });
+}
+
+/** Run `n` animation frames. */
+function frame(n = 1) {
+  for (let i = 0; i < n; i++) {
+    const pending = [...rafQueue.values()];
+    rafQueue.clear();
+    for (const cb of pending) cb(16 * (i + 1));
+  }
+}
+
+function pointerMove(el: Element, clientX: number, clientY: number) {
+  el.dispatchEvent(
+    new MouseEvent("pointermove", { clientX, clientY, bubbles: true }),
+  );
+}
+
+/** Force `matchMedia` to report reduced motion; call BEFORE renderPage(). */
+function stubReducedMotion() {
+  vi.stubGlobal(
+    "matchMedia",
+    (query: string) =>
+      ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  );
+}
+
+function setScrollY(value: number) {
+  Object.defineProperty(globalThis, "scrollY", {
+    value,
+    writable: true,
+    configurable: true,
+  });
 }
 
 describe("LandingPage", () => {
@@ -40,6 +99,8 @@ describe("LandingPage", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    setScrollY(0);
   });
 
   it("renders the hero headline and all four pillar titles", () => {
@@ -131,5 +192,106 @@ describe("LandingPage", () => {
   it("has no a11y violations", async () => {
     const { container } = renderPage();
     await expectNoA11yViolations(container);
+  });
+
+  /* ── motion polish wiring (magnetic / tilt / parallax / stagger) ──────── */
+
+  it("reveals the pillar grid as a stagger group — parent trigger, no per-card reveal", () => {
+    const { container } = renderPage();
+    const grid = container.querySelector(".woa-land-stagger");
+    expect(grid).not.toBeNull();
+    // The PARENT carries the reveal trigger…
+    expect(grid).toHaveAttribute("data-reveal");
+    // …over exactly the four pillar cards…
+    expect(grid?.children).toHaveLength(hu.landing.pillars.length);
+    // …and the cards are no longer individually revealed.
+    expect(grid?.querySelector("[data-reveal]")).toBeNull();
+  });
+
+  it("the nav, hero and footer CTAs are magnetic (pointer-follow transform)", () => {
+    stubRaf();
+    renderPage();
+    const targets = [
+      // nav + footer "Belépés a műhelybe"
+      ...screen.getAllByRole("link", { name: hu.landing.enterApp }),
+      // hero gold "Kezdj el írni"
+      screen.getByRole("link", { name: hu.landing.heroCtaPrimary }),
+    ] as HTMLElement[];
+    expect(targets).toHaveLength(3);
+    for (const cta of targets) {
+      pointerMove(cta, 40, 20);
+      frame(1);
+      expect(cta.style.transform).toMatch(/^translate\(/);
+    }
+  });
+
+  it("pointer over the hero section tilts the floating editor mock", () => {
+    stubRaf();
+    const { container } = renderPage();
+    const tilt = container.querySelector<HTMLElement>("[data-hero-tilt]");
+    expect(tilt).not.toBeNull();
+    const zone = tilt?.closest("section");
+    expect(zone).not.toBeNull();
+    pointerMove(zone as Element, 120, 60);
+    frame(1);
+    expect(tilt?.style.transform).toMatch(
+      /^rotateY\(-?[\d.]+deg\) rotateX\(-?[\d.]+deg\)$/,
+    );
+  });
+
+  it("the hero glow parallaxes at a fraction of the scroll offset", () => {
+    stubRaf();
+    setScrollY(200);
+    const { container } = renderPage();
+    const glow = container.querySelector<HTMLElement>("[data-hero-glow]");
+    expect(glow).not.toBeNull();
+    // Applied once on mount (mid-page reload)…
+    expect(glow?.style.transform).toBe(
+      `translate3d(0,${(200 * PARALLAX_FACTOR).toFixed(1)}px,0)`,
+    );
+    // …and follows subsequent scrolling via rAF.
+    setScrollY(400);
+    globalThis.dispatchEvent(new Event("scroll"));
+    frame(1);
+    expect(glow?.style.transform).toBe(
+      `translate3d(0,${(400 * PARALLAX_FACTOR).toFixed(1)}px,0)`,
+    );
+  });
+
+  it("under reduced motion no JS transform is ever applied and content stays visible", () => {
+    stubRaf();
+    stubReducedMotion();
+    setScrollY(200);
+    const { container } = renderPage();
+
+    // Magnetic CTA: inert.
+    const cta = screen.getByRole("link", {
+      name: hu.landing.heroCtaPrimary,
+    }) as HTMLElement;
+    pointerMove(cta, 40, 20);
+    frame(3);
+    expect(cta.style.transform).toBe("");
+
+    // Hero tilt: inert.
+    const tilt = container.querySelector<HTMLElement>("[data-hero-tilt]");
+    pointerMove(tilt?.closest("section") as Element, 120, 60);
+    frame(3);
+    expect(tilt?.style.transform).toBe("");
+
+    // Parallax glow: inert.
+    expect(
+      container.querySelector<HTMLElement>("[data-hero-glow]")?.style
+        .transform,
+    ).toBe("");
+
+    // Reveal contract: everything is shown immediately (no hidden stagger).
+    for (const pillar of hu.landing.pillars) {
+      expect(
+        screen.getByRole("heading", { name: pillar.title }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      container.querySelector(".woa-land-stagger"),
+    ).toHaveAttribute("data-reveal-in");
   });
 });
